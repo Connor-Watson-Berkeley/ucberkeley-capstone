@@ -43,6 +43,29 @@ def calculate_metrics(actuals: pd.Series, forecasts: pd.Series) -> Dict[str, flo
         correct_direction = (actual_direction == forecast_direction).sum()
         metrics['directional_accuracy'] = float(correct_direction / len(actual_direction) * 100)
 
+    # Directional accuracy from inference date (Day 0)
+    # Compare each forecast day against the first actual value (inference date)
+    if len(actuals) > 1:
+        day_0_actual = actuals.iloc[0]
+        day_0_forecast = forecasts.iloc[0]
+
+        # For each subsequent day, check if direction from day 0 matches
+        correct_from_day0 = 0
+        total_from_day0 = 0
+
+        for i in range(1, len(actuals)):
+            actual_higher = actuals.iloc[i] > day_0_actual
+            forecast_higher = forecasts.iloc[i] > day_0_forecast
+
+            if actual_higher == forecast_higher:
+                correct_from_day0 += 1
+            total_from_day0 += 1
+
+        if total_from_day0 > 0:
+            metrics['directional_accuracy_from_day0'] = float(correct_from_day0 / total_from_day0 * 100)
+        else:
+            metrics['directional_accuracy_from_day0'] = None
+
     return metrics
 
 
