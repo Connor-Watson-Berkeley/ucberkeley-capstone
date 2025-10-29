@@ -3,7 +3,15 @@
 Defines model configurations for training and evaluation.
 """
 
-from ground_truth.models import naive, random_walk, arima, sarimax
+from ground_truth.models import naive, random_walk, arima, sarimax, xgboost_model, prophet_model
+try:
+    from ground_truth.models import neuralprophet_model, panel_model, statsforecast_models
+    ADVANCED_MODELS_AVAILABLE = True
+except ImportError:
+    ADVANCED_MODELS_AVAILABLE = False
+    neuralprophet_model = None
+    panel_model = None
+    statsforecast_models = None
 
 
 # Model registry: List of all baseline models to train
@@ -41,19 +49,19 @@ BASELINE_MODELS = {
     },
 
     'sarimax_auto': {
-        'name': 'SARIMAX(auto)',
+        'name': 'ARIMA(auto)',
         'function': sarimax.sarimax_forecast_with_metadata,
         'params': {
             'target': 'close',
-            'exog_features': None,  # No exogenous variables
-            'order': None,  # Auto-fit
+            'exog_features': None,  # No exogenous variables = ARIMA not SARIMAX
+            'order': None,  # Auto-fit (typically selects (0,1,0) = naive)
             'horizon': 14
         },
-        'description': 'Auto-fitted SARIMAX without weather covariates'
+        'description': 'Auto-fitted ARIMA (no exogenous vars) - often reduces to naive'
     },
 
     'sarimax_auto_weather': {
-        'name': 'SARIMAX(auto)+Weather',
+        'name': 'SARIMAX+Weather',
         'function': sarimax.sarimax_forecast_with_metadata,
         'params': {
             'target': 'close',
@@ -77,7 +85,343 @@ BASELINE_MODELS = {
         },
         'description': 'Auto-fitted SARIMAX with seasonal weather projection'
     },
+
+    'xgboost': {
+        'name': 'XGBoost',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': None,
+            'horizon': 14,
+            'lags': [1, 7, 14],
+            'windows': [7, 30]
+        },
+        'description': 'XGBoost with engineered features (lags, rolling stats)'
+    },
+
+    'xgboost_weather': {
+        'name': 'XGBoost+Weather',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'horizon': 14,
+            'lags': [1, 7, 14],
+            'windows': [7, 30]
+        },
+        'description': 'XGBoost with weather covariates and engineered features'
+    },
+
+    'xgboost_deep_lags': {
+        'name': 'XGBoost+DeepLags',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': None,
+            'horizon': 14,
+            'lags': [1, 2, 3, 7, 14, 21, 30],  # More lags
+            'windows': [7, 14, 30, 60]  # More windows
+        },
+        'description': 'XGBoost with deep lag structure (7 lags, 4 windows)'
+    },
+
+    'xgboost_weather_deep': {
+        'name': 'XGBoost+Weather+Deep',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'horizon': 14,
+            'lags': [1, 2, 3, 7, 14, 21, 30],
+            'windows': [7, 14, 30, 60]
+        },
+        'description': 'XGBoost with weather + deep feature engineering'
+    },
+
+    'prophet': {
+        'name': 'Prophet',
+        'function': prophet_model.prophet_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': None,
+            'horizon': 14
+        },
+        'description': 'Meta Prophet with automatic seasonality detection'
+    },
+
+    'prophet_weather': {
+        'name': 'Prophet+Weather',
+        'function': prophet_model.prophet_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'horizon': 14
+        },
+        'description': 'Meta Prophet with weather regressors and seasonality'
+    },
+
+    'xgboost_sentiment': {
+        'name': 'XGBoost+Sentiment',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['sentiment_score', 'sentiment_ma_7', 'sentiment_ma_14',
+                            'sentiment_momentum_7d', 'event_count'],
+            'horizon': 14,
+            'lags': [1, 7, 14],
+            'windows': [7, 30]
+        },
+        'description': 'XGBoost with GDELT sentiment features only'
+    },
+
+    'xgboost_weather_sentiment': {
+        'name': 'XGBoost+Weather+Sentiment',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm',
+                            'sentiment_score', 'sentiment_ma_7', 'sentiment_ma_14',
+                            'sentiment_momentum_7d', 'event_count'],
+            'horizon': 14,
+            'lags': [1, 7, 14],
+            'windows': [7, 30]
+        },
+        'description': 'XGBoost with weather + GDELT sentiment features'
+    },
+
+    'xgboost_full_features': {
+        'name': 'XGBoost+Full',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm',
+                            'sentiment_score', 'sentiment_ma_7', 'sentiment_ma_14', 'sentiment_ma_30',
+                            'sentiment_momentum_1d', 'sentiment_momentum_7d',
+                            'event_count', 'positive_ratio', 'negative_ratio'],
+            'horizon': 14,
+            'lags': [1, 2, 3, 7, 14, 21, 30],
+            'windows': [7, 14, 30, 60]
+        },
+        'description': 'XGBoost with all features: weather, sentiment, deep lags'
+    },
+
+    'xgboost_ultra_deep': {
+        'name': 'XGBoost+UltraDeep',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'horizon': 14,
+            'lags': [1, 2, 3, 4, 5, 6, 7, 14, 21, 28, 30],  # 11 lags
+            'windows': [3, 5, 7, 10, 14, 21, 30, 60, 90]  # 9 windows
+        },
+        'description': 'XGBoost with ultra-deep lag structure (11 lags, 9 windows)'
+    },
+
+    'xgboost_minimal': {
+        'name': 'XGBoost+Minimal',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c'],
+            'horizon': 14,
+            'lags': [1, 7],  # Just 2 lags
+            'windows': [7]  # Just 1 window
+        },
+        'description': 'XGBoost with minimal features (temp only, 2 lags, 1 window)'
+    },
+
+    'xgboost_short_term': {
+        'name': 'XGBoost+ShortTerm',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'horizon': 14,
+            'lags': [1, 2, 3],  # Very short-term lags
+            'windows': [3, 5, 7]  # Short windows
+        },
+        'description': 'XGBoost optimized for short-term patterns'
+    },
+
+    'xgboost_long_term': {
+        'name': 'XGBoost+LongTerm',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'horizon': 14,
+            'lags': [7, 14, 21, 30, 60, 90],  # Long-term lags
+            'windows': [30, 60, 90]  # Long windows
+        },
+        'description': 'XGBoost optimized for long-term patterns'
+    },
+
+    # ========================================================================
+    # MODELS WITH VIX AND EXCHANGE RATES (Previously Missing!)
+    # ========================================================================
+
+    'sarimax_market': {
+        'name': 'SARIMAX+Market',
+        'function': sarimax.sarimax_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['vix'],  # Market volatility indicator
+            'covariate_projection_method': 'persist',
+            'order': None,  # Auto-fit
+            'horizon': 14
+        },
+        'description': 'SARIMAX with VIX (market volatility) - was missing!'
+    },
+
+    'sarimax_weather_market': {
+        'name': 'SARIMAX+Weather+VIX',
+        'function': sarimax.sarimax_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm', 'vix'],
+            'covariate_projection_method': 'persist',
+            'order': None,  # Auto-fit
+            'horizon': 14
+        },
+        'description': 'SARIMAX with weather + VIX'
+    },
+
+    'sarimax_colombian_trader': {
+        'name': 'SARIMAX+COP',
+        'function': sarimax.sarimax_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm', 'cop_usd'],
+            'covariate_projection_method': 'persist',
+            'order': None,  # Auto-fit
+            'horizon': 14
+        },
+        'description': 'SARIMAX with COP/USD (critical for Colombian trader use case)'
+    },
+
+    'xgboost_market': {
+        'name': 'XGBoost+VIX',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['vix'],
+            'horizon': 14,
+            'lags': [1, 7, 14],
+            'windows': [7, 30]
+        },
+        'description': 'XGBoost with VIX only'
+    },
+
+    'xgboost_weather_market': {
+        'name': 'XGBoost+Weather+VIX',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm', 'vix'],
+            'horizon': 14,
+            'lags': [1, 7, 14],
+            'windows': [7, 30]
+        },
+        'description': 'XGBoost with weather + VIX'
+    },
+
+    'xgboost_colombian_trader': {
+        'name': 'XGBoost+COP',
+        'function': xgboost_model.xgboost_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm', 'cop_usd', 'vix'],
+            'horizon': 14,
+            'lags': [1, 2, 3, 7, 14, 21, 30],
+            'windows': [7, 14, 30, 60]
+        },
+        'description': 'XGBoost with weather + COP/USD + VIX (full Colombian trader model)'
+    },
 }
+
+# Add advanced models if available
+if ADVANCED_MODELS_AVAILABLE and neuralprophet_model is not None:
+    BASELINE_MODELS['neuralprophet'] = {
+        'name': 'NeuralProphet',
+        'function': neuralprophet_model.neuralprophet_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': None,
+            'horizon': 14,
+            'n_lags': 14,
+            'epochs': 100
+        },
+        'description': 'Neural network time series with deep learning'
+    }
+
+    BASELINE_MODELS['neuralprophet_weather'] = {
+        'name': 'NeuralProphet+Weather',
+        'function': neuralprophet_model.neuralprophet_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'horizon': 14,
+            'n_lags': 14,
+            'epochs': 100
+        },
+        'description': 'NeuralProphet with weather covariates'
+    }
+
+    BASELINE_MODELS['neuralprophet_deep'] = {
+        'name': 'NeuralProphet+Deep',
+        'function': neuralprophet_model.neuralprophet_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'horizon': 14,
+            'n_lags': 30,  # More lags
+            'epochs': 200  # More training
+        },
+        'description': 'NeuralProphet with deep lags and extended training'
+    }
+
+# Add statsforecast models if available
+if ADVANCED_MODELS_AVAILABLE and statsforecast_models is not None:
+    BASELINE_MODELS['auto_arima_stats'] = {
+        'name': 'AutoARIMA (statsforecast)',
+        'function': statsforecast_models.auto_arima_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'horizon': 14
+        },
+        'description': 'Automated ARIMA from statsforecast (fast)'
+    }
+
+    BASELINE_MODELS['auto_ets'] = {
+        'name': 'AutoETS',
+        'function': statsforecast_models.auto_ets_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'horizon': 14
+        },
+        'description': 'Exponential smoothing with automatic model selection'
+    }
+
+    BASELINE_MODELS['holt_winters'] = {
+        'name': 'Holt-Winters',
+        'function': statsforecast_models.holt_winters_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'horizon': 14
+        },
+        'description': 'Triple exponential smoothing (trend + seasonality)'
+    }
+
+    BASELINE_MODELS['auto_theta'] = {
+        'name': 'AutoTheta',
+        'function': statsforecast_models.auto_theta_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'horizon': 14
+        },
+        'description': 'Theta method - M3 competition winner'
+    }
 
 
 # Commodity-specific configurations
