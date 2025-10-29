@@ -200,7 +200,7 @@ python experiments/run_walkforward_comprehensive.py
 ## Documentation
 
 All essential information is in this README. Additional technical details available in:
-- `../agent_instructions/DATA_CONTRACTS.md` - Schema specifications
+- `../project_overview/DATA_CONTRACTS.md` - Schema specifications
 - Code comments and docstrings
 
 For development history, see `experiments/` folder (not in git).

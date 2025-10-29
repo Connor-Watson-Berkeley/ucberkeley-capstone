@@ -41,6 +41,7 @@ env/
 experiments/
 dashboards/
 deprecated/
+project_overview/
 *.log
 
 # Generated outputs
