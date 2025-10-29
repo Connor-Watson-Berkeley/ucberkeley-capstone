@@ -40,6 +40,7 @@ env/
 # Development files (NOT FOR PRODUCTION)
 experiments/
 dashboards/
+deprecated/
 *.log
 
 # Generated outputs
