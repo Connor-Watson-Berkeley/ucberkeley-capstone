@@ -21,6 +21,10 @@ python run_production_deployment.py
 
 ```
 forecast_agent/
+├── .gitignore
+├── README.md
+├── run_production_deployment.py # Production script
+│
 ├── ground_truth/                 # Production package
 │   ├── config/
 │   │   └── model_registry.py    # 25 models (single source of truth)
@@ -37,11 +41,13 @@ forecast_agent/
 │   └── testing/
 │       └── data_validation.py   # Schema validators
 │
-├── run_production_deployment.py # Production script
-├── experiments/                  # Development scripts (not in git)
-└── dashboards/                   # Visualizations (not in git)
+└── Local folders (not in git):
+    ├── experiments/              # 13 scripts + dashboard code
+    ├── dashboards/               # HTML visualizations
+    ├── deprecated/               # Historical docs
+    └── production_forecasts/     # Generated outputs
 
-Data pipeline (create_gdelt_unified_data.py) located in research_agent/
+Data pipeline (create_gdelt_unified_data.py) located in ../research_agent/
 ```
 
 ## Data Contract
@@ -135,10 +141,12 @@ Traditional day-to-day directional accuracy is misleading for trading. Use Dir D
 - `README.md`
 
 **Development files (not in git)**:
-- `experiments/` - 13 experimental scripts for model evaluation
+- `experiments/` - 13 experimental scripts + dashboard code
 - `dashboards/` - HTML visualizations from walk-forward evaluation
+- `deprecated/` - Historical documentation
+- `project_overview/` - Project documentation and specifications
 - `production_forecasts/` - Generated output tables
-- All `.log`, `.parquet`, `.json`, `.html` files
+- `*.log`, `*.parquet`, `*.json`, `*.html` - Generated files
 
 See `.gitignore` for complete exclusion list.
 
@@ -199,8 +207,7 @@ python experiments/run_walkforward_comprehensive.py
 
 ## Documentation
 
-All essential information is in this README. Additional technical details available in:
+All essential information is in this README. Additional technical details:
 - `../project_overview/DATA_CONTRACTS.md` - Schema specifications
+- `deprecated/` - Historical development documentation (local only)
 - Code comments and docstrings
-
-For development history, see `experiments/` folder (not in git).
