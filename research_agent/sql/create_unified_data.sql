@@ -186,6 +186,97 @@ weather_filled AS (
 )
 
 -- =============================================================================
+-- FUTURE: GDELT SENTIMENT DATA (commodity.bronze.bronze_gkg)
+-- =============================================================================
+-- Uncomment to add GDELT sentiment analysis to unified_data
+--
+-- V2TONE is a comma-separated string with 7 dimensions:
+-- 1. Tone (overall sentiment)
+-- 2. Positive Score
+-- 3. Negative Score
+-- 4. Polarity
+-- 5. Activity Reference Density
+-- 6. Self/Group Reference Density
+-- 7. Word Count
+--
+-- gdelt_raw AS (
+--   SELECT
+--     DATE(SQLDATE) as date,
+--     CASE
+--       WHEN THEMES LIKE '%COFFEE%' THEN 'Coffee'
+--       WHEN THEMES LIKE '%SUGAR%' THEN 'Sugar'
+--       ELSE NULL
+--     END as commodity,
+--     -- Parse V2TONE dimensions
+--     CAST(SPLIT(V2TONE, ',')[0] AS DOUBLE) as tone,
+--     CAST(SPLIT(V2TONE, ',')[1] AS DOUBLE) as positive_score,
+--     CAST(SPLIT(V2TONE, ',')[2] AS DOUBLE) as negative_score,
+--     CAST(SPLIT(V2TONE, ',')[3] AS DOUBLE) as polarity,
+--     CAST(SPLIT(V2TONE, ',')[4] AS DOUBLE) as activity_density,
+--     CAST(SPLIT(V2TONE, ',')[5] AS DOUBLE) as self_group_density,
+--     CAST(SPLIT(V2TONE, ',')[6] AS DOUBLE) as word_count
+--   FROM commodity.bronze.bronze_gkg
+--   WHERE SQLDATE >= '20150707'  -- Match start date
+--     AND (THEMES LIKE '%COFFEE%' OR THEMES LIKE '%SUGAR%')
+--     AND V2TONE IS NOT NULL
+-- ),
+--
+-- gdelt_sentiment AS (
+--   SELECT
+--     date,
+--     commodity,
+--     -- Aggregate across articles for the day
+--     AVG(tone) as gdelt_tone,
+--     AVG(positive_score) as gdelt_positive,
+--     AVG(negative_score) as gdelt_negative,
+--     AVG(polarity) as gdelt_polarity,
+--     STDDEV(tone) as gdelt_tone_volatility,
+--     COUNT(*) as gdelt_article_count,
+--     SUM(word_count) as gdelt_total_words
+--   FROM gdelt_raw
+--   GROUP BY date, commodity
+-- ),
+--
+-- gdelt_filled AS (
+--   SELECT
+--     ds.date,
+--     c.commodity,
+--     -- Forward-fill all GDELT features
+--     LAST_VALUE(gs.gdelt_tone, true) OVER (
+--       PARTITION BY c.commodity ORDER BY ds.date
+--       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+--     ) as gdelt_tone,
+--     LAST_VALUE(gs.gdelt_positive, true) OVER (
+--       PARTITION BY c.commodity ORDER BY ds.date
+--       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+--     ) as gdelt_positive,
+--     LAST_VALUE(gs.gdelt_negative, true) OVER (
+--       PARTITION BY c.commodity ORDER BY ds.date
+--       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+--     ) as gdelt_negative,
+--     LAST_VALUE(gs.gdelt_polarity, true) OVER (
+--       PARTITION BY c.commodity ORDER BY ds.date
+--       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+--     ) as gdelt_polarity,
+--     LAST_VALUE(gs.gdelt_tone_volatility, true) OVER (
+--       PARTITION BY c.commodity ORDER BY ds.date
+--       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+--     ) as gdelt_tone_volatility,
+--     LAST_VALUE(gs.gdelt_article_count, true) OVER (
+--       PARTITION BY c.commodity ORDER BY ds.date
+--       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+--     ) as gdelt_article_count,
+--     LAST_VALUE(gs.gdelt_total_words, true) OVER (
+--       PARTITION BY c.commodity ORDER BY ds.date
+--       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+--     ) as gdelt_total_words
+--   FROM date_spine ds
+--   CROSS JOIN commodities c
+--   LEFT JOIN gdelt_sentiment gs
+--     ON ds.date = gs.date AND c.commodity = gs.commodity
+-- ),
+
+-- =============================================================================
 -- STEP 6: FINAL JOIN WITH TRADING DAY INDICATOR
 -- =============================================================================
 SELECT
@@ -206,9 +297,19 @@ SELECT
   wf.temp_c,
   wf.humidity_pct,
   wf.precipitation_mm
+  -- FUTURE: Add GDELT sentiment columns (7 features)
+  -- gdf.gdelt_tone,              -- Overall sentiment
+  -- gdf.gdelt_positive,          -- Positive score
+  -- gdf.gdelt_negative,          -- Negative score
+  -- gdf.gdelt_polarity,          -- Polarity measure
+  -- gdf.gdelt_tone_volatility,   -- Sentiment disagreement
+  -- gdf.gdelt_article_count,     -- News volume
+  -- gdf.gdelt_total_words        -- Total coverage
 FROM weather_filled wf
 INNER JOIN market_filled mf ON wf.date = mf.date AND wf.commodity = mf.commodity
 INNER JOIN vix_filled vf ON wf.date = vf.date
 INNER JOIN macro_filled macf ON wf.date = macf.date
 LEFT JOIN trading_days td ON wf.date = td.date AND wf.commodity = td.commodity
+-- FUTURE: Join GDELT sentiment
+-- LEFT JOIN gdelt_filled gdf ON wf.date = gdf.date AND wf.commodity = gdf.commodity
 ORDER BY wf.date, wf.commodity, wf.region;
