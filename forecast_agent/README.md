@@ -7,6 +7,15 @@ Time series forecasting system for commodity price prediction with walk-forward 
 
 ## Quick Start
 
+### Databricks
+1. Clone repo in Databricks Repos
+2. Open `databricks_quickstart.py` notebook
+3. Update path in cell 4: `/Workspace/Repos/<YOUR_USERNAME>/ucberkeley-capstone/forecast_agent`
+4. Run all cells
+
+The notebook will install dependencies, load data, run forecasts, and write to production tables.
+
+### Local Development
 ```bash
 # Production deployment
 python run_production_deployment.py
@@ -23,7 +32,8 @@ python run_production_deployment.py
 forecast_agent/
 ├── .gitignore
 ├── README.md
-├── run_production_deployment.py # Production script
+├── databricks_quickstart.py      # Databricks notebook (start here!)
+├── run_production_deployment.py  # Local production script
 │
 ├── ground_truth/                 # Production package
 │   ├── config/
