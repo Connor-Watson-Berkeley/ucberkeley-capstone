@@ -23,15 +23,15 @@ if not DATABRICKS_TOKEN:
         print("ERROR: DATABRICKS_TOKEN not found in environment or config file")
         sys.exit(1)
 
-def execute_sql(sql_query, wait_timeout=60):
+def execute_sql(sql_query, wait_timeout=30):
     """Execute SQL query via Databricks SQL API"""
-    
+
     url = f"{DATABRICKS_HOST}/api/2.0/sql/statements/"
     headers = {
         "Authorization": f"Bearer {DATABRICKS_TOKEN}",
         "Content-Type": "application/json"
     }
-    
+
     payload = {
         "statement": sql_query,
         "warehouse_id": WAREHOUSE_ID,
@@ -73,24 +73,34 @@ def main():
     print("="*60)
     print("Databricks Catalog Setup")
     print("="*60)
-    
-    # Step 1: Use commodity catalog
-    print("\n[1/4] Using commodity catalog...")
+
+    # Step 1: Try creating commodity catalog with S3 storage location
+    print("\n[1/5] Creating commodity catalog with S3 storage...")
+    success, _ = execute_sql("""
+        CREATE CATALOG IF NOT EXISTS commodity
+        MANAGED LOCATION 's3://groundtruth-capstone/catalog/commodity/'
+        COMMENT 'Commodity price forecasting data catalog'
+    """)
+    if not success:
+        print("WARNING: Could not create catalog, it may already exist or need manual creation...")
+        print("Try creating via Databricks UI: Data → Catalogs → Create Catalog")
+
+    # Step 2: Use commodity catalog
+    print("\n[2/5] Using commodity catalog...")
     success, _ = execute_sql("USE CATALOG commodity")
     if not success:
-        print("ERROR: Cannot use commodity catalog. Does it exist?")
-        print("Try creating it first: CREATE CATALOG IF NOT EXISTS commodity")
+        print("ERROR: Cannot use commodity catalog.")
         return False
-    
-    # Step 2: Create schemas
-    print("\n[2/4] Creating schemas...")
-    
+
+    # Step 3: Create schemas
+    print("\n[3/5] Creating schemas...")
+
     schemas = [
         ("bronze", "Bronze layer - raw data with deduplication views"),
         ("silver", "Silver layer - cleaned and joined data"),
         ("landing", "Landing layer - raw ingestion from S3")
     ]
-    
+
     for schema_name, comment in schemas:
         sql = f"CREATE SCHEMA IF NOT EXISTS commodity.{schema_name} COMMENT '{comment}'"
         success, _ = execute_sql(sql)
@@ -99,9 +109,9 @@ def main():
         else:
             print(f"  ✗ Failed: commodity.{schema_name}")
             return False
-    
-    # Step 3: Verify schemas exist
-    print("\n[3/4] Verifying schemas...")
+
+    # Step 4: Verify schemas exist
+    print("\n[4/5] Verifying schemas...")
     success, result = execute_sql("SHOW SCHEMAS IN commodity")
     
     if success:
