@@ -65,3 +65,12 @@ project_overview/
 
 # Lambda and EventBridge exports
 *.zip
+
+# Lambda migration - extracted dependencies (not needed in git)
+lambda_migration/migrated_functions/extracted/
+lambda_migration/migrated_functions/updated/
+
+# Lambda and EventBridge exports (large zip files)
+*.zip
+all-lambdas.zip
+all-eventbridge.zip
