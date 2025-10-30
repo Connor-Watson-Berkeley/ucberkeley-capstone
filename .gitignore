@@ -51,6 +51,12 @@ Thumbs.db
 # Databricks
 .databricks/
 
+# Infrastructure configuration (workspace-specific identifiers)
+infra/
+
+# Project documentation (local only)
+project_overview/
+
 # Model artifacts (optional - uncomment if needed)
 # *.pkl
 # *.joblib
