@@ -1,0 +1,926 @@
+-- Databricks notebook source
+-- MAGIC %python
+-- MAGIC import pyspark.sql.functions as F
+-- MAGIC from pyspark.sql.window import Window as W 
+-- MAGIC from pyspark.sql import SparkSession, Window
+-- MAGIC from datetime import datetime, timedelta
+-- MAGIC import random
+-- MAGIC import pandas as pd # Used only for initial SparkSession creation/setup
+-- MAGIC
+-- MAGIC # Initialize Spark Session (already available in Databricks runtime)
+-- MAGIC spark = SparkSession.builder.appName("CoffeeFeatures").getOrCreate()
+-- MAGIC
+-- MAGIC # --- 1. DATA LOADING AND JOIN (READING FROM BRONZE TABLES) ---
+-- MAGIC
+-- MAGIC print("--- 1. Loading and Joining Bronze Tables for Daily Input ---")
+-- MAGIC
+-- MAGIC # FIX APPLIED: Use multiple regions for a more robust weather risk assessment.
+-- MAGIC TARGET_REGIONS = ['Minas Gerais', 'Sao Paulo', 'Dak Lak (Vietnam)']
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.1 Load Market Data (Price and Volume from Yahoo Finance)
+-- MAGIC print("  - Loading market_data_raw...")
+-- MAGIC market_df = spark.read.table("commodity.bronze.market_data_raw")
+-- MAGIC market_df = market_df.select(
+-- MAGIC     F.col("Date").cast("date").alias("Date"), # Assuming 'Date' column exists
+-- MAGIC     F.col("Close").alias("Coffee_Price"),
+-- MAGIC     F.col("Volume").alias("Volume")
+-- MAGIC ).filter(F.col("Date").isNotNull())
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.2 Load VIX Data (from new dedicated bronze table)
+-- MAGIC print("  - Loading vix_data_raw...")
+-- MAGIC vix_df = spark.read.table("commodity.bronze.vix_data_raw")
+-- MAGIC vix_df = vix_df.select(
+-- MAGIC     F.col("date").cast("date").alias("Date"),
+-- MAGIC     F.col("vix").alias("VIX")
+-- MAGIC ).filter(F.col("Date").isNotNull())
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.3 Load Macro Data (Exchange Rates)
+-- MAGIC print("  - Loading macro_data_raw...")
+-- MAGIC macro_df = spark.read.table("commodity.bronze.macro_data_raw")
+-- MAGIC macro_df = macro_df.select(
+-- MAGIC     F.col("date").cast("date").alias("Date"),
+-- MAGIC     # *** ACTION REQUIRED: CHECK THIS COLUMN NAME ***
+-- MAGIC     # Replace 'cop_usd' with your actual USD/BRL column name.
+-- MAGIC     F.col("cop_usd").alias("USD_BRL") 
+-- MAGIC ).filter(F.col("Date").isNotNull())
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.4 Load Weather Data (Rainfall, Temperature)
+-- MAGIC print("  - Loading v_weather_data_all and filtering to target regions...")
+-- MAGIC weather_df = spark.read.table("commodity.bronze.v_weather_data_all")
+-- MAGIC # FIX APPLIED: Filter using .isin() to include all target regions
+-- MAGIC weather_df = weather_df.filter(F.col("region").isin(TARGET_REGIONS)) 
+-- MAGIC weather_df = weather_df.select(
+-- MAGIC     F.col("dt").cast("date").alias("Date"), 
+-- MAGIC     F.col("precipitation_mm").alias("Rainfall_MM"),
+-- MAGIC     F.col("temp_c").alias("Min_Temp_C"),
+-- MAGIC     F.col("region").alias("Region")
+-- MAGIC ).filter(F.col("dt").isNotNull()) 
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.5 Join all daily dataframes on the Date column (Full Outer to keep all dates)
+-- MAGIC print("  - Joining Market, VIX, and Macro data on Date...")
+-- MAGIC daily_df = market_df.join(vix_df, on="Date", how="full_outer")
+-- MAGIC daily_df = daily_df.join(macro_df, on="Date", how="full_outer")
+-- MAGIC # NOTE: Weather join happens in section 2.4 after feature calculation
+-- MAGIC
+-- MAGIC # Drop rows where the essential price/volume data is missing (assuming no trade days should be excluded)
+-- MAGIC daily_df = daily_df.na.drop(subset=['Coffee_Price', 'Volume']) 
+-- MAGIC
+-- MAGIC daily_df = daily_df.orderBy("Date")
+-- MAGIC daily_df.cache() # Cache for multiple passes
+-- MAGIC daily_df.printSchema()
+-- MAGIC print(f"Sample Records (after join): {daily_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 2. FEATURE ENGINEERING IMPLEMENTATION ---
+-- MAGIC
+-- MAGIC # 2.1 Setup Rolling Window Specifications
+-- MAGIC
+-- MAGIC # Define the standard non-partitioned windows for financial data
+-- MAGIC window_20d = Window.orderBy(F.col("Date")).rowsBetween(-19, 0)
+-- MAGIC window_90d = Window.orderBy(F.col("Date")).rowsBetween(-89, 0)
+-- MAGIC
+-- MAGIC # FIX APPLIED: Partitioned window for regional weather analysis
+-- MAGIC window_90d_region = W.partitionBy("Region").orderBy(F.col("Date")).rowsBetween(-89, 0)
+-- MAGIC window_60d_region = W.partitionBy("Region").orderBy(F.col("Date")).rowsBetween(-59, 0)
+-- MAGIC
+-- MAGIC
+-- MAGIC # 2.2 Price and Volatility Features (Yahoo Finance Data)
+-- MAGIC
+-- MAGIC print("\n--- 2.2 Generating Price and Volatility Features ---")
+-- MAGIC
+-- MAGIC # 1. Log Returns
+-- MAGIC price_df = daily_df.withColumn(
+-- MAGIC     "Log_Return", 
+-- MAGIC     F.log(F.col("Coffee_Price") / F.lag(F.col("Coffee_Price"), 1).over(Window.orderBy("Date")))
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 2. 20-Day Historical Volatility (HV)
+-- MAGIC price_df = price_df.withColumn(
+-- MAGIC     "HV_20D_Annualized", 
+-- MAGIC     F.stddev(F.col("Log_Return")).over(window_20d) * F.sqrt(F.lit(252)) # Annualized
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 3. Moving Average Signal (50-day vs 200-day)
+-- MAGIC price_df = price_df.withColumn("SMA_50D", F.avg(F.col("Coffee_Price")).over(Window.orderBy("Date").rowsBetween(-49, 0)))
+-- MAGIC price_df = price_df.withColumn("SMA_200D", F.avg(F.col("Coffee_Price")).over(Window.orderBy("Date").rowsBetween(-199, 0)))
+-- MAGIC price_df = price_df.withColumn(
+-- MAGIC     "MA_Signal", 
+-- MAGIC     F.col("SMA_50D") - F.col("SMA_200D") # Positive if bullish momentum
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 4. Volume Z-Score (Anomaly)
+-- MAGIC price_df = price_df.withColumn("Volume_Mean_90D", F.avg(F.col("Volume")).over(window_90d))
+-- MAGIC price_df = price_df.withColumn("Volume_STD_90D", F.stddev(F.col("Volume")).over(window_90d))
+-- MAGIC price_df = price_df.withColumn(
+-- MAGIC     "Volume_Z_Score", 
+-- MAGIC     (F.col("Volume") - F.col("Volume_Mean_90D")) / F.col("Volume_STD_90D")
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 2.3 Macro and FX Features (VIX & Exchange Rates)
+-- MAGIC
+-- MAGIC print("\n--- 2.3 Generating Macro and FX Features ---")
+-- MAGIC
+-- MAGIC macro_df = price_df.withColumn(
+-- MAGIC     "FX_BRL_Return_7D", 
+-- MAGIC     (F.col("USD_BRL") / F.lag(F.col("USD_BRL"), 7).over(Window.orderBy("Date"))) - 1 # 7-day return
+-- MAGIC )
+-- MAGIC macro_df = macro_df.withColumn(
+-- MAGIC     "VIX_Mean_7D", 
+-- MAGIC     F.avg(F.col("VIX")).over(Window.orderBy("Date").rowsBetween(-6, 0))
+-- MAGIC )
+-- MAGIC
+-- MAGIC
+-- MAGIC # 2.4 Weather Stress Features (OWM Data - Multi-Region)
+-- MAGIC
+-- MAGIC print("\n--- 2.4 Generating Multi-Region Weather Stress Features ---")
+-- MAGIC
+-- MAGIC # Apply weather features *per region*
+-- MAGIC regional_weather_features = weather_df
+-- MAGIC
+-- MAGIC # 1. Regional 90-Day Rainfall Z-Score (Drought/Flood Stress)
+-- MAGIC regional_weather_features = regional_weather_features.withColumn("Rainfall_Mean_90D", F.avg(F.col("Rainfall_MM")).over(window_90d_region))
+-- MAGIC regional_weather_features = regional_weather_features.withColumn("Rainfall_STD_90D", F.stddev(F.col("Rainfall_MM")).over(window_90d_region))
+-- MAGIC regional_weather_features = regional_weather_features.withColumn(
+-- MAGIC     "Rainfall_Z_Score_90D_Regional", 
+-- MAGIC     (F.col("Rainfall_MM") - F.col("Rainfall_Mean_90D")) / F.col("Rainfall_STD_90D")
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 2. Regional Frost Day Count (Binary Shock Feature)
+-- MAGIC regional_weather_features = regional_weather_features.withColumn(
+-- MAGIC     "Is_Frost", 
+-- MAGIC     F.when(F.col("Min_Temp_C") <= 0, 1).otherwise(0)
+-- MAGIC )
+-- MAGIC regional_weather_features = regional_weather_features.withColumn(
+-- MAGIC     "Frost_Day_Count_60D_Regional", 
+-- MAGIC     F.sum(F.col("Is_Frost")).over(window_60d_region)
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 3. Aggregate Regional Stress into Daily Features (Worst-Case Index)
+-- MAGIC # For Z-Score (Drought): Lower Z-Score is worse (MIN)
+-- MAGIC # For Frost: Higher count is worse (MAX)
+-- MAGIC daily_weather_stress = regional_weather_features.groupBy("Date").agg(
+-- MAGIC     F.min("Rainfall_Z_Score_90D_Regional").alias("Worst_Rainfall_Z_Score"),
+-- MAGIC     F.max("Frost_Day_Count_60D_Regional").alias("Max_Frost_Count")
+-- MAGIC )
+-- MAGIC
+-- MAGIC # Final Join: Combine financial features (macro_df) with worst-case weather stress
+-- MAGIC final_daily_df = macro_df.join(daily_weather_stress, on="Date", how="left_outer")
+-- MAGIC final_daily_df.cache()
+-- MAGIC print(f"Final Daily DataFrame count (after weather merge): {final_daily_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 3. ALIGNMENT AND RESAMPLING FOR CFTC & FAOSTAT MERGE ---
+-- MAGIC
+-- MAGIC # NOTE: We use the 'final_daily_df' for resampling
+-- MAGIC
+-- MAGIC # 3.1 Weekly Alignment (for merging with CFTC data)
+-- MAGIC print("\n--- 3.1 Weekly Resampling for CFTC (End-of-Week Features) ---")
+-- MAGIC
+-- MAGIC weekly_features_df = final_daily_df.groupBy(F.date_trunc('week', F.col("Date")).alias("Week_Start_Date")).agg(
+-- MAGIC     F.last(F.col("Coffee_Price")).alias("Coffee_Price_EOW"),
+-- MAGIC     F.mean(F.col("HV_20D_Annualized")).alias("HV_20D_Annualized_Wk_Mean"),
+-- MAGIC     F.last(F.col("MA_Signal")).alias("MA_Signal_EOW"),
+-- MAGIC     F.mean(F.col("VIX_Mean_7D")).alias("VIX_Mean_Wk_Mean"),
+-- MAGIC     F.mean(F.col("FX_BRL_Return_7D")).alias("FX_BRL_Return_Wk_Mean"),
+-- MAGIC     F.max(F.col("Max_Frost_Count")).alias("Max_Frost_Count_Wk_Max") # Use MAX frost count for the week
+-- MAGIC ).orderBy("Week_Start_Date")
+-- MAGIC
+-- MAGIC print(f"Weekly Features created: {weekly_features_df.count()}")
+-- MAGIC weekly_features_df.show(5)
+-- MAGIC
+-- MAGIC
+-- MAGIC # 3.2 Monthly Alignment (for merging with FAOSTAT data)
+-- MAGIC print("\n--- 3.2 Monthly Resampling for FAOSTAT (End-of-Month Features) ---")
+-- MAGIC
+-- MAGIC monthly_features_df = final_daily_df.groupBy(F.date_trunc('month', F.col("Date")).alias("Month_Start_Date")).agg(
+-- MAGIC     F.last(F.col("Coffee_Price")).alias("Coffee_Price_EOM"),
+-- MAGIC     F.mean(F.col("HV_20D_Annualized")).alias("HV_20D_Annualized_Mo_Mean"),
+-- MAGIC     F.min(F.col("Worst_Rainfall_Z_Score")).alias("Worst_Rainfall_Z_Score_Mo_Min"), # Use MIN Z-score for the month
+-- MAGIC     F.max(F.col("Max_Frost_Count")).alias("Max_Frost_Count_Mo_Max"), # Use MAX frost count for the month
+-- MAGIC     F.mean(F.col("USD_BRL")).alias("USD_BRL_Mo_Mean")
+-- MAGIC ).orderBy("Month_Start_Date")
+-- MAGIC
+-- MAGIC print(f"Monthly Features created: {monthly_features_df.count()}")
+-- MAGIC monthly_features_df.show(5)
+-- MAGIC
+-- MAGIC # --- 4. FINAL OUTPUT ---
+-- MAGIC # Write the resulting feature tables to a Databricks Delta Lake location
+-- MAGIC # This will create your Silver layer feature tables for modeling!
+-- MAGIC weekly_features_df.write.mode("overwrite").format("delta").saveAsTable("commodity.silver.coffee_weekly")
+-- MAGIC monthly_features_df.write.mode("overwrite").format("delta").saveAsTable("commodity.silver.coffee_monthly")
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC import pyspark.sql.functions as F
+-- MAGIC from pyspark.sql import SparkSession
+-- MAGIC import matplotlib.pyplot as plt
+-- MAGIC import seaborn as sns
+-- MAGIC import numpy as np
+-- MAGIC import pandas as pd
+-- MAGIC
+-- MAGIC # Initialize Spark Session (already available in Databricks runtime)
+-- MAGIC spark = SparkSession.builder.appName("CoffeeVisualization").getOrCreate()
+-- MAGIC
+-- MAGIC # ----------------------------------------------------
+-- MAGIC # 1. LOAD WEEKLY AND MONTHLY FEATURE TABLES
+-- MAGIC # ----------------------------------------------------
+-- MAGIC
+-- MAGIC print("--- 1. Loading Weekly Features from commodity.silver.coffee_weekly ---")
+-- MAGIC try:
+-- MAGIC     weekly_df_spark = spark.read.table("commodity.silver.coffee_weekly")
+-- MAGIC     weekly_df_pd = weekly_df_spark.toPandas()
+-- MAGIC     weekly_df_pd['Week_Start_Date'] = pd.to_datetime(weekly_df_pd['Week_Start_Date'])
+-- MAGIC     weekly_df_pd = weekly_df_pd.set_index('Week_Start_Date').sort_index()
+-- MAGIC except Exception as e:
+-- MAGIC     print(f"Error loading weekly table: {e}")
+-- MAGIC     print("Please ensure 'commodity.silver.coffee_weekly' has been successfully written.")
+-- MAGIC     exit()
+-- MAGIC
+-- MAGIC print("--- 1. Loading Monthly Features from commodity.silver.coffee_monthly ---")
+-- MAGIC try:
+-- MAGIC     monthly_df_spark = spark.read.table("commodity.silver.coffee_monthly")
+-- MAGIC     monthly_df_pd = monthly_df_spark.toPandas()
+-- MAGIC     # FIX: Rename the index column to match the expected feature name for clarity
+-- MAGIC     monthly_df_pd = monthly_df_pd.rename(columns={'Month_Start_Date': 'Date_Index'})
+-- MAGIC     monthly_df_pd['Date_Index'] = pd.to_datetime(monthly_df_pd['Date_Index'])
+-- MAGIC     monthly_df_pd = monthly_df_pd.set_index('Date_Index').sort_index()
+-- MAGIC
+-- MAGIC except Exception as e:
+-- MAGIC     print(f"Error loading monthly table: {e}")
+-- MAGIC     print("Please ensure 'commodity.silver.coffee_monthly' has been successfully written.")
+-- MAGIC     exit()
+-- MAGIC
+-- MAGIC sns.set_style("whitegrid")
+-- MAGIC plt.rcParams['figure.figsize'] = [12, 6]
+-- MAGIC plt.rcParams['figure.dpi'] = 100
+-- MAGIC
+-- MAGIC # ----------------------------------------------------
+-- MAGIC # VISUALIZATION 1: MARKET DYNAMICS (PRICE VS. VOLATILITY)
+-- MAGIC # ----------------------------------------------------
+-- MAGIC print("--- Generating Viz 1: Price vs. Volatility (Weekly) ---")
+-- MAGIC
+-- MAGIC fig, ax1 = plt.subplots(figsize=(14, 6))
+-- MAGIC
+-- MAGIC color = 'tab:blue'
+-- MAGIC ax1.set_xlabel('Week Start Date')
+-- MAGIC ax1.set_ylabel('Coffee Price (USD/lb)', color=color, fontweight='bold')
+-- MAGIC ax1.plot(weekly_df_pd.index, weekly_df_pd['Coffee_Price_EOW'], color=color, label='EOW Price')
+-- MAGIC ax1.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC # Instantiate a second axes that shares the same x-axis
+-- MAGIC ax2 = ax1.twinx()
+-- MAGIC color = 'tab:red'
+-- MAGIC ax2.set_ylabel('HV 20D Annualized (%)', color=color, fontweight='bold')
+-- MAGIC # We multiply by 100 to show volatility as a percentage
+-- MAGIC ax2.plot(weekly_df_pd.index, weekly_df_pd['HV_20D_Annualized_Wk_Mean'] * 100, color=color, linestyle='--', label='20D Volatility')
+-- MAGIC ax2.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC ax1.set_title('Coffee Futures Price vs. Market Volatility (HV)', fontsize=16)
+-- MAGIC plt.grid(True, linestyle='--', alpha=0.6)
+-- MAGIC plt.show()
+-- MAGIC
+-- MAGIC
+-- MAGIC # ----------------------------------------------------
+-- MAGIC # VISUALIZATION 2: MACRO DRIVER CORRELATION (PRICE VS. EXCHANGE RATE)
+-- MAGIC # ----------------------------------------------------
+-- MAGIC print("--- Generating Viz 2: Price vs. Exchange Rate (Weekly Price, Monthly FX) ---")
+-- MAGIC
+-- MAGIC fig, ax1 = plt.subplots(figsize=(14, 6))
+-- MAGIC
+-- MAGIC # Price (Left Axis) - Uses Weekly Data
+-- MAGIC color = 'tab:green'
+-- MAGIC ax1.set_xlabel('Date')
+-- MAGIC ax1.set_ylabel('Coffee Price (USD/lb)', color=color, fontweight='bold')
+-- MAGIC ax1.plot(weekly_df_pd.index, weekly_df_pd['Coffee_Price_EOW'], color=color, label='EOW Price (Weekly)')
+-- MAGIC ax1.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC # USD/BRL Exchange Rate (Right Axis) - Uses Monthly Data
+-- MAGIC ax2 = ax1.twinx()
+-- MAGIC color = 'tab:orange'
+-- MAGIC ax2.set_ylabel('USD/BRL Exchange Rate (Monthly)', color=color, fontweight='bold')
+-- MAGIC # FIX APPLIED: Plotting the monthly feature against the monthly index
+-- MAGIC ax2.plot(monthly_df_pd.index, monthly_df_pd['USD_BRL_Mo_Mean'], color=color, linestyle='-', label='USD/BRL (Monthly Mean)')
+-- MAGIC ax2.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC ax1.set_title('Coffee Price vs. Brazilian Real (USD/BRL) Exchange Rate', fontsize=16)
+-- MAGIC plt.grid(True, linestyle='--', alpha=0.6)
+-- MAGIC plt.show()
+-- MAGIC
+-- MAGIC
+-- MAGIC # ----------------------------------------------------
+-- MAGIC # VISUALIZATION 3: SUPPLY STRESS INDEX
+-- MAGIC # ----------------------------------------------------
+-- MAGIC print("--- Generating Viz 3: Supply Stress Index (Monthly) ---")
+-- MAGIC
+-- MAGIC # Data is already loaded as monthly_df_pd
+-- MAGIC
+-- MAGIC fig, ax1 = plt.subplots(figsize=(14, 6))
+-- MAGIC
+-- MAGIC # Worst Rainfall Z-Score (Drought Stress) (Left Axis)
+-- MAGIC color = 'tab:blue'
+-- MAGIC ax1.set_xlabel('Month Start Date')
+-- MAGIC ax1.set_ylabel('Worst Rainfall Z-Score (Drought/Flood)', color=color, fontweight='bold')
+-- MAGIC ax1.plot(monthly_df_pd.index, monthly_df_pd['Worst_Rainfall_Z_Score_Mo_Min'], color=color, label='Drought Stress (MIN Z-Score)')
+-- MAGIC ax1.axhline(0, color='gray', linestyle=':', linewidth=1)
+-- MAGIC ax1.axhline(-2, color='red', linestyle='--', linewidth=1, label='Severe Drought Threshold (-2 SD)') # Highlight severe drought
+-- MAGIC ax1.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC # Max Frost Count (Right Axis)
+-- MAGIC ax2 = ax1.twinx()
+-- MAGIC color = 'tab:purple'
+-- MAGIC ax2.set_ylabel('Max Frost Day Count (60D)', color=color, fontweight='bold')
+-- MAGIC ax2.bar(monthly_df_pd.index, monthly_df_pd['Max_Frost_Count_Mo_Max'], color=color, alpha=0.5, label='Max Frost Days')
+-- MAGIC ax2.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC ax1.set_title('Multi-Region Worst-Case Weather Stress Indicators (Monthly)', fontsize=16)
+-- MAGIC fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
+-- MAGIC plt.show()
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC import pyspark.sql.functions as F
+-- MAGIC from pyspark.sql.window import Window as W 
+-- MAGIC from pyspark.sql import SparkSession, Window
+-- MAGIC import pandas as pd # Used only for initial SparkSession creation/setup
+-- MAGIC
+-- MAGIC # Initialize Spark Session (already available in Databricks runtime)
+-- MAGIC spark = SparkSession.builder.appName("SugarFeatures").getOrCreate()
+-- MAGIC
+-- MAGIC # --- CONFIGURATION ---
+-- MAGIC # Key sugar producing regions globally for multi-region weather stress calculation
+-- MAGIC TARGET_REGIONS = ['Sao Paulo', 'Maharashtra', 'Ubon Ratchathani']
+-- MAGIC TARGET_COMMODITY = "Sugar"
+-- MAGIC
+-- MAGIC # --- 1. DATA LOADING AND JOIN (READING FROM BRONZE TABLES) ---
+-- MAGIC
+-- MAGIC print(f"--- 1. Loading and Joining Bronze Tables for Daily {TARGET_COMMODITY} Input ---")
+-- MAGIC
+-- MAGIC # 1.1 Load Market Data (Price and Volume - ASSUMED TO BE SUGAR FUTURES)
+-- MAGIC print(f"  - Loading market_data_raw (assuming it contains {TARGET_COMMODITY} data)...")
+-- MAGIC market_df = spark.read.table("commodity.bronze.market_data_raw")
+-- MAGIC market_df = market_df.select(
+-- MAGIC     F.col("Date").cast("date").alias("Date"),
+-- MAGIC     # ASSUMPTION: 'Close' column holds the Sugar futures closing price
+-- MAGIC     F.col("Close").alias("Sugar_Price"), 
+-- MAGIC     F.col("Volume").alias("Volume")
+-- MAGIC ).filter(F.col("Date").isNotNull())
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.2 Load VIX Data
+-- MAGIC print("  - Loading vix_data_raw...")
+-- MAGIC vix_df = spark.read.table("commodity.bronze.vix_data_raw")
+-- MAGIC vix_df = vix_df.select(
+-- MAGIC     F.col("date").cast("date").alias("Date"),
+-- MAGIC     F.col("vix").alias("VIX")
+-- MAGIC ).filter(F.col("Date").isNotNull())
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.3 Load Macro Data (Exchange Rates)
+-- MAGIC print("  - Loading macro_data_raw...")
+-- MAGIC macro_df = spark.read.table("commodity.bronze.macro_data_raw")
+-- MAGIC macro_df = macro_df.select(
+-- MAGIC     F.col("date").cast("date").alias("Date"),
+-- MAGIC     # ACTION REQUIRED: Replace 'cop_usd' with your actual USD/BRL column name.
+-- MAGIC     F.col("cop_usd").alias("USD_BRL") 
+-- MAGIC ).filter(F.col("Date").isNotNull())
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.4 Load Weather Data
+-- MAGIC print(f"  - Loading v_weather_data_all and filtering to target regions: {', '.join(TARGET_REGIONS)}...")
+-- MAGIC weather_df = spark.read.table("commodity.bronze.v_weather_data_all")
+-- MAGIC weather_df = weather_df.filter(F.col("region").isin(TARGET_REGIONS)) 
+-- MAGIC weather_df = weather_df.select(
+-- MAGIC     F.col("dt").cast("date").alias("Date"), 
+-- MAGIC     F.col("precipitation_mm").alias("Rainfall_MM"),
+-- MAGIC     F.col("temp_c").alias("Min_Temp_C"),
+-- MAGIC     F.col("region").alias("Region")
+-- MAGIC ).filter(F.col("dt").isNotNull()) 
+-- MAGIC
+-- MAGIC
+-- MAGIC # 1.5 Join all daily dataframes on the Date column
+-- MAGIC print("  - Joining Market, VIX, and Macro data on Date...")
+-- MAGIC daily_df = market_df.join(vix_df, on="Date", how="full_outer")
+-- MAGIC daily_df = daily_df.join(macro_df, on="Date", how="full_outer")
+-- MAGIC
+-- MAGIC daily_df = daily_df.na.drop(subset=['Sugar_Price', 'Volume']) 
+-- MAGIC
+-- MAGIC daily_df = daily_df.orderBy("Date")
+-- MAGIC daily_df.cache()
+-- MAGIC print(f"Sample Records (after join): {daily_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 2. FEATURE ENGINEERING IMPLEMENTATION ---
+-- MAGIC
+-- MAGIC # 2.1 Setup Rolling Window Specifications
+-- MAGIC
+-- MAGIC window_20d = Window.orderBy(F.col("Date")).rowsBetween(-19, 0)
+-- MAGIC window_90d = Window.orderBy(F.col("Date")).rowsBetween(-89, 0)
+-- MAGIC
+-- MAGIC # Partitioned windows for regional weather analysis
+-- MAGIC window_90d_region = W.partitionBy("Region").orderBy(F.col("Date")).rowsBetween(-89, 0)
+-- MAGIC window_60d_region = W.partitionBy("Region").orderBy(F.col("Date")).rowsBetween(-59, 0)
+-- MAGIC
+-- MAGIC
+-- MAGIC # 2.2 Price and Volatility Features
+-- MAGIC
+-- MAGIC print("\n--- 2.2 Generating Price and Volatility Features ---")
+-- MAGIC
+-- MAGIC # 1. Log Returns
+-- MAGIC price_df = daily_df.withColumn(
+-- MAGIC     "Log_Return", 
+-- MAGIC     F.log(F.col("Sugar_Price") / F.lag(F.col("Sugar_Price"), 1).over(Window.orderBy("Date")))
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 2. 20-Day Historical Volatility (HV)
+-- MAGIC price_df = price_df.withColumn(
+-- MAGIC     "HV_20D_Annualized", 
+-- MAGIC     F.stddev(F.col("Log_Return")).over(window_20d) * F.sqrt(F.lit(252))
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 3. Moving Average Signal (50-day vs 200-day)
+-- MAGIC price_df = price_df.withColumn("SMA_50D", F.avg(F.col("Sugar_Price")).over(Window.orderBy("Date").rowsBetween(-49, 0)))
+-- MAGIC price_df = price_df.withColumn("SMA_200D", F.avg(F.col("Sugar_Price")).over(Window.orderBy("Date").rowsBetween(-199, 0)))
+-- MAGIC price_df = price_df.withColumn(
+-- MAGIC     "MA_Signal", 
+-- MAGIC     F.col("SMA_50D") - F.col("SMA_200D")
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 4. Volume Z-Score (Anomaly)
+-- MAGIC price_df = price_df.withColumn("Volume_Mean_90D", F.avg(F.col("Volume")).over(window_90d))
+-- MAGIC price_df = price_df.withColumn("Volume_STD_90D", F.stddev(F.col("Volume")).over(window_90d))
+-- MAGIC price_df = price_df.withColumn(
+-- MAGIC     "Volume_Z_Score", 
+-- MAGIC     (F.col("Volume") - F.col("Volume_Mean_90D")) / F.col("Volume_STD_90D")
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 2.3 Macro and FX Features
+-- MAGIC
+-- MAGIC print("\n--- 2.3 Generating Macro and FX Features ---")
+-- MAGIC
+-- MAGIC macro_df = price_df.withColumn(
+-- MAGIC     "FX_BRL_Return_7D", 
+-- MAGIC     (F.col("USD_BRL") / F.lag(F.col("USD_BRL"), 7).over(Window.orderBy("Date"))) - 1
+-- MAGIC )
+-- MAGIC macro_df = macro_df.withColumn(
+-- MAGIC     "VIX_Mean_7D", 
+-- MAGIC     F.avg(F.col("VIX")).over(Window.orderBy("Date").rowsBetween(-6, 0))
+-- MAGIC )
+-- MAGIC
+-- MAGIC
+-- MAGIC # 2.4 Weather Stress Features (OWM Data - Multi-Region)
+-- MAGIC
+-- MAGIC print("\n--- 2.4 Generating Multi-Region Weather Stress Features ---")
+-- MAGIC
+-- MAGIC # Apply weather features *per region*
+-- MAGIC regional_weather_features = weather_df
+-- MAGIC
+-- MAGIC # 1. Regional 90-Day Rainfall Z-Score (Drought/Flood Stress)
+-- MAGIC regional_weather_features = regional_weather_features.withColumn("Rainfall_Mean_90D", F.avg(F.col("Rainfall_MM")).over(window_90d_region))
+-- MAGIC regional_weather_features = regional_weather_features.withColumn("Rainfall_STD_90D", F.stddev(F.col("Rainfall_MM")).over(window_90d_region))
+-- MAGIC regional_weather_features = regional_weather_features.withColumn(
+-- MAGIC     "Rainfall_Z_Score_90D_Regional", 
+-- MAGIC     (F.col("Rainfall_MM") - F.col("Rainfall_Mean_90D")) / F.col("Rainfall_STD_90D")
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 2. Regional Frost Day Count (Binary Shock Feature)
+-- MAGIC # NOTE: Frost is less of a factor for sugarcane than coffee, but retained as a heat proxy.
+-- MAGIC regional_weather_features = regional_weather_features.withColumn(
+-- MAGIC     "Is_Frost", 
+-- MAGIC     F.when(F.col("Min_Temp_C") <= 0, 1).otherwise(0)
+-- MAGIC )
+-- MAGIC regional_weather_features = regional_weather_features.withColumn(
+-- MAGIC     "Frost_Day_Count_60D_Regional", 
+-- MAGIC     F.sum(F.col("Is_Frost")).over(window_60d_region)
+-- MAGIC )
+-- MAGIC
+-- MAGIC # 3. Aggregate Regional Stress into Daily Features (Worst-Case Index)
+-- MAGIC # For Z-Score (Drought): Lower Z-Score is worse (MIN)
+-- MAGIC # For Frost: Higher count is worse (MAX)
+-- MAGIC daily_weather_stress = regional_weather_features.groupBy("Date").agg(
+-- MAGIC     F.min("Rainfall_Z_Score_90D_Regional").alias("Worst_Rainfall_Z_Score"),
+-- MAGIC     F.max("Frost_Day_Count_60D_Regional").alias("Max_Frost_Count")
+-- MAGIC )
+-- MAGIC
+-- MAGIC # Final Join: Combine financial features (macro_df) with worst-case weather stress
+-- MAGIC final_daily_df = macro_df.join(daily_weather_stress, on="Date", how="left_outer")
+-- MAGIC final_daily_df.cache()
+-- MAGIC print(f"Final Daily DataFrame count (after weather merge): {final_daily_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 3. ALIGNMENT AND RESAMPLING FOR CFTC & FAOSTAT MERGE ---
+-- MAGIC
+-- MAGIC # 3.1 Weekly Alignment (for merging with CFTC data)
+-- MAGIC print("\n--- 3.1 Weekly Resampling for CFTC (End-of-Week Features) ---")
+-- MAGIC
+-- MAGIC weekly_features_df = final_daily_df.groupBy(F.date_trunc('week', F.col("Date")).alias("Week_Start_Date")).agg(
+-- MAGIC     F.last(F.col("Sugar_Price")).alias("Sugar_Price_EOW"),
+-- MAGIC     F.mean(F.col("HV_20D_Annualized")).alias("HV_20D_Annualized_Wk_Mean"),
+-- MAGIC     F.last(F.col("MA_Signal")).alias("MA_Signal_EOW"),
+-- MAGIC     F.mean(F.col("VIX_Mean_7D")).alias("VIX_Mean_Wk_Mean"),
+-- MAGIC     F.mean(F.col("FX_BRL_Return_7D")).alias("FX_BRL_Return_Wk_Mean"),
+-- MAGIC     F.max(F.col("Max_Frost_Count")).alias("Max_Frost_Count_Wk_Max")
+-- MAGIC ).orderBy("Week_Start_Date")
+-- MAGIC
+-- MAGIC print(f"Weekly Features created: {weekly_features_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # 3.2 Monthly Alignment (for merging with FAOSTAT data)
+-- MAGIC print("\n--- 3.2 Monthly Resampling for FAOSTAT (End-of-Month Features) ---")
+-- MAGIC
+-- MAGIC monthly_features_df = final_daily_df.groupBy(F.date_trunc('month', F.col("Date")).alias("Month_Start_Date")).agg(
+-- MAGIC     F.last(F.col("Sugar_Price")).alias("Sugar_Price_EOM"),
+-- MAGIC     F.mean(F.col("HV_20D_Annualized")).alias("HV_20D_Annualized_Mo_Mean"),
+-- MAGIC     F.min(F.col("Worst_Rainfall_Z_Score")).alias("Worst_Rainfall_Z_Score_Mo_Min"),
+-- MAGIC     F.max(F.col("Max_Frost_Count")).alias("Max_Frost_Count_Mo_Max"),
+-- MAGIC     F.mean(F.col("USD_BRL")).alias("USD_BRL_Mo_Mean")
+-- MAGIC ).orderBy("Month_Start_Date")
+-- MAGIC
+-- MAGIC print(f"Monthly Features created: {monthly_features_df.count()}")
+-- MAGIC
+-- MAGIC # --- 4. FINAL OUTPUT ---
+-- MAGIC # Write the resulting feature tables to a Databricks Delta Lake location
+-- MAGIC weekly_features_df.write.mode("overwrite").format("delta").saveAsTable("commodity.silver.sugar_weekly")
+-- MAGIC monthly_features_df.write.mode("overwrite").format("delta").saveAsTable("commodity.silver.sugar_monthly")
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC import pandas as pd
+-- MAGIC import matplotlib.pyplot as plt
+-- MAGIC import seaborn as sns
+-- MAGIC from pyspark.sql import SparkSession
+-- MAGIC
+-- MAGIC # Initialize Spark Session (already available in Databricks runtime)
+-- MAGIC spark = SparkSession.builder.appName("SugarFeatureViz").getOrCreate()
+-- MAGIC
+-- MAGIC # --- 0. DATA LOADING (Sugar) ---
+-- MAGIC
+-- MAGIC print("--- 1. Loading Weekly Features from commodity.silver.sugar_weekly ---")
+-- MAGIC try:
+-- MAGIC     # Load the weekly features table for Sugar
+-- MAGIC     weekly_df_spark = spark.read.table("commodity.silver.sugar_weekly")
+-- MAGIC     weekly_df_pd = weekly_df_spark.toPandas()
+-- MAGIC     weekly_df_pd['Week_Start_Date'] = pd.to_datetime(weekly_df_pd['Week_Start_Date'])
+-- MAGIC     weekly_df_pd = weekly_df_pd.set_index('Week_Start_Date').sort_index()
+-- MAGIC except Exception as e:
+-- MAGIC     print(f"Error loading weekly table: {e}")
+-- MAGIC     print("Please ensure 'commodity.silver.sugar_weekly' has been successfully written.")
+-- MAGIC     exit()
+-- MAGIC
+-- MAGIC print("--- 2. Loading Monthly Features from commodity.silver.sugar_monthly ---")
+-- MAGIC try:
+-- MAGIC     # Load the monthly features table for Sugar
+-- MAGIC     monthly_df_spark = spark.read.table("commodity.silver.sugar_monthly")
+-- MAGIC     monthly_df_pd = monthly_df_spark.toPandas()
+-- MAGIC     # Rename the index column to match the expected feature name for clarity
+-- MAGIC     monthly_df_pd = monthly_df_pd.rename(columns={'Month_Start_Date': 'Date_Index'})
+-- MAGIC     monthly_df_pd['Date_Index'] = pd.to_datetime(monthly_df_pd['Date_Index'])
+-- MAGIC     monthly_df_pd = monthly_df_pd.set_index('Date_Index').sort_index()
+-- MAGIC
+-- MAGIC except Exception as e:
+-- MAGIC     print(f"Error loading monthly table: {e}")
+-- MAGIC     print("Please ensure 'commodity.silver.sugar_monthly' has been successfully written.")
+-- MAGIC     exit()
+-- MAGIC
+-- MAGIC # Configure plot styles
+-- MAGIC sns.set_style("whitegrid")
+-- MAGIC plt.rcParams['figure.figsize'] = [12, 6]
+-- MAGIC plt.rcParams['figure.dpi'] = 100
+-- MAGIC
+-- MAGIC # ----------------------------------------------------
+-- MAGIC # VISUALIZATION 1: MARKET DYNAMICS (PRICE VS. VOLATILITY)
+-- MAGIC # ----------------------------------------------------
+-- MAGIC print("--- Generating Viz 1: Price vs. Volatility (Weekly) ---")
+-- MAGIC
+-- MAGIC fig, ax1 = plt.subplots(figsize=(14, 6))
+-- MAGIC
+-- MAGIC color = 'tab:blue'
+-- MAGIC ax1.set_xlabel('Week Start Date')
+-- MAGIC ax1.set_ylabel('Sugar Price (USD/lb)', color=color, fontweight='bold')
+-- MAGIC ax1.plot(weekly_df_pd.index, weekly_df_pd['Sugar_Price_EOW'], color=color, label='EOW Price')
+-- MAGIC ax1.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC # Instantiate a second axes that shares the same x-axis
+-- MAGIC ax2 = ax1.twinx()
+-- MAGIC color = 'tab:red'
+-- MAGIC ax2.set_ylabel('HV 20D Annualized (%)', color=color, fontweight='bold')
+-- MAGIC # We multiply by 100 to show volatility as a percentage
+-- MAGIC ax2.plot(weekly_df_pd.index, weekly_df_pd['HV_20D_Annualized_Wk_Mean'] * 100, color=color, linestyle='--', label='20D Volatility')
+-- MAGIC ax2.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC ax1.set_title('Sugar Futures Price vs. Market Volatility (HV)', fontsize=16)
+-- MAGIC plt.grid(True, linestyle='--', alpha=0.6)
+-- MAGIC plt.show()
+-- MAGIC
+-- MAGIC
+-- MAGIC # ----------------------------------------------------
+-- MAGIC # VISUALIZATION 2: MACRO DRIVER CORRELATION (PRICE VS. EXCHANGE RATE)
+-- MAGIC # ----------------------------------------------------
+-- MAGIC print("--- Generating Viz 2: Price vs. Exchange Rate (Weekly Price, Monthly FX) ---")
+-- MAGIC
+-- MAGIC fig, ax1 = plt.subplots(figsize=(14, 6))
+-- MAGIC
+-- MAGIC # Price (Left Axis) - Uses Weekly Data
+-- MAGIC color = 'tab:green'
+-- MAGIC ax1.set_xlabel('Date')
+-- MAGIC ax1.set_ylabel('Sugar Price (USD/lb)', color=color, fontweight='bold')
+-- MAGIC ax1.plot(weekly_df_pd.index, weekly_df_pd['Sugar_Price_EOW'], color=color, label='EOW Price (Weekly)')
+-- MAGIC ax1.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC # USD/BRL Exchange Rate (Right Axis) - Uses Monthly Data
+-- MAGIC ax2 = ax1.twinx()
+-- MAGIC color = 'tab:orange'
+-- MAGIC ax2.set_ylabel('USD/BRL Exchange Rate (Monthly)', color=color, fontweight='bold')
+-- MAGIC ax2.plot(monthly_df_pd.index, monthly_df_pd['USD_BRL_Mo_Mean'], color=color, linestyle='-', label='USD/BRL (Monthly Mean)')
+-- MAGIC ax2.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC ax1.set_title('Sugar Price vs. Brazilian Real (USD/BRL) Exchange Rate', fontsize=16)
+-- MAGIC plt.grid(True, linestyle='--', alpha=0.6)
+-- MAGIC plt.show()
+-- MAGIC
+-- MAGIC
+-- MAGIC # ----------------------------------------------------
+-- MAGIC # VISUALIZATION 3: SUPPLY STRESS INDEX
+-- MAGIC # ----------------------------------------------------
+-- MAGIC print("--- Generating Viz 3: Supply Stress Index (Monthly) ---")
+-- MAGIC
+-- MAGIC # Data is already loaded as monthly_df_pd
+-- MAGIC
+-- MAGIC fig, ax1 = plt.subplots(figsize=(14, 6))
+-- MAGIC
+-- MAGIC # Worst Rainfall Z-Score (Drought Stress) (Left Axis)
+-- MAGIC color = 'tab:blue'
+-- MAGIC ax1.set_xlabel('Month Start Date')
+-- MAGIC ax1.set_ylabel('Worst Rainfall Z-Score (Drought/Flood)', color=color, fontweight='bold')
+-- MAGIC ax1.plot(monthly_df_pd.index, monthly_df_pd['Worst_Rainfall_Z_Score_Mo_Min'], color=color, label='Drought Stress (MIN Z-Score)')
+-- MAGIC ax1.axhline(0, color='gray', linestyle=':', linewidth=1)
+-- MAGIC ax1.axhline(-2, color='red', linestyle='--', linewidth=1, label='Severe Drought Threshold (-2 SD)') # Highlight severe drought
+-- MAGIC ax1.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC # Max Frost Count (Right Axis)
+-- MAGIC ax2 = ax1.twinx()
+-- MAGIC color = 'tab:purple'
+-- MAGIC ax2.set_ylabel('Max Frost Day Count (60D)', color=color, fontweight='bold')
+-- MAGIC ax2.bar(monthly_df_pd.index, monthly_df_pd['Max_Frost_Count_Mo_Max'], color=color, alpha=0.5, label='Max Frost Days')
+-- MAGIC ax2.tick_params(axis='y', labelcolor=color)
+-- MAGIC
+-- MAGIC ax1.set_title('Multi-Region Worst-Case Weather Stress Indicators for Sugar (Monthly)', fontsize=16)
+-- MAGIC fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.95))
+-- MAGIC plt.show()
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC import pyspark.sql.functions as F
+-- MAGIC from pyspark.sql import SparkSession
+-- MAGIC from pyspark.sql.types import DateType
+-- MAGIC
+-- MAGIC # Initialize Spark Session (already available in Databricks runtime)
+-- MAGIC spark = SparkSession.builder.appName("SugarCFTCMerge").getOrCreate()
+-- MAGIC
+-- MAGIC # --- CONFIGURATION ---
+-- MAGIC TARGET_COMMODITY = "SUGAR"
+-- MAGIC CFTC_TABLE = "commodity.bronze.cftc_data_raw"
+-- MAGIC WEEKLY_FEATURES_TABLE = "commodity.silver.sugar_weekly"
+-- MAGIC OUTPUT_TABLE = "commodity.silver.sugar_weekly_merged"
+-- MAGIC
+-- MAGIC # --- 1. LOAD AND PREPARE CFTC DATA (THE TARGET VARIABLE) ---
+-- MAGIC
+-- MAGIC print(f"--- 1. Loading and Preparing CFTC Data for {TARGET_COMMODITY} ---")
+-- MAGIC
+-- MAGIC # Load raw CFTC data
+-- MAGIC cftc_df = spark.read.table(CFTC_TABLE)
+-- MAGIC
+-- MAGIC # ASSUMPTION CHECK: Filter for the Sugar commodity and select key columns.
+-- MAGIC # NOTE: Column names for positions are placeholders and must match your CFTC table schema.
+-- MAGIC cftc_df_sugar = cftc_df.filter(F.upper(F.col("market_and_exchange_names")) == TARGET_COMMODITY) # Assuming a commodity name column exists
+-- MAGIC cftc_df_sugar = cftc_df_sugar.select(
+-- MAGIC     F.col("as_of_date_in_form_yyyy-mm-dd").cast(DateType()).alias("Week_Start_Date"), 
+-- MAGIC     F.col("noncommercial_positions-long_all").alias("NC_Long"),
+-- MAGIC     F.col("noncommercial_positions-short_all").alias("NC_Short"),
+-- MAGIC     F.col("open_interest_all").alias("Open_Interest")
+-- MAGIC ).filter(F.col("Week_Start_Date").isNotNull())
+-- MAGIC
+-- MAGIC # Calculate the Net Non-Commercial Position (The core sentiment metric)
+-- MAGIC cftc_df_sugar = cftc_df_sugar.withColumn(
+-- MAGIC     "Net_Non_Commercial_Position",
+-- MAGIC     F.col("NC_Long") - F.col("NC_Short")
+-- MAGIC )
+-- MAGIC
+-- MAGIC cftc_df_sugar = cftc_df_sugar.orderBy("Week_Start_Date")
+-- MAGIC print(f"CFTC Sugar records prepared: {cftc_df_sugar.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 2. LOAD ENGINEERED WEEKLY FEATURES ---
+-- MAGIC
+-- MAGIC print(f"\n--- 2. Loading Weekly Features from {WEEKLY_FEATURES_TABLE} ---")
+-- MAGIC features_df = spark.read.table(WEEKLY_FEATURES_TABLE)
+-- MAGIC features_df = features_df.withColumn(
+-- MAGIC     "Week_Start_Date", 
+-- MAGIC     F.col("Week_Start_Date").cast(DateType())
+-- MAGIC ).orderBy("Week_Start_Date")
+-- MAGIC
+-- MAGIC print(f"Weekly Feature records loaded: {features_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 3. MERGE CFTC AND FEATURES ---
+-- MAGIC
+-- MAGIC print(f"\n--- 3. Merging CFTC Sentiment and Features on Week_Start_Date ---")
+-- MAGIC
+-- MAGIC # Perform a left join, keeping all CFTC weeks and linking available features.
+-- MAGIC # A left join is safer, ensuring we don't lose any target (CFTC) data.
+-- MAGIC final_merged_df = cftc_df_sugar.alias("cftc").join(
+-- MAGIC     features_df.alias("features"),
+-- MAGIC     on="Week_Start_Date",
+-- MAGIC     how="left"
+-- MAGIC )
+-- MAGIC
+-- MAGIC # Clean up and select final columns for the Silver layer
+-- MAGIC final_merged_df = final_merged_df.select(
+-- MAGIC     F.col("Week_Start_Date"),
+-- MAGIC     F.col("Net_Non_Commercial_Position"),  # TARGET VARIABLE
+-- MAGIC     F.col("Open_Interest"),
+-- MAGIC     # Select all features from the sugar_weekly table
+-- MAGIC     *[col for col in features_df.columns if col not in ("Week_Start_Date")] 
+-- MAGIC )
+-- MAGIC
+-- MAGIC # Drop any rows where the target variable is null (CFTC data is missing)
+-- MAGIC final_merged_df = final_merged_df.na.drop(subset=["Net_Non_Commercial_Position"])
+-- MAGIC
+-- MAGIC print(f"Final Merged DataFrame count: {final_merged_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 4. SAVE TO SILVER LAYER (GOLD STANDARD FOR MODELING) ---
+-- MAGIC
+-- MAGIC print(f"\n--- 4. Saving to Silver Layer: {OUTPUT_TABLE} ---")
+-- MAGIC final_merged_df.write.mode("overwrite").format("delta").saveAsTable(OUTPUT_TABLE)
+-- MAGIC print(f"Success! The final table for modeling is now available at: {OUTPUT_TABLE}")
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC import pyspark.sql.functions as F
+-- MAGIC from pyspark.sql import SparkSession
+-- MAGIC from pyspark.sql.types import DateType
+-- MAGIC
+-- MAGIC # Initialize Spark Session (already available in Databricks runtime)
+-- MAGIC spark = SparkSession.builder.appName("CoffeeCFTCMerge").getOrCreate()
+-- MAGIC
+-- MAGIC # --- CONFIGURATION ---
+-- MAGIC TARGET_COMMODITY = "COFFEE" # Changed to COFFEE
+-- MAGIC CFTC_TABLE = "commodity.bronze.cftc_data_raw"
+-- MAGIC WEEKLY_FEATURES_TABLE = "commodity.silver.coffee_weekly" # Changed to coffee_weekly
+-- MAGIC OUTPUT_TABLE = "commodity.silver.coffee_weekly_merged" # Changed to coffee_weekly_merged
+-- MAGIC
+-- MAGIC # --- 1. LOAD AND PREPARE CFTC DATA (THE TARGET VARIABLE) ---
+-- MAGIC
+-- MAGIC print(f"--- 1. Loading and Preparing CFTC Data for {TARGET_COMMODITY} ---")
+-- MAGIC
+-- MAGIC # Load raw CFTC data
+-- MAGIC cftc_df = spark.read.table(CFTC_TABLE)
+-- MAGIC
+-- MAGIC # Filter for the Coffee commodity and select key columns.
+-- MAGIC cftc_df_coffee = cftc_df.filter(F.upper(F.col("market_and_exchange_names")) == TARGET_COMMODITY) 
+-- MAGIC cftc_df_coffee = cftc_df_coffee.select(
+-- MAGIC     # ASSUMPTION: The CFTC report date column is named 'Report_Date'
+-- MAGIC     F.col("as_of_date_in_form_yyyy-mm-dd").cast(DateType()).alias("Week_Start_Date"), 
+-- MAGIC     F.col("noncommercial_positions-long_all").alias("NC_Long"),
+-- MAGIC     F.col("noncommercial_positions-short_all").alias("NC_Short"),
+-- MAGIC     F.col("open_interest_all").alias("Open_Interest")
+-- MAGIC ).filter(F.col("Week_Start_Date").isNotNull())
+-- MAGIC
+-- MAGIC # Calculate the Net Non-Commercial Position (The core sentiment metric)
+-- MAGIC cftc_df_coffee = cftc_df_coffee.withColumn(
+-- MAGIC     "Net_Non_Commercial_Position",
+-- MAGIC     F.col("NC_Long") - F.col("NC_Short")
+-- MAGIC )
+-- MAGIC
+-- MAGIC cftc_df_coffee = cftc_df_coffee.orderBy("Week_Start_Date")
+-- MAGIC print(f"CFTC Coffee records prepared: {cftc_df_coffee.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 2. LOAD ENGINEERED WEEKLY FEATURES ---
+-- MAGIC
+-- MAGIC print(f"\n--- 2. Loading Weekly Features from {WEEKLY_FEATURES_TABLE} ---")
+-- MAGIC features_df = spark.read.table(WEEKLY_FEATURES_TABLE)
+-- MAGIC features_df = features_df.withColumn(
+-- MAGIC     "Week_Start_Date", 
+-- MAGIC     F.col("Week_Start_Date").cast(DateType())
+-- MAGIC ).orderBy("Week_Start_Date")
+-- MAGIC
+-- MAGIC print(f"Weekly Feature records loaded: {features_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 3. MERGE CFTC AND FEATURES ---
+-- MAGIC
+-- MAGIC print(f"\n--- 3. Merging CFTC Sentiment and Features on Week_Start_Date ---")
+-- MAGIC
+-- MAGIC # Perform a left join, keeping all CFTC weeks and linking available features.
+-- MAGIC final_merged_df = cftc_df_coffee.alias("cftc").join(
+-- MAGIC     features_df.alias("features"),
+-- MAGIC     on="Week_Start_Date",
+-- MAGIC     how="left"
+-- MAGIC )
+-- MAGIC
+-- MAGIC # Clean up and select final columns for the Silver layer
+-- MAGIC final_merged_df = final_merged_df.select(
+-- MAGIC     F.col("Week_Start_Date"),
+-- MAGIC     F.col("Net_Non_Commercial_Position"),  # TARGET VARIABLE
+-- MAGIC     F.col("Open_Interest"),
+-- MAGIC     # Select all features from the coffee_weekly table
+-- MAGIC     *[col for col in features_df.columns if col not in ("Week_Start_Date")] 
+-- MAGIC )
+-- MAGIC
+-- MAGIC # Drop any rows where the target variable is null (CFTC data is missing)
+-- MAGIC final_merged_df = final_merged_df.na.drop(subset=["Net_Non_Commercial_Position"])
+-- MAGIC
+-- MAGIC print(f"Final Merged DataFrame count: {final_merged_df.count()}")
+-- MAGIC
+-- MAGIC
+-- MAGIC # --- 4. SAVE TO SILVER LAYER (GOLD STANDARD FOR MODELING) ---
+-- MAGIC
+-- MAGIC print(f"\n--- 4. Saving to Silver Layer: {OUTPUT_TABLE} ---")
+-- MAGIC final_merged_df.write.mode("overwrite").format("delta").saveAsTable(OUTPUT_TABLE)
+-- MAGIC print(f"Success! The final table for modeling is now available at: {OUTPUT_TABLE}")
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC # 1. Define the old and new paths
+-- MAGIC file_name = "coffee_distributions_sarimax_v0.csv"
+-- MAGIC old_path = f"dbfs:/FileStore/coffee_forecasts/distributions/{file_name}"
+-- MAGIC
+-- MAGIC # CRITICAL: Replace this with the actual path in your cloud storage bucket
+-- MAGIC new_cloud_path = f"s3://berkeley-datasci210-capstone/silver/coffee_forecasts/distributions/{file_name}"
+-- MAGIC
+-- MAGIC print(f"Copying file from {old_path} to {new_cloud_path}")
+-- MAGIC
+-- MAGIC # 2. Execute the copy command
+-- MAGIC dbutils.fs.cp(old_path, new_cloud_path, recurse=True)
+-- MAGIC
+-- MAGIC print("Copy complete. The file is now in cloud storage.")
+
+-- COMMAND ----------
+
+GRANT CREATE TABLE ON SCHEMA commodity.silver to `account users`;
+
+-- COMMAND ----------
+
+GRANT CREATE TABLE ON SCHEMA commodity.bronze to `account users`;
+
+-- COMMAND ----------
+
+GRANT READ FILES ON EXTERNAL LOCATION `workspace_ingestion_data` TO `account users`;
+
+-- COMMAND ----------
+
+-- 1. Use the correct schema where you want the Volume to live
+USE CATALOG commodity;
+USE SCHEMA silver;
+
+-- 2. Create the EXTERNAL VOLUME
+-- We use the External Location 'workspace_ingestion_data' (from your screenshot)
+-- which maps to the root of the bucket: s3://berkeley-datasci210-capstone/
+-- The LOCATION path below specifies the *exact directory* inside that bucket
+-- where your forecast files (and related files) will be stored.
+
+CREATE EXTERNAL VOLUME IF NOT EXISTS coffee_forecast_volume
+LOCATION 's3://berkeley-datasci210-capstone/silver/coffee_forecasts/';
+
+
+-- COMMAND ----------
+
+GRANT READ VOLUME ON VOLUME commodity.silver.coffee_forecast_volume TO `account users`;
+
+-- COMMAND ----------
+
+-- 1. Use the correct schema where you want the Volume to live
+USE CATALOG commodity;
+USE SCHEMA silver;
+
+-- 2. Create the EXTERNAL VOLUME
+-- We use the External Location 'workspace_ingestion_data' (from your screenshot)
+-- which maps to the root of the bucket: s3://berkeley-datasci210-capstone/
+-- The LOCATION path below specifies the *exact directory* inside that bucket
+-- where your trading files (and related files) will be stored.
+
+CREATE EXTERNAL VOLUME IF NOT EXISTS trading_agent_volume
+LOCATION 's3://berkeley-datasci210-capstone/silver/trading_agent/';
+
+
+-- COMMAND ----------
+
+GRANT WRITE VOLUME ON VOLUME commodity.silver.trading_agent_volume TO `account users`;
