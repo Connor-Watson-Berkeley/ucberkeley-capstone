@@ -1,0 +1,9 @@
+{
+    "Name": "berkeley-datasci210-capstone-daily-update",
+    "Arn": "arn:aws:events:us-east-1:471112877453:rule/berkeley-datasci210-capstone-daily-update",
+    "ScheduleExpression": "cron(0 2 * * ? *)",
+    "State": "ENABLED",
+    "Description": "Trigger GDELT incremental update daily",
+    "EventBusName": "default",
+    "CreatedBy": "471112877453"
+}

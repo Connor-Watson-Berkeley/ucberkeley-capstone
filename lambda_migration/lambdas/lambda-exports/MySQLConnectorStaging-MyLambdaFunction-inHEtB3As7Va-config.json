@@ -1,0 +1,38 @@
+{
+    "FunctionName": "MySQLConnectorStaging-MyLambdaFunction-inHEtB3As7Va",
+    "FunctionArn": "arn:aws:lambda:us-east-1:471112877453:function:MySQLConnectorStaging-MyLambdaFunction-inHEtB3As7Va",
+    "Runtime": "nodejs20.x",
+    "Role": "arn:aws:iam::471112877453:role/MySQLConnectorStaging-LambdaExecutionRole-Fg5X2t1lVp4P",
+    "Handler": "index.handler",
+    "CodeSize": 211,
+    "Description": "",
+    "Timeout": 25,
+    "MemorySize": 128,
+    "LastModified": "2025-01-17T10:13:01.076+0000",
+    "CodeSha256": "29T8n1O7go8D0myGfTsvCWYgSq9zdvNaArXF8CsOUsw=",
+    "Version": "$LATEST",
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "1bd1fac9-9cef-4d26-8816-9bfcb65dbf37",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "x86_64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:dd206d5c0479b082438417cc6b87731a870d3c7d4c6f2375bbacade0b935398d"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/MySQLConnectorStaging-MyLambdaFunction-inHEtB3As7Va"
+    }
+}

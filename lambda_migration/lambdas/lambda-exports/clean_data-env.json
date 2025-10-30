@@ -1,0 +1,7 @@
+{
+    "password": "shSigma86",
+    "dbname": "w205",
+    "sqs_url": "https://sqs.us-east-1.amazonaws.com/471112877453/create-table",
+    "host": "w205-database-1-instance-1.cpg82o42avdr.us-east-1.rds.amazonaws.com",
+    "user": "postgres"
+}

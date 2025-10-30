@@ -1,0 +1,93 @@
+{
+  "old_bucket": "berkeley-datasci210-capstone",
+  "new_bucket": "groundtruth-capstone",
+  "new_account": "534150427458",
+  "new_region": "us-west-2",
+  "functions": [
+    {
+      "old_name": "market-data-MarketDataFunction-KDrn3b6ML3vk",
+      "new_name": "market-data-fetcher",
+      "runtime": "python3.12",
+      "handler": "app.lambda_handler",
+      "memory": 128,
+      "timeout": 60,
+      "architecture": "arm64",
+      "env_vars": {},
+      "priority": 1
+    },
+    {
+      "old_name": "weather-data-WeatherFetcherFunction-R0gqBD2JibqQ",
+      "new_name": "weather-data-fetcher",
+      "runtime": "python3.12",
+      "handler": "app.lambda_handler",
+      "memory": 512,
+      "timeout": 60,
+      "architecture": "arm64",
+      "env_vars": {
+        "OPENWEATHER_API_KEY": "c7d0e1449305a2f2b1da6eacdd6d4607",
+        "S3_BUCKET_NAME": "groundtruth-capstone"
+      },
+      "priority": 1
+    },
+    {
+      "old_name": "vix-data-VIXCalculatorFunction-Xhomphw9v29c",
+      "new_name": "vix-data-fetcher",
+      "runtime": "python3.12",
+      "handler": "app.lambda_handler",
+      "memory": 128,
+      "timeout": 300,
+      "architecture": "arm64",
+      "env_vars": {
+        "FRED_API_KEY": "23e399e854cd920b8c34172dbb9c9f7b",
+        "S3_BUCKET_NAME": "groundtruth-capstone",
+        "RUN_MODE": "INCREMENTAL"
+      },
+      "priority": 1
+    },
+    {
+      "old_name": "fx-calculator-FXCalculatorFunction-UNrpc5EgxsSn",
+      "new_name": "fx-calculator-fetcher",
+      "runtime": "python3.12",
+      "handler": "app.lambda_handler",
+      "memory": 128,
+      "timeout": 300,
+      "architecture": "arm64",
+      "env_vars": {
+        "FRED_API_KEY": "23e399e854cd920b8c34172dbb9c9f7b",
+        "S3_BUCKET_NAME": "groundtruth-capstone",
+        "RUN_MODE": "INCREMENTAL"
+      },
+      "priority": 1
+    },
+    {
+      "old_name": "cftc-data-CFTCCalculatorFunction-bDFWiwe08UoF",
+      "new_name": "cftc-data-fetcher",
+      "runtime": "python3.12",
+      "handler": "app.lambda_handler",
+      "memory": 128,
+      "timeout": 300,
+      "architecture": "arm64",
+      "env_vars": {
+        "S3_KEY_PREFIX": "landing/cftc_data/",
+        "S3_BUCKET_NAME": "groundtruth-capstone"
+      },
+      "priority": 1
+    },
+    {
+      "old_name": "berkeley-datasci210-capstone-processor",
+      "new_name": "gdelt-processor",
+      "runtime": "python3.11",
+      "handler": "lambda_function.lambda_handler",
+      "memory": 2048,
+      "timeout": 900,
+      "architecture": "x86_64",
+      "env_vars": {
+        "S3_BUCKET": "groundtruth-capstone",
+        "S3_RAW_PREFIX": "landing/gdelt/raw/",
+        "TRACKING_TABLE": "groundtruth-capstone-file-tracking",
+        "S3_FILTERED_PREFIX": "landing/gdelt/filtered/"
+      },
+      "priority": 2
+    }
+  ]
+}
