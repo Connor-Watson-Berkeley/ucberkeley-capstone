@@ -1,0 +1,57 @@
+{
+    "FunctionName": "create-table",
+    "FunctionArn": "arn:aws:lambda:us-east-1:471112877453:function:create-table",
+    "Runtime": "python3.10",
+    "Role": "arn:aws:iam::471112877453:role/Lambda_RDS_S3_Full_Access",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 27464515,
+    "Description": "",
+    "Timeout": 60,
+    "MemorySize": 128,
+    "LastModified": "2024-04-13T22:11:44.000+0000",
+    "CodeSha256": "FOo5L1XX/96lOi/Fh3kY98dFCj9X/rx6dMyfrUr3yS4=",
+    "Version": "$LATEST",
+    "VpcConfig": {
+        "SubnetIds": [
+            "subnet-0f9518e2f6716accd"
+        ],
+        "SecurityGroupIds": [
+            "sg-06cc67d8687d6fa15",
+            "sg-0b4aef6d81edf7166"
+        ],
+        "VpcId": "vpc-0e2f65fc9f002e220",
+        "Ipv6AllowedForDualStack": false
+    },
+    "Environment": {
+        "Variables": {
+            "password": "shSigma86",
+            "dbname": "w205",
+            "host": "w205-database-1-instance-1.cpg82o42avdr.us-east-1.rds.amazonaws.com",
+            "user": "postgres"
+        }
+    },
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "bf06e576-e363-402c-a8e7-76daad87a6c2",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "x86_64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:b556158cad85934b6c377a5efb9a608a8a761e7800735ebbcc34a66e4c6523ab"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/create-table"
+    }
+}

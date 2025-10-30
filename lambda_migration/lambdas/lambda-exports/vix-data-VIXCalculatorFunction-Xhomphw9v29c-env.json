@@ -1,0 +1,5 @@
+{
+    "FRED_API_KEY": "23e399e854cd920b8c34172dbb9c9f7b",
+    "S3_BUCKET_NAME": "berkeley-datasci210-capstone",
+    "RUN_MODE": "INCREMENTAL"
+}

@@ -1,0 +1,52 @@
+{
+    "FunctionName": "berkeley-datasci210-capstone-processor",
+    "FunctionArn": "arn:aws:lambda:us-east-1:471112877453:function:berkeley-datasci210-capstone-processor",
+    "Runtime": "python3.11",
+    "Role": "arn:aws:iam::471112877453:role/berkeley-datasci210-capstone-lambda-role",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 4098,
+    "Description": "",
+    "Timeout": 900,
+    "MemorySize": 2048,
+    "LastModified": "2025-10-05T12:33:36.000+0000",
+    "CodeSha256": "KM5B2Cfxo1gNMu2LrdG5kxWmmzjk6iH564Ecy4BEuI8=",
+    "Version": "$LATEST",
+    "Environment": {
+        "Variables": {
+            "S3_BUCKET": "berkeley-datasci210-capstone",
+            "S3_RAW_PREFIX": "landing/gdelt/raw/",
+            "TRACKING_TABLE": "berkeley-datasci210-capstone-file-tracking",
+            "S3_FILTERED_PREFIX": "landing/gdelt/filtered/"
+        }
+    },
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "b8ff1f0d-f5cc-4a1e-b601-d0ee020059c3",
+    "Layers": [
+        {
+            "Arn": "arn:aws:lambda:us-east-1:471112877453:layer:berkeley-datasci210-capstone-dependencies:1",
+            "CodeSize": 15434839
+        }
+    ],
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "x86_64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:d6935992cddc0c573a0cb7ac0214699a5676aefd38a43d64192dce8a044a3724"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/berkeley-datasci210-capstone-processor"
+    }
+}

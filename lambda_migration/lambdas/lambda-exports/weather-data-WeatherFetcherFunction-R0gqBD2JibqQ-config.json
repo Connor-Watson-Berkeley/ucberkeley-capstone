@@ -1,0 +1,44 @@
+{
+    "FunctionName": "weather-data-WeatherFetcherFunction-R0gqBD2JibqQ",
+    "FunctionArn": "arn:aws:lambda:us-east-1:471112877453:function:weather-data-WeatherFetcherFunction-R0gqBD2JibqQ",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::471112877453:role/berkeley-datasci210-capstone-lambda-role",
+    "Handler": "app.lambda_handler",
+    "CodeSize": 51564179,
+    "Description": "",
+    "Timeout": 60,
+    "MemorySize": 512,
+    "LastModified": "2025-10-25T12:56:00.000+0000",
+    "CodeSha256": "7fRm62Tynv6qVw1o7Adfg8GPiyiZEi67SbUMC/+Gstg=",
+    "Version": "$LATEST",
+    "Environment": {
+        "Variables": {
+            "OPENWEATHER_API_KEY": "c7d0e1449305a2f2b1da6eacdd6d4607",
+            "S3_BUCKET_NAME": "berkeley-datasci210-capstone"
+        }
+    },
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "654b0079-4779-4497-86cf-a301388a2f8c",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "arm64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:3989905fa9934b6f382504ae96e8888341c49abaa90cf4686d6e80180e30bb0d"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/weather-data-WeatherFetcherFunction-R0gqBD2JibqQ"
+    }
+}
