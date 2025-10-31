@@ -237,11 +237,28 @@ def fetch_historical_daily_batched(regions_items, start_date, end_date):
     regions_items: list[(region_name, lat, lon, commodity)]
     Returns: list of dict records (one per region x day)
     """
+    # All 15 daily variables available from Open-Meteo Archive (all non-null back to 2015)
     daily_vars = [
+        # Temperature (3 fields)
         "temperature_2m_max",
         "temperature_2m_min",
-        "precipitation_sum",          # use "rain_sum" if you want rain only
-        "relative_humidity_2m_mean"
+        "temperature_2m_mean",
+        # Precipitation (4 fields)
+        "precipitation_sum",
+        "rain_sum",
+        "snowfall_sum",
+        "precipitation_hours",
+        # Humidity (3 fields)
+        "relative_humidity_2m_mean",
+        "relative_humidity_2m_max",
+        "relative_humidity_2m_min",
+        # Wind (3 fields)
+        "wind_speed_10m_max",
+        "wind_gusts_10m_max",
+        "wind_direction_10m_dominant",
+        # Solar/ET (2 fields)
+        "shortwave_radiation_sum",
+        "et0_fao_evapotranspiration"
     ]
     records_all = []
 
@@ -282,29 +299,50 @@ def fetch_historical_daily_batched(regions_items, start_date, end_date):
                         continue
                     region, lat, lon, commodity = batch[idx]
                     times = daily.get("time", [])
-                    tmax = daily.get("temperature_2m_max", [])
-                    tmin = daily.get("temperature_2m_min", [])
-                    precip = daily.get("precipitation_sum", [])
-                    rh = daily.get("relative_humidity_2m_mean", [])
+
+                    # Extract all 15 daily variables
+                    temp_max = daily.get("temperature_2m_max", [])
+                    temp_min = daily.get("temperature_2m_min", [])
+                    temp_mean = daily.get("temperature_2m_mean", [])
+                    precip_sum = daily.get("precipitation_sum", [])
+                    rain_sum = daily.get("rain_sum", [])
+                    snow_sum = daily.get("snowfall_sum", [])
+                    precip_hours = daily.get("precipitation_hours", [])
+                    rh_mean = daily.get("relative_humidity_2m_mean", [])
+                    rh_max = daily.get("relative_humidity_2m_max", [])
+                    rh_min = daily.get("relative_humidity_2m_min", [])
+                    wind_max = daily.get("wind_speed_10m_max", [])
+                    gusts_max = daily.get("wind_gusts_10m_max", [])
+                    wind_dir = daily.get("wind_direction_10m_dominant", [])
+                    radiation = daily.get("shortwave_radiation_sum", [])
+                    et0 = daily.get("et0_fao_evapotranspiration", [])
+
                     for i in range(len(times)):
                         records_all.append({
                             "Type": "HISTORICAL_DAILY",
                             "Region": region,
                             "Commodity": commodity,
                             "Date": times[i],
-                            "Time_UTC": None,
-                            "Temperature_C": None,
-                            "Feels_Like_C": None,
-                            "Humidity_perc": rh[i] if i < len(rh) else None,
-                            "Pressure_hPa": None,
-                            "Wind_Speed_m/s": None,
-                            "Weather_Main": None,
-                            "Weather_Description": None,
-                            "Rain_mm/h": None,
-                            "Snow_mm/h": None,
-                            "Max_Temp_C": tmax[i] if i < len(tmax) else None,
-                            "Min_Temp_C": tmin[i] if i < len(tmin) else None,
-                            "Precipitation_mm": precip[i] if i < len(precip) else None,
+                            # Temperature (3 fields - all non-null)
+                            "Temp_Max_C": temp_max[i] if i < len(temp_max) else None,
+                            "Temp_Min_C": temp_min[i] if i < len(temp_min) else None,
+                            "Temp_Mean_C": temp_mean[i] if i < len(temp_mean) else None,
+                            # Precipitation (4 fields - all non-null)
+                            "Precipitation_mm": precip_sum[i] if i < len(precip_sum) else None,
+                            "Rain_mm": rain_sum[i] if i < len(rain_sum) else None,
+                            "Snowfall_cm": snow_sum[i] if i < len(snow_sum) else None,
+                            "Precipitation_Hours": precip_hours[i] if i < len(precip_hours) else None,
+                            # Humidity (3 fields - all non-null)
+                            "Humidity_Mean_Pct": rh_mean[i] if i < len(rh_mean) else None,
+                            "Humidity_Max_Pct": rh_max[i] if i < len(rh_max) else None,
+                            "Humidity_Min_Pct": rh_min[i] if i < len(rh_min) else None,
+                            # Wind (3 fields - all non-null)
+                            "Wind_Speed_Max_kmh": wind_max[i] if i < len(wind_max) else None,
+                            "Wind_Gusts_Max_kmh": gusts_max[i] if i < len(gusts_max) else None,
+                            "Wind_Direction_Deg": wind_dir[i] if i < len(wind_dir) else None,
+                            # Solar/ET (2 fields - all non-null)
+                            "Solar_Radiation_MJ_m2": radiation[i] if i < len(radiation) else None,
+                            "Evapotranspiration_mm": et0[i] if i < len(et0) else None,
                         })
                 break  # success, break retry loop
 
