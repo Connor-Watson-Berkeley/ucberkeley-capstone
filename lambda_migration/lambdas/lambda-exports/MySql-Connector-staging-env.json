@@ -1,6 +1,0 @@
-{
-    "TESTING": "false",
-    "ENV": "staging",
-    "DEBUG": "true",
-    "LAMBDA_PATH": "mysql_connector/"
-}

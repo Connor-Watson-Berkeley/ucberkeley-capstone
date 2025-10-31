@@ -1,4 +1,0 @@
-{
-    "S3_KEY_PREFIX": "landing/cftc_data/",
-    "S3_BUCKET_NAME": "berkeley-datasci210-capstone"
-}
