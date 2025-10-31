@@ -1,20 +1,33 @@
 # Research Agent
 
-**Owners**: Stuart & Francisco
-**Status**: ✅ Complete (GDELT integration pending)
+Data pipeline and feature engineering for commodity price forecasting.
 
 ## Purpose
-Create unified data table from raw market, weather, and macro sources.
+Automated data collection pipeline (Lambda → S3 → Databricks) and unified feature table creation.
 
 ## Output
 `commodity.silver.unified_data` - Single source of truth for forecasting
 
+## Directory Structure
+
+```
+research_agent/
+├── infrastructure/          # AWS Lambda + Databricks setup
+│   ├── lambda/             # 6 data collection functions
+│   ├── eventbridge/        # Daily scheduling (2AM UTC)
+│   └── databricks/         # Landing + bronze SQL tables
+├── ground_truth/           # Feature engineering modules
+├── sql/                    # Silver layer (unified_data)
+└── notebooks/              # Data exploration
+```
+
 ## Contents
 
-- `sql/create_unified_data.sql` - Table creation script (includes commented GDELT integration)
+- `infrastructure/` - **NEW**: Automated data pipeline (see `infrastructure/README.md`)
+- `sql/create_unified_data.sql` - Silver layer unified table
 - `notebooks/Data Exploration.dbquery.ipynb` - Data validation
-- `UNIFIED_DATA_ARCHITECTURE.md` - Data joining strategy, forward-fill approach, hierarchy
-- `GDELT_PROCESSING.md` - 🚧 **WIP**: GDELT sentiment processing decisions
+- `UNIFIED_DATA_ARCHITECTURE.md` - Data joining strategy
+- `GDELT_PROCESSING.md` - GDELT sentiment processing
 
 ## Key Features
 - Deduplicated global data (VIX, macro, market)

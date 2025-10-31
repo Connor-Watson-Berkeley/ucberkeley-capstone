@@ -74,3 +74,4 @@ lambda_migration/migrated_functions/updated/
 *.zip
 all-lambdas.zip
 all-eventbridge.zip
+lambda_migration/
