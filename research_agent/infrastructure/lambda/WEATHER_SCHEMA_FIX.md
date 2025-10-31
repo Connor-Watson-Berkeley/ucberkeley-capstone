@@ -118,7 +118,7 @@ WHERE date IS NOT NULL;
 
 1. **Fix Lambda function**:
    ```bash
-   cd research_agent/infrastructure/lambda/functions/weather-data-WeatherFetcherFunction-R0gqBD2JibqQ/
+   cd research_agent/infrastructure/lambda/functions/weather-data-fetcher/
    # Edit app.py with changes above
    ```
 
