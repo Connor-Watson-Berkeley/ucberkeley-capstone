@@ -75,3 +75,24 @@ lambda_migration/migrated_functions/updated/
 all-lambdas.zip
 all-eventbridge.zip
 lambda_migration/
+
+# Lambda dependencies (installed at deploy time)
+research_agent/infrastructure/lambda/functions/*/boto*
+research_agent/infrastructure/lambda/functions/*/botocore*
+research_agent/infrastructure/lambda/functions/*/urllib3*
+research_agent/infrastructure/lambda/functions/*/requests*
+research_agent/infrastructure/lambda/functions/*/certifi*
+research_agent/infrastructure/lambda/functions/*/charset_normalizer*
+research_agent/infrastructure/lambda/functions/*/idna*
+research_agent/infrastructure/lambda/functions/*/s3transfer*
+research_agent/infrastructure/lambda/functions/*/jmespath*
+research_agent/infrastructure/lambda/functions/*/python_dateutil*
+research_agent/infrastructure/lambda/functions/*/six*
+research_agent/infrastructure/lambda/functions/*/DateTime*
+research_agent/infrastructure/lambda/functions/*/pytz*
+research_agent/infrastructure/lambda/functions/*/zope*
+research_agent/infrastructure/lambda/functions/*/pandas*
+research_agent/infrastructure/lambda/functions/*/numpy*
+research_agent/infrastructure/lambda/functions/*/bin/
+research_agent/infrastructure/lambda/functions/*/*.dist-info/
+research_agent/infrastructure/lambda/functions/*/.libs*/
