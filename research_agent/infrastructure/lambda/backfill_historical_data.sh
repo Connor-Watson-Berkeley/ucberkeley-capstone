@@ -79,6 +79,23 @@ cat /tmp/vix-historical-response.json
 echo ""
 echo ""
 
+# Invoke Weather function (2015-01-01 to present)
+# Weather function accepts days_to_fetch parameter, not RUN_MODE
+# Calculate days from 2015-01-01 to today (approximately 3,957 days as of 2025-10-31)
+echo "Invoking Weather function (2015-01-01 to present)..."
+echo "NOTE: This may take 10+ minutes due to API rate limits..."
+aws lambda invoke \
+  --function-name weather-data-fetcher \
+  --region $REGION \
+  --payload '{"days_to_fetch": [3957, 0]}' \
+  --cli-read-timeout 900 \
+  /tmp/weather-historical-response.json
+
+echo "Weather Response:"
+cat /tmp/weather-historical-response.json
+echo ""
+echo ""
+
 # Step 3: Restore INCREMENTAL mode
 echo "Step 3: Restoring RUN_MODE=INCREMENTAL for future daily updates..."
 

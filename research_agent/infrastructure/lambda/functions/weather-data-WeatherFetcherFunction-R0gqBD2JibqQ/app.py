@@ -292,10 +292,19 @@ def fetch_historical_daily_batched(regions_items, start_date, end_date):
                             "Region": region,
                             "Commodity": commodity,
                             "Date": times[i],
+                            "Time_UTC": None,
+                            "Temperature_C": None,
+                            "Feels_Like_C": None,
+                            "Humidity_perc": rh[i] if i < len(rh) else None,
+                            "Pressure_hPa": None,
+                            "Wind_Speed_m/s": None,
+                            "Weather_Main": None,
+                            "Weather_Description": None,
+                            "Rain_mm/h": None,
+                            "Snow_mm/h": None,
                             "Max_Temp_C": tmax[i] if i < len(tmax) else None,
                             "Min_Temp_C": tmin[i] if i < len(tmin) else None,
                             "Precipitation_mm": precip[i] if i < len(precip) else None,
-                            "Humidity_perc": rh[i] if i < len(rh) else None,
                         })
                 break  # success, break retry loop
 
@@ -387,6 +396,9 @@ def fetch_current_batched(regions_items):
                         "Weather_Description": None,                  # map WMO code if desired
                         "Rain_mm/h": current.get("rain"),
                         "Snow_mm/h": current.get("snowfall"),
+                        "Max_Temp_C": None,  # Not available for current weather
+                        "Min_Temp_C": None,  # Not available for current weather
+                        "Precipitation_mm": None,  # Not available for current weather
                     })
                 break
 
