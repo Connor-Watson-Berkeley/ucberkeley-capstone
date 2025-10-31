@@ -50,6 +50,7 @@ SELECT
 FROM commodity.landing.gdelt_sentiment_inc;
 
 -- Verify views created
+USE CATALOG commodity;
 SHOW VIEWS IN commodity.bronze;
 
 -- Sample query: Coffee prices over time
