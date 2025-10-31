@@ -6,9 +6,9 @@
 
 USE CATALOG commodity;
 
--- Market Data (Coffee & Sugar)
+-- Market Data (Coffee & Sugar) - Full OHLCV data
 CREATE OR REPLACE VIEW commodity.bronze.v_market_data_all AS
-SELECT date, commodity, close
+SELECT date, commodity, open, high, low, close, volume
 FROM commodity.landing.market_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date, commodity ORDER BY ingest_ts DESC) = 1;
 
