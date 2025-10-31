@@ -13,9 +13,9 @@ WITH date_spine AS (
 -- STEP 2: DEDUPLICATE GLOBAL DATA
 -- =============================================================================
 
--- Market Data: Already clean
+-- Market Data: Full OHLCV data
 market_clean AS (
-  SELECT date, commodity, close, high, low, open, volume
+  SELECT date, commodity, open, high, low, close, volume
   FROM commodity.bronze.v_market_data_all
   WHERE date >= '2015-07-07'
 ),
@@ -105,10 +105,10 @@ market_filled AS (
   SELECT
     dcs.date,
     dcs.commodity,
-    LAST_VALUE(mc.close, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as close,
+    LAST_VALUE(mc.open, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as open,
     LAST_VALUE(mc.high, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as high,
     LAST_VALUE(mc.low, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as low,
-    LAST_VALUE(mc.open, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as open,
+    LAST_VALUE(mc.close, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as close,
     LAST_VALUE(mc.volume, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as volume
   FROM date_commodity_spine dcs
   LEFT JOIN market_clean mc ON dcs.date = mc.date AND dcs.commodity = mc.commodity
@@ -154,7 +154,7 @@ macro_filled AS (
 ),
 
 -- =============================================================================
--- STEP 5: WEATHER DATA (REGIONAL)
+-- STEP 5: WEATHER DATA (REGIONAL) - ENHANCED 15 FIELDS
 -- =============================================================================
 
 weather_with_forward_fill AS (
@@ -162,14 +162,42 @@ weather_with_forward_fill AS (
     date,
     region,
     commodity,
-    min_temp_c,
-    max_temp_c,
-    humidity_pct,
+    -- Temperature (3 fields)
+    temp_max_c,
+    temp_min_c,
+    temp_mean_c,
+    -- Precipitation (4 fields)
     precipitation_mm,
-    LAST_VALUE(max_temp_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as max_temp_c_filled,
-    LAST_VALUE(min_temp_c, true) OVER (PARTITION BY region ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_c_filled,
-    LAST_VALUE(humidity_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_pct_filled,
-    LAST_VALUE(precipitation_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as precipitation_mm_filled
+    rain_mm,
+    snowfall_cm,
+    precipitation_hours,
+    -- Humidity (3 fields)
+    humidity_mean_pct,
+    humidity_max_pct,
+    humidity_min_pct,
+    -- Wind (3 fields)
+    wind_speed_max_kmh,
+    wind_gusts_max_kmh,
+    wind_direction_deg,
+    -- Solar/ET (2 fields)
+    solar_radiation_mj_m2,
+    evapotranspiration_mm,
+    -- Forward fill all fields
+    LAST_VALUE(temp_max_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_max_c_filled,
+    LAST_VALUE(temp_min_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_min_c_filled,
+    LAST_VALUE(temp_mean_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_mean_c_filled,
+    LAST_VALUE(precipitation_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as precipitation_mm_filled,
+    LAST_VALUE(rain_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as rain_mm_filled,
+    LAST_VALUE(snowfall_cm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as snowfall_cm_filled,
+    LAST_VALUE(precipitation_hours, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as precipitation_hours_filled,
+    LAST_VALUE(humidity_mean_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_mean_pct_filled,
+    LAST_VALUE(humidity_max_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_max_pct_filled,
+    LAST_VALUE(humidity_min_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_min_pct_filled,
+    LAST_VALUE(wind_speed_max_kmh, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_speed_max_kmh_filled,
+    LAST_VALUE(wind_gusts_max_kmh, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_gusts_max_kmh_filled,
+    LAST_VALUE(wind_direction_deg, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_direction_deg_filled,
+    LAST_VALUE(solar_radiation_mj_m2, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as solar_radiation_mj_m2_filled,
+    LAST_VALUE(evapotranspiration_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as evapotranspiration_mm_filled
   FROM commodity.bronze.v_weather_data_all
   WHERE date >= '2015-07-07'
 ),
@@ -179,9 +207,26 @@ weather_filled AS (
     date,
     region,
     commodity,
-    temp_c_filled as temp_c,
-    humidity_pct_filled as humidity_pct,
-    precipitation_mm_filled as precipitation_mm
+    -- Temperature (3 fields)
+    temp_max_c_filled as temp_max_c,
+    temp_min_c_filled as temp_min_c,
+    temp_mean_c_filled as temp_mean_c,
+    -- Precipitation (4 fields)
+    precipitation_mm_filled as precipitation_mm,
+    rain_mm_filled as rain_mm,
+    snowfall_cm_filled as snowfall_cm,
+    precipitation_hours_filled as precipitation_hours,
+    -- Humidity (3 fields)
+    humidity_mean_pct_filled as humidity_mean_pct,
+    humidity_max_pct_filled as humidity_max_pct,
+    humidity_min_pct_filled as humidity_min_pct,
+    -- Wind (3 fields)
+    wind_speed_max_kmh_filled as wind_speed_max_kmh,
+    wind_gusts_max_kmh_filled as wind_gusts_max_kmh,
+    wind_direction_deg_filled as wind_direction_deg,
+    -- Solar/ET (2 fields)
+    solar_radiation_mj_m2_filled as solar_radiation_mj_m2,
+    evapotranspiration_mm_filled as evapotranspiration_mm
   FROM weather_with_forward_fill
 )
 
@@ -283,20 +328,40 @@ SELECT
   wf.date,
   COALESCE(td.is_trading_day, 0) as is_trading_day,  -- 2nd column
   wf.commodity,
-  mf.close,
+  -- Market Data (OHLCV)
+  mf.open,
   mf.high,
   mf.low,
-  mf.open,
+  mf.close,
   mf.volume,
+  -- VIX
   vf.vix,
   macf.vnd_usd, macf.cop_usd, macf.idr_usd, macf.etb_usd, macf.hnl_usd, macf.ugx_usd,
   macf.pen_usd, macf.xaf_usd, macf.gtq_usd, macf.gnf_usd, macf.nio_usd, macf.crc_usd,
   macf.tzs_usd, macf.kes_usd, macf.lak_usd, macf.pkr_usd, macf.php_usd, macf.egp_usd,
   macf.ars_usd, macf.rub_usd, macf.try_usd, macf.uah_usd, macf.irr_usd, macf.byn_usd,
   wf.region,
-  wf.temp_c,
-  wf.humidity_pct,
-  wf.precipitation_mm
+  -- ENHANCED WEATHER FEATURES (15 fields)
+  -- Temperature (3 fields)
+  wf.temp_max_c,
+  wf.temp_min_c,
+  wf.temp_mean_c,
+  -- Precipitation (4 fields)
+  wf.precipitation_mm,
+  wf.rain_mm,
+  wf.snowfall_cm,
+  wf.precipitation_hours,
+  -- Humidity (3 fields)
+  wf.humidity_mean_pct,
+  wf.humidity_max_pct,
+  wf.humidity_min_pct,
+  -- Wind (3 fields)
+  wf.wind_speed_max_kmh,
+  wf.wind_gusts_max_kmh,
+  wf.wind_direction_deg,
+  -- Solar/ET (2 fields - critical for crop modeling)
+  wf.solar_radiation_mj_m2,
+  wf.evapotranspiration_mm
   -- FUTURE: Add GDELT sentiment columns (7 features)
   -- gdf.gdelt_tone,              -- Overall sentiment
   -- gdf.gdelt_positive,          -- Positive score

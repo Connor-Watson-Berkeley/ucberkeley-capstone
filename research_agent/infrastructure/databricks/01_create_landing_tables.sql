@@ -6,14 +6,18 @@
 
 USE CATALOG commodity;
 
--- Market Data (Coffee & Sugar prices)
+-- Market Data (Coffee & Sugar prices) - Full OHLCV data
 CREATE OR REPLACE TABLE commodity.landing.market_data_inc
 USING DELTA
 AS
 SELECT
   CAST(date AS DATE) as date,
   commodity,
+  CAST(`open` AS DOUBLE) as open,
+  CAST(`high` AS DOUBLE) as high,
+  CAST(`low` AS DOUBLE) as low,
   CAST(`close` AS DOUBLE) as close,
+  CAST(`volume` AS BIGINT) as volume,
   current_timestamp() as ingest_ts
 FROM read_files(
   's3://groundtruth-capstone/landing/market_data/*.csv',
@@ -24,7 +28,11 @@ UNION ALL
 SELECT
   CAST(date AS DATE) as date,
   commodity,
+  CAST(`open` AS DOUBLE) as open,
+  CAST(`high` AS DOUBLE) as high,
+  CAST(`low` AS DOUBLE) as low,
   CAST(`close` AS DOUBLE) as close,
+  CAST(`volume` AS BIGINT) as volume,
   current_timestamp() as ingest_ts
 FROM read_files(
   's3://groundtruth-capstone/landing/market_data/history/*.csv',

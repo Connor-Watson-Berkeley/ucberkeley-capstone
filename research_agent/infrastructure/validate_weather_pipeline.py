@@ -208,7 +208,7 @@ def validate_data():
     )
     if success and 'result' in result:
         rows = result.get('result', {}).get('data_array', [[]])
-        total = rows[0][0] if rows else 0
+        total = int(rows[0][0]) if rows and rows[0] else 0
         print(f"  ✓ Total records: {total:,}")
 
     # Test 2: Check date range
@@ -233,7 +233,7 @@ def validate_data():
         rows = result.get('result', {}).get('data_array', [])
         print(f"  ✓ Found {len(rows)} region/commodity combinations:")
         for region, commodity, count in rows[:10]:  # Show first 10
-            print(f"    - {region:<30} ({commodity:<6}): {count:>6,} rows")
+            print(f"    - {region:<30} ({commodity:<6}): {int(count):>6,} rows")
         if len(rows) > 10:
             print(f"    ... and {len(rows) - 10} more")
 
@@ -255,7 +255,7 @@ def validate_data():
     if success and 'result' in result:
         rows = result.get('result', {}).get('data_array', [[]])
         if rows:
-            nulls = rows[0]
+            nulls = [int(n) for n in rows[0]]
             fields = ['Temp Max', 'Temp Min', 'Temp Mean', 'Precipitation', 'Humidity', 'Wind', 'Solar', 'ET0']
             any_nulls = any(n > 0 for n in nulls)
             if not any_nulls:
@@ -283,7 +283,14 @@ def validate_data():
             print(f"    {'-'*85}")
             for row in rows:
                 region, date, tmax, tmin, precip, humid, wind, solar = row
-                print(f"    {region:<30} {date:<12} {tmax:<6.1f} {tmin:<6.1f} {precip:<6.1f} {humid:<6} {wind:<6.1f} {solar:<6.1f}")
+                # Handle None values gracefully
+                tmax_str = f"{float(tmax):<6.1f}" if tmax is not None else "NULL  "
+                tmin_str = f"{float(tmin):<6.1f}" if tmin is not None else "NULL  "
+                precip_str = f"{float(precip):<6.1f}" if precip is not None else "NULL  "
+                humid_str = f"{int(humid):<6}" if humid is not None else "NULL  "
+                wind_str = f"{float(wind):<6.1f}" if wind is not None else "NULL  "
+                solar_str = f"{float(solar):<6.1f}" if solar is not None else "NULL  "
+                print(f"    {region:<30} {date:<12} {tmax_str} {tmin_str} {precip_str} {humid_str} {wind_str} {solar_str}")
 
     return True
 
