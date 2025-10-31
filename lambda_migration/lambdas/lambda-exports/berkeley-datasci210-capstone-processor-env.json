@@ -1,6 +1,0 @@
-{
-    "S3_BUCKET": "berkeley-datasci210-capstone",
-    "S3_RAW_PREFIX": "landing/gdelt/raw/",
-    "TRACKING_TABLE": "berkeley-datasci210-capstone-file-tracking",
-    "S3_FILTERED_PREFIX": "landing/gdelt/filtered/"
-}
