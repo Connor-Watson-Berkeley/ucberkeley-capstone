@@ -23,9 +23,22 @@ cd eventbridge
 ./setup_all_eventbridge_schedules.sh
 ```
 
-### 3. Create Databricks Tables
+### 3. Create Databricks Tables (via API)
+```bash
+# Set your Databricks token
+export DATABRICKS_TOKEN=<your-token>
+
+# Run automated setup
+python setup_databricks_pipeline.py
+```
+
+This creates:
+- `commodity` catalog with landing/bronze/silver schemas
+- Landing tables that read from S3
+- Bronze deduplication views
+
+**Alternative (Manual)**: Run SQL files in Databricks SQL Editor:
 ```sql
--- In Databricks SQL Editor
 source databricks/01_create_landing_tables.sql
 source databricks/02_create_bronze_views.sql
 ```
