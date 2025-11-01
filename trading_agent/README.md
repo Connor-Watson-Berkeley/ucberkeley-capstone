@@ -158,4 +158,4 @@ LIMIT 1  -- One row per date
 - Separate table with realized prices
 - One row per (forecast_date, commodity)
 
-See `../project_overview/DATA_CONTRACTS.md` for complete schema specifications.
+**Complete schema specifications**: See `../project_overview/DATA_CONTRACTS.md` for full table schemas and usage examples.

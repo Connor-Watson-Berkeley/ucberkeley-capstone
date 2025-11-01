@@ -66,21 +66,26 @@ df = spark.table("commodity.silver.unified_data") \
 | `model_version` | STRING | Model identifier (e.g., 'sarimax_v0') | Yes |
 | `commodity` | STRING | 'Coffee' or 'Sugar' | Yes |
 | `model_success` | BOOLEAN | Did model converge? | Yes |
+| `actual_close` | FLOAT | Realized close price (NULL for future dates) | No |
+| `has_data_leakage` | BOOLEAN | TRUE if forecast_date <= data_cutoff_date | Yes |
 
-**Partitioning**: `model_version`, `commodity`
+**Partitioning**: `commodity`, `forecast_date`
 
 **Critical Invariants**:
 - `data_cutoff_date < forecast_date` (prevents data leakage)
+- `has_data_leakage = TRUE if forecast_date <= data_cutoff_date` (data quality flag)
+- `has_data_leakage` should always be FALSE in production (filter out bad data)
+- `actual_close` is NULL for future dates, populated during backfill
 - Daily forecasts create overlapping predictions
 - Each target date has up to 14 forecasts (from different cutoff dates)
 
 **Usage by Trading Agent**:
 ```sql
--- Get 7-day ahead forecasts for backtesting
-SELECT forecast_date, forecast_mean, lower_95, upper_95
+-- Get 7-day ahead forecasts for backtesting (with actuals)
+SELECT forecast_date, forecast_mean, lower_95, upper_95, actual_close
 FROM commodity.silver.point_forecasts
 WHERE day_ahead = 7
-  AND data_cutoff_date < forecast_date
+  AND has_data_leakage = FALSE  -- Filter out any bad data
   AND model_version = 'production_v1'
   AND forecast_date BETWEEN '2023-01-01' AND '2023-12-31'
 ```
@@ -94,29 +99,49 @@ WHERE day_ahead = 7
 
 | Column | Type | Description | Required |
 |--------|------|-------------|----------|
-| `path_id` | INT | Sample path ID (1-2000) | Yes |
+| `path_id` | INT | Sample path ID (0-2000, where 0=actuals) | Yes |
 | `forecast_start_date` | DATE | First day of forecast | Yes |
 | `data_cutoff_date` | DATE | Last training date | Yes |
 | `generation_timestamp` | TIMESTAMP | When generated | Yes |
 | `model_version` | STRING | Model identifier | Yes |
 | `commodity` | STRING | 'Coffee' or 'Sugar' | Yes |
 | `day_1` to `day_14` | FLOAT | Forecasted prices | Yes |
+| `is_actuals` | BOOLEAN | TRUE for path_id=0 (actuals), FALSE otherwise | Yes |
+| `has_data_leakage` | BOOLEAN | TRUE if forecast_start_date <= data_cutoff_date | Yes |
 
 **Partitioning**: `model_version`, `commodity`
 
 **Purpose**: Monte Carlo paths for risk analysis (VaR, CVaR)
 
+**Key Features**:
+- **path_id=0**: Actuals row (when available) with is_actuals=TRUE
+- **path_id=1-2000**: Forecast paths with is_actuals=FALSE
+- **has_data_leakage = TRUE if forecast_start_date <= data_cutoff_date** (data quality flag)
+- **has_data_leakage** should always be FALSE in production (filter out bad data)
+- Total: 2,001 rows per forecast (2,000 paths + 1 actuals)
+
 **Typical Usage**:
 ```sql
--- Calculate 95% VaR for day 7
+-- Calculate 95% VaR for day 7 (exclude actuals path)
 SELECT forecast_start_date,
        PERCENTILE(day_7, 0.05) as var_95,
        AVG(day_7) as mean_price
 FROM commodity.silver.distributions
 WHERE forecast_start_date = '2024-01-15'
-  AND data_cutoff_date < '2024-01-15'
+  AND is_actuals = FALSE  -- Exclude path_id=0
+  AND has_data_leakage = FALSE
   AND model_version = 'production_v1'
 GROUP BY forecast_start_date
+```
+
+```sql
+-- Get actuals from distributions (path_id=0)
+SELECT forecast_start_date,
+       day_1, day_2, day_3, day_4, day_5, day_6, day_7
+FROM commodity.silver.distributions
+WHERE path_id = 0  -- Actuals row
+  AND is_actuals = TRUE
+ORDER BY forecast_start_date DESC
 ```
 
 ## Output 3: commodity.silver.forecast_actuals

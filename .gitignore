@@ -5,6 +5,15 @@ data/*.json
 *.csv
 *.parquet
 
+# Temporary scaffolding docs (clean up before committing!)
+_scratch/
+*.draft.md
+*.tmp.md
+*_SCRATCH.md
+
+# AI assistant entry point (local only)
+CLAUDE_GUIDE.md
+
 # Python
 __pycache__/
 *.py[cod]

@@ -162,10 +162,10 @@ df_train = df.filter("is_trading_day = 1")
 
 ```
 Bronze Layer (Raw)
-  ├── v_market_data_all
-  ├── v_vix_data_all
-  ├── v_weather_data_all
-  ├── v_macro_data_all
+  ├── market_data
+  ├── vix_data
+  ├── weather_data
+  ├── macro_data
   └── bronze_gkg (GDELT)
          ↓
     Deduplication
@@ -292,7 +292,7 @@ LAST_VALUE(gdelt_tone, true) OVER (
 
 **Data Flow**:
 
-1. **Bronze**: `v_market_data_all` has no row for Jan 14 (market closed)
+1. **Bronze**: `market_data` has no row for Jan 14 (market closed)
 
 2. **Market Clean**:
    ```

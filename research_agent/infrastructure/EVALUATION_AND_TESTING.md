@@ -152,7 +152,7 @@ echo $?  # 0 = pass, 1 = fail
 **Action Required**:
 1. **URGENT**: Backfill 10 years of weather data for 38 Sugar regions
 2. Rebuild landing.weather_data_inc table
-3. Rebuild bronze.v_weather_data_all view
+3. Rebuild bronze.weather_data view
 4. Rebuild silver.unified_data table
 5. Validate Sugar data completeness
 
