@@ -7,14 +7,17 @@ import pandas as pd
 import numpy as np
 from datetime import timedelta
 from typing import Dict, List, Callable
+from ground_truth.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def walk_forward_backtest(df_pandas: pd.DataFrame, model_fn: Callable,
                           model_params: dict, target: str = 'close',
-                          initial_train_days: int = 365 * 3,
-                          forecast_horizon: int = 14,
-                          step_size: int = 14,
-                          n_windows: int = 10) -> Dict:
+                          initial_train_days: int = None,
+                          forecast_horizon: int = None,
+                          step_size: int = None,
+                          n_windows: int = None) -> Dict:
     """
     Walk-forward backtesting with expanding window.
 
@@ -23,10 +26,10 @@ def walk_forward_backtest(df_pandas: pd.DataFrame, model_fn: Callable,
         model_fn: Model function (e.g., xgboost_forecast_with_metadata)
         model_params: Model parameters
         target: Target column
-        initial_train_days: Initial training period (days)
-        forecast_horizon: Forecast days ahead
-        step_size: Days to move forward each iteration
-        n_windows: Number of forecast windows to test
+        initial_train_days: Initial training period (defaults from EVALUATION_CONFIG)
+        forecast_horizon: Forecast days ahead (defaults from EVALUATION_CONFIG)
+        step_size: Days to move forward each iteration (defaults from EVALUATION_CONFIG)
+        n_windows: Number of forecast windows to test (defaults from EVALUATION_CONFIG)
 
     Returns:
         Dict with:
@@ -45,6 +48,18 @@ def walk_forward_backtest(df_pandas: pd.DataFrame, model_fn: Callable,
         - Expanding window mimics production (more data over time)
         - Reveals model stability across different periods
     """
+    # Load defaults from config
+    from ground_truth.config.model_registry import EVALUATION_CONFIG
+
+    config = EVALUATION_CONFIG['walk_forward']
+    initial_train_days = initial_train_days or config['initial_training_days']
+    forecast_horizon = forecast_horizon or config['forecast_horizon']
+    step_size = step_size or config['step_size']
+    n_windows = n_windows or config['n_windows']
+
+    logger.info(f"Starting walk-forward backtest: initial_train={initial_train_days} days, "
+                f"horizon={forecast_horizon} days, step={step_size} days, n_windows={n_windows}")
+
     results = []
 
     # Start date for backtesting
@@ -141,7 +156,7 @@ def walk_forward_backtest(df_pandas: pd.DataFrame, model_fn: Callable,
             })
 
         except Exception as e:
-            print(f"Window {window_i + 1} failed: {str(e)[:50]}")
+            logger.warning(f"Window {window_i + 1} failed: {str(e)[:50]}", exc_info=True)
             continue
 
     # Aggregate performance
