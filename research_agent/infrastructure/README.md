@@ -57,11 +57,11 @@ source databricks/02_create_bronze_views.sql
 ## Databricks Tables
 
 **Landing** (`commodity.landing.*_inc`): Raw S3 data with `ingest_ts`
-**Bronze** (`commodity.bronze.v_*_all`): Deduplicated views using `QUALIFY ROW_NUMBER()`
+**Bronze** (`commodity.bronze.*_data`): Deduplicated views using `QUALIFY ROW_NUMBER()`
 
 Query example:
 ```sql
-SELECT * FROM commodity.bronze.v_market_data_all
+SELECT * FROM commodity.bronze.market_data
 WHERE commodity = 'Coffee'
 ORDER BY date DESC LIMIT 100;
 ```

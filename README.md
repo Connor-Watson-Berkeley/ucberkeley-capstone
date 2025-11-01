@@ -1,37 +1,68 @@
 # Ground Truth - Commodity Forecasting System
 
 **Team**: Connor Watson, Stuart Holland, Francisco Munoz, Tony Gibbons
-**Timeline**: Week 10-11 of 12 (Backtesting & Evaluation Phase)
+
+AI-driven forecasting for coffee & sugar futures to help Colombian traders optimize harvest sales.
+
+**Key Insight**: Traders care about `Coffee Price (USD) × COP/USD Rate`, not just USD futures.
+
+---
+
+## For AI Assistants
+
+**🤖 START HERE**: [CLAUDE_GUIDE.md](CLAUDE_GUIDE.md)
+
+This is your primary entry point containing:
+- Credential setup (AWS & Databricks)
+- Development best practices
+- Navigation to all key docs
+- Current project state
+- Quick reference for common tasks
+
+---
 
 ## Quick Start
 
 ```bash
 # Project structure
 ucberkeley-capstone/
-├── agent_instructions/    # AI assistant context (read this first!)
-├── research_agent/        # Data pipeline → unified_data (Stuart & Francisco)
+├── CLAUDE_GUIDE.md        # 🤖 AI agent entry point
+├── docs/                  # Core reference documentation
+│   ├── DATA_CONTRACTS.md  # Database schemas (single source of truth)
+│   ├── ARCHITECTURE.md    # System architecture
+│   ├── SECURITY.md        # Credential management
+│   └── EVALUATION_STRATEGY.md
+├── research_agent/        # Data pipeline (Francisco)
 ├── forecast_agent/        # Time series forecasting (Connor)
 ├── trading_agent/         # Risk/trading signals (Tony)
-├── data/                  # Local snapshots (gitignored)
-└── docs/                  # Project documentation
+└── data/                  # Local snapshots (gitignored)
 ```
 
-## Purpose
-
-AI-driven forecasting for coffee & sugar futures to help Colombian traders optimize harvest sales.
-
-**Key Insight**: Traders care about `Coffee Price (USD) × COP/USD Rate`, not just USD futures.
+---
 
 ## Three-Agent System
 
 ```
 Research → Forecast → Trading
-(Stuart & Francisco)  (Connor)   (Tony)
+(Francisco)  (Connor)   (Tony)
 ```
 
-- **Research Agent**: Creates `commodity.silver.unified_data` (✅ Complete)
-- **Forecast Agent**: Generates forecasts + distributions (🚧 In Progress)
-- **Trading Agent**: Risk management + signals (⏳ Waiting)
+**Research Agent**: Creates `commodity.silver.unified_data`
+- Lambda functions for data ingestion
+- Bronze/Silver layers in Databricks
+- See [research_agent/README.md](research_agent/README.md)
+
+**Forecast Agent**: Generates forecasts + distributions
+- Time series models (SARIMAX, Prophet, XGBoost, ARIMA)
+- Walk-forward evaluation framework
+- See [forecast_agent/README.md](forecast_agent/README.md)
+
+**Trading Agent**: Risk management + signals
+- VaR, CVaR metrics
+- Position sizing recommendations
+- See [trading_agent/README.md](trading_agent/README.md)
+
+---
 
 ## Data Contracts
 
@@ -42,46 +73,51 @@ Research → Forecast → Trading
 
 ### Outputs:
 - `commodity.silver.point_forecasts` - 14-day forecasts with confidence intervals
-- `commodity.silver.distributions` - 2000 Monte Carlo paths for risk analysis
+- `commodity.silver.distributions` - 2,000 Monte Carlo paths for risk analysis
 - `commodity.silver.forecast_actuals` - Realized close prices for backtesting
 
-See `agent_instructions/DATA_CONTRACTS.md` for schemas.
+See [docs/DATA_CONTRACTS.md](docs/DATA_CONTRACTS.md) for complete schemas.
 
-## For AI Assistants
+---
 
-**Start here**:
-1. Read `agent_instructions/PREFERENCES.md` - Connor's working style
-2. Read `agent_instructions/PROJECT_OVERVIEW.md` - Project context
-3. Read `agent_instructions/DATA_CONTRACTS.md` - Data schemas
-4. Read `agent_instructions/DEVELOPMENT_GUIDE.md` - How to work on this codebase
+## Current State
 
-## Current Focus: Forecast Agent
+**Production Tables** (Databricks):
+- ✅ **commodity.landing.*** - Raw incremental data (6 tables)
+- ✅ **commodity.bronze.*** - Deduplicated views (6 views)
+- ✅ **commodity.silver.unified_data** - Joined dataset (~75k rows)
+- ✅ **commodity.silver.distributions** - 22,000 rows (9 models, Coffee)
 
-**Connor's Priorities**:
-1. Baseline ARIMA model (tonight)
-2. Scalable model bank framework
-3. Parallel model training in Databricks
-4. Evaluation framework
-5. Stable outputs for trading agent
+**Infrastructure**:
+- Lambda Functions deployed in us-west-2
+- EventBridge daily triggers
+- Databricks Unity Catalog
 
-See `forecast_agent/README.md` for details.
-
-## Success Metrics
-
-- Information Ratio > 0.5
-- AUC > 0.65 for directional predictions
-- Brier Score < 0.20
-- Baseline: 54.95% directional accuracy (V1 SARIMAX)
+---
 
 ## Tech Stack
 
 - **Platform**: Databricks (PySpark)
 - **Storage**: Delta Lake
-- **Modeling**: statsmodels, (future: LSTM, transformers)
-- **Local Testing**: Parquet snapshots in `data/`
+- **Modeling**: statsmodels, Prophet, XGBoost
+- **Infrastructure**: AWS Lambda, EventBridge
+- **Local Testing**: Parquet snapshots
+
+---
 
 ## Documentation
 
-- `docs/COFFEE_FORECASTING_STRATEGIC_ROADMAP.md` - Full project vision
-- `docs/Ground Truth Project Plan.pdf` - Original proposal
-- `docs/next_steps.md` - Chat summary (from V1 development)
+**Core Reference**:
+- [CLAUDE_GUIDE.md](CLAUDE_GUIDE.md) - AI agent entry point
+- [docs/DATA_CONTRACTS.md](docs/DATA_CONTRACTS.md) - Database schemas
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
+- [docs/SECURITY.md](docs/SECURITY.md) - Credential management
+
+**Agent-Specific**:
+- [research_agent/README.md](research_agent/README.md)
+- [forecast_agent/README.md](forecast_agent/README.md)
+- [trading_agent/README.md](trading_agent/README.md)
+
+---
+
+**Last Updated**: 2025-01-11
