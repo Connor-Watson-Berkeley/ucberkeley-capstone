@@ -7,37 +7,37 @@
 USE CATALOG commodity;
 
 -- Market Data (Coffee & Sugar) - Full OHLCV data
-CREATE OR REPLACE VIEW commodity.bronze.v_market_data_all AS
+CREATE OR REPLACE VIEW commodity.bronze.market_data AS
 SELECT date, commodity, open, high, low, close, volume
 FROM commodity.landing.market_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date, commodity ORDER BY ingest_ts DESC) = 1;
 
 -- Macro Data (FX rates)
-CREATE OR REPLACE VIEW commodity.bronze.v_macro_data_all AS
+CREATE OR REPLACE VIEW commodity.bronze.macro_data AS
 SELECT *
 FROM commodity.landing.macro_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date ORDER BY ingest_ts DESC) = 1;
 
 -- VIX Data (volatility)
-CREATE OR REPLACE VIEW commodity.bronze.v_vix_data_all AS
+CREATE OR REPLACE VIEW commodity.bronze.vix_data AS
 SELECT date, vix
 FROM commodity.landing.vix_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date ORDER BY ingest_ts DESC) = 1;
 
 -- Weather Data
-CREATE OR REPLACE VIEW commodity.bronze.v_weather_data_all AS
+CREATE OR REPLACE VIEW commodity.bronze.weather_data AS
 SELECT *
 FROM commodity.landing.weather_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date, region, commodity ORDER BY ingest_ts DESC) = 1;
 
 -- CFTC Data (trader positioning)
-CREATE OR REPLACE VIEW commodity.bronze.v_cftc_data_all AS
+CREATE OR REPLACE VIEW commodity.bronze.cftc_data AS
 SELECT *
 FROM commodity.landing.cftc_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date, market_name ORDER BY ingest_ts DESC) = 1;
 
 -- GDELT News Sentiment (all records, no deduplication)
-CREATE OR REPLACE VIEW commodity.bronze.v_gdelt_sentiment_all AS
+CREATE OR REPLACE VIEW commodity.bronze.gdelt_sentiment AS
 SELECT
   date,
   source_url,
@@ -54,7 +54,7 @@ USE CATALOG commodity;
 SHOW VIEWS IN commodity.bronze;
 
 -- Sample query: Coffee prices over time
-SELECT * FROM commodity.bronze.v_market_data_all
+SELECT * FROM commodity.bronze.market_data
 WHERE commodity = 'Coffee'
 ORDER BY date DESC
 LIMIT 10;

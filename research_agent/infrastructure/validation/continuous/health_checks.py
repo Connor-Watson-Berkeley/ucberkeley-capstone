@@ -194,7 +194,7 @@ def main():
         "Test 7: No impossible prices",
         """
         SELECT COUNT(*) as bad_prices
-        FROM commodity.bronze.v_market_data_all
+        FROM commodity.bronze.market_data
         WHERE open <= 0 OR high <= 0 OR low <= 0 OR close <= 0
           AND date >= CURRENT_DATE - INTERVAL 30 DAYS
         """,
@@ -206,7 +206,7 @@ def main():
         "Test 8: No OHLC violations",
         """
         SELECT COUNT(*) as violations
-        FROM commodity.bronze.v_market_data_all
+        FROM commodity.bronze.market_data
         WHERE (high < low OR high < open OR high < close OR low > open OR low > close)
           AND date >= CURRENT_DATE - INTERVAL 30 DAYS
         """,
@@ -219,7 +219,7 @@ def main():
         """
         WITH bronze_dates AS (
             SELECT COUNT(DISTINCT date) as bronze_count
-            FROM commodity.bronze.v_market_data_all
+            FROM commodity.bronze.market_data
             WHERE commodity = 'Coffee' AND date >= '2015-07-07'
         ),
         silver_dates AS (

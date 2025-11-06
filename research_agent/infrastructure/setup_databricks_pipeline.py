@@ -318,7 +318,7 @@ def verify_setup():
         """
         SELECT commodity, COUNT(*) as row_count,
                MIN(date) as earliest_date, MAX(date) as latest_date
-        FROM commodity.bronze.v_market_data_all
+        FROM commodity.bronze.market_data
         GROUP BY commodity
         """,
         description="Checking market data content"
@@ -378,7 +378,7 @@ def main():
         print("\nNext steps:")
         print("1. Lambda functions will write data to S3 daily at 2AM UTC")
         print("2. Databricks tables auto-refresh from S3 on query")
-        print("3. Query data: SELECT * FROM commodity.bronze.v_market_data_all")
+        print("3. Query data: SELECT * FROM commodity.bronze.market_data")
         print("4. Create silver unified_data table with: research_agent/sql/create_unified_data.sql")
 
         return True

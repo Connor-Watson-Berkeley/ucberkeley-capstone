@@ -114,7 +114,7 @@ def validate_market_data_layers():
     # Check each layer
     layers = [
         ("Landing", "commodity.landing.market_data_inc"),
-        ("Bronze", "commodity.bronze.v_market_data_all"),
+        ("Bronze", "commodity.bronze.market_data"),
         ("Silver", "commodity.silver.unified_data")
     ]
 
@@ -198,7 +198,7 @@ def validate_market_data_layers():
             date,
             LAG(date) OVER (PARTITION BY commodity ORDER BY date) as prev_date,
             DATEDIFF(date, LAG(date) OVER (PARTITION BY commodity ORDER BY date)) as days_gap
-        FROM commodity.bronze.v_market_data_all
+        FROM commodity.bronze.market_data
         WHERE date >= '2015-07-07'
     )
     SELECT
@@ -244,7 +244,7 @@ def validate_weather_data():
         SUM(CASE WHEN humidity_mean_pct IS NULL THEN 1 ELSE 0 END) as null_humidity,
         SUM(CASE WHEN wind_speed_max_kmh IS NULL THEN 1 ELSE 0 END) as null_wind,
         SUM(CASE WHEN solar_radiation_mj_m2 IS NULL THEN 1 ELSE 0 END) as null_solar
-    FROM commodity.bronze.v_weather_data_all
+    FROM commodity.bronze.weather_data
     WHERE date >= '2015-01-01'
     GROUP BY commodity
     ORDER BY commodity
@@ -310,7 +310,7 @@ def validate_macro_vix():
         MIN(vix) as min_vix,
         MAX(vix) as max_vix,
         AVG(vix) as avg_vix
-    FROM commodity.bronze.v_vix_data_all
+    FROM commodity.bronze.vix_data
     WHERE date >= '2015-07-07'
     """
 
@@ -341,7 +341,7 @@ def validate_macro_vix():
         SUM(CASE WHEN DEXBZUS IS NULL THEN 1 ELSE 0 END) as null_brl,
         SUM(CASE WHEN DEXCAUS IS NULL THEN 1 ELSE 0 END) as null_cad,
         SUM(CASE WHEN DEXUSEU IS NULL THEN 1 ELSE 0 END) as null_eur
-    FROM commodity.bronze.v_macro_data_all
+    FROM commodity.bronze.macro_data
     WHERE date >= '2015-07-07'
     """
 
@@ -374,7 +374,7 @@ def validate_anomalies():
         low,
         close,
         volume
-    FROM commodity.bronze.v_market_data_all
+    FROM commodity.bronze.market_data
     WHERE date >= '2015-07-07'
       AND (
           open <= 0 OR high <= 0 OR low <= 0 OR close <= 0  -- Negative/zero prices
@@ -407,7 +407,7 @@ def validate_anomalies():
             commodity,
             AVG(close) as mean_close,
             STDDEV(close) as std_close
-        FROM commodity.bronze.v_market_data_all
+        FROM commodity.bronze.market_data
         WHERE date >= '2015-07-07'
         GROUP BY commodity
     )
@@ -418,7 +418,7 @@ def validate_anomalies():
         s.mean_close,
         s.std_close,
         ABS(m.close - s.mean_close) / s.std_close as z_score
-    FROM commodity.bronze.v_market_data_all m
+    FROM commodity.bronze.market_data m
     JOIN stats s ON m.commodity = s.commodity
     WHERE date >= '2015-07-07'
       AND ABS(m.close - s.mean_close) / s.std_close > 5

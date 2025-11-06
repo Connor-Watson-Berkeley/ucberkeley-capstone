@@ -4,9 +4,9 @@ This module extends ProductionForecastWriter to support writing directly
 to Databricks Unity Catalog instead of local parquet files.
 
 Destination tables:
-- commodity.silver.point_forecasts
-- commodity.silver.distributions
-- commodity.silver.forecast_actuals
+- commodity.forecast.point_forecasts
+- commodity.forecast.distributions
+- commodity.forecast.forecast_metadata
 """
 
 import pandas as pd
@@ -23,12 +23,12 @@ class DatabricksForecastWriter:
     """
     Write forecast distributions to Databricks Unity Catalog.
 
-    Target schema: commodity.silver
+    Target schema: commodity.forecast
 
     Tables:
-    - commodity.silver.point_forecasts
-    - commodity.silver.distributions
-    - commodity.silver.forecast_actuals
+    - commodity.forecast.point_forecasts
+    - commodity.forecast.distributions
+    - commodity.forecast.forecast_metadata
     """
 
     def __init__(self,
@@ -70,7 +70,7 @@ class DatabricksForecastWriter:
             )
 
         self.catalog = "commodity"
-        self.schema = "silver"
+        self.schema = "forecast"
 
     def _get_connection(self):
         """Get Databricks SQL connection."""
@@ -81,9 +81,9 @@ class DatabricksForecastWriter:
         )
 
     def setup_schema(self):
-        """Create silver schema and tables if they don't exist."""
+        """Create forecast schema and tables if they don't exist."""
 
-        print("Setting up commodity.silver schema...")
+        print("Setting up commodity.forecast schema...")
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -92,11 +92,11 @@ class DatabricksForecastWriter:
             print("  Using commodity catalog...")
             cursor.execute("USE CATALOG commodity")
 
-            # Create silver schema (if not exists - research_agent may have created it)
-            print("  Ensuring silver schema exists...")
+            # Create forecast schema (if not exists)
+            print("  Ensuring forecast schema exists...")
             cursor.execute(f"""
                 CREATE SCHEMA IF NOT EXISTS {self.catalog}.{self.schema}
-                COMMENT 'Silver layer: Forecast outputs and unified data'
+                COMMENT 'Forecast schema: Model outputs, distributions, and metadata'
             """)
 
             # Drop existing table if it doesn't match contract
@@ -176,10 +176,60 @@ class DatabricksForecastWriter:
                 PARTITIONED BY (commodity)
             """)
 
+            # Drop existing forecast_metadata table if it exists
+            print("  Dropping existing forecast_metadata table (if exists)...")
+            cursor.execute(f"DROP TABLE IF EXISTS {self.catalog}.{self.schema}.forecast_metadata")
+
+            # Create forecast metadata table
+            print("  Creating forecast_metadata table...")
+            cursor.execute(f"""
+                CREATE TABLE {self.catalog}.{self.schema}.forecast_metadata (
+                    forecast_id STRING COMMENT 'Unique identifier: model_version_commodity_forecast_date',
+                    forecast_start_date DATE COMMENT 'First day of forecast horizon',
+                    data_cutoff_date DATE COMMENT 'Last training date',
+                    generation_timestamp TIMESTAMP COMMENT 'When forecast was generated',
+                    model_version STRING COMMENT 'Model identifier',
+                    commodity STRING COMMENT 'Coffee or Sugar',
+
+                    -- Performance Metrics
+                    mae_1d DECIMAL(10,4) COMMENT '1-day ahead MAE',
+                    mae_7d DECIMAL(10,4) COMMENT '7-day ahead MAE',
+                    mae_14d DECIMAL(10,4) COMMENT '14-day ahead MAE',
+                    rmse_1d DECIMAL(10,4) COMMENT '1-day ahead RMSE',
+                    rmse_7d DECIMAL(10,4) COMMENT '7-day ahead RMSE',
+                    rmse_14d DECIMAL(10,4) COMMENT '14-day ahead RMSE',
+                    mape_1d DECIMAL(10,4) COMMENT '1-day ahead MAPE (%)',
+                    mape_7d DECIMAL(10,4) COMMENT '7-day ahead MAPE (%)',
+                    mape_14d DECIMAL(10,4) COMMENT '14-day ahead MAPE (%)',
+
+                    -- Timing Metrics
+                    training_time_seconds DECIMAL(10,2) COMMENT 'Time to train model',
+                    inference_time_seconds DECIMAL(10,2) COMMENT 'Time to generate 14-day forecast',
+                    total_time_seconds DECIMAL(10,2) COMMENT 'Total time (training + inference)',
+
+                    -- Infrastructure
+                    hardware_type STRING COMMENT 'CPU type or "local" if run locally',
+                    num_cores INT COMMENT 'Number of CPU cores used',
+                    memory_gb INT COMMENT 'RAM allocated (GB)',
+                    cluster_id STRING COMMENT 'Databricks cluster ID (NULL if local)',
+
+                    -- Data Quality
+                    training_days INT COMMENT 'Number of days in training set',
+                    actuals_available INT COMMENT 'Number of actuals available (0-14)',
+                    has_data_leakage BOOLEAN COMMENT 'TRUE if forecast_start_date <= data_cutoff_date',
+                    model_success BOOLEAN COMMENT 'Did model train successfully?',
+
+                    -- Additional Metadata
+                    notes STRING COMMENT 'Any additional notes or warnings'
+                )
+                COMMENT 'Forecast performance metrics and timing data'
+                PARTITIONED BY (model_version, commodity)
+            """)
+
             cursor.close()
 
         print(f"✓ Schema setup complete: {self.catalog}.{self.schema}")
-        print(f"  Tables created: distributions, point_forecasts, forecast_actuals")
+        print(f"  Tables created: distributions, point_forecasts, forecast_actuals, forecast_metadata")
 
     def write_distributions(self, df: pd.DataFrame, mode: str = "append"):
         """
@@ -291,17 +341,38 @@ class DatabricksForecastWriter:
         print(f"✓ Inserted {len(df):,} rows via SQL")
 
     def write_point_forecasts(self, df: pd.DataFrame, mode: str = "append"):
-        """Write point forecasts DataFrame to Databricks."""
+        """
+        Write point forecasts DataFrame to Databricks.
+
+        Args:
+            df: Point forecasts DataFrame (from ProductionForecastWriter)
+            mode: 'append' or 'overwrite'
+        """
+
+        if len(df) == 0:
+            print("⚠ Warning: Empty DataFrame, nothing to write")
+            return
 
         table_name = f"{self.catalog}.{self.schema}.point_forecasts"
         print(f"\nWriting {len(df):,} rows to {table_name}...")
 
-        # Convert datetime columns
+        # Convert datetime columns to proper types
         df = df.copy()
         df['forecast_date'] = pd.to_datetime(df['forecast_date']).dt.date
         df['data_cutoff_date'] = pd.to_datetime(df['data_cutoff_date']).dt.date
         df['generation_timestamp'] = pd.to_datetime(df['generation_timestamp'])
 
+        # Ensure column order matches table schema
+        expected_cols = [
+            'forecast_date', 'data_cutoff_date', 'generation_timestamp',
+            'day_ahead', 'forecast_mean', 'forecast_std',
+            'lower_95', 'upper_95', 'model_version', 'commodity', 'model_success',
+            'actual_close', 'has_data_leakage'
+        ]
+
+        df = df[expected_cols]
+
+        # Write using Spark (via Databricks SDK)
         from pyspark.sql import SparkSession
 
         try:
@@ -315,9 +386,14 @@ class DatabricksForecastWriter:
 
             print(f"✓ Wrote {len(df):,} rows to {table_name}")
 
+            # Verify
+            count = spark.sql(f"SELECT COUNT(*) FROM {table_name}").collect()[0][0]
+            print(f"  Total rows in table: {count:,}")
+
         except Exception as e:
-            print(f"  Error writing point forecasts: {e}")
-            raise
+            # Fallback: use SQL INSERT (slower but works without Spark)
+            print(f"  Spark write failed, using SQL INSERT: {e}")
+            self._write_via_sql_insert(df, table_name)
 
     def verify_tables(self):
         """Verify tables exist and show row counts."""
@@ -376,7 +452,7 @@ def upload_distributions_to_databricks(parquet_path: str = "production_forecasts
     print("\n" + "="*80)
     print("✅ UPLOAD COMPLETE")
     print("="*80)
-    print(f"\nDistributions available at: commodity.silver.distributions")
+    print(f"\nDistributions available at: commodity.forecast.distributions")
     print(f"Total rows uploaded: {len(df):,}")
 
 
