@@ -1,17 +1,39 @@
-# Data files (too large for git)
+# =============================================================================
+# Data Files & Outputs
+# =============================================================================
+# Raw data files (too large for git)
 data/*.csv
 data/*.parquet
 data/*.json
 *.csv
 *.parquet
 
-# Temporary scaffolding docs (clean up before committing!)
+# Forecast outputs (generated artifacts)
+forecast_agent/experiments/
+forecast_agent/dashboards/
+forecast_agent/production_forecasts/
+forecast_agent/trading_agent_forecast_*.json
+
+# =============================================================================
+# Temporary Scaffolding (clean up before committing!)
+# =============================================================================
 _scratch/
 *.draft.md
 *.tmp.md
 *_SCRATCH.md
+*.log
+*_output.log
+rebuild_output*.log
+*_BACKFILL_STATUS.md
+*_BACKFILL_FIX.md
+manifest.mf
+presentation_slides.html
+presentation_diagrams/
 
-# AI assistant entry point (local only)
+# =============================================================================
+# Local Configuration & Guides
+# =============================================================================
+# AI assistant entry point (local only, regenerated per session)
 CLAUDE_GUIDE.md
 
 # Python
@@ -60,10 +82,16 @@ Thumbs.db
 # Databricks
 .databricks/
 
-# Infrastructure configuration (workspace-specific identifiers)
+# =============================================================================
+# Infrastructure & Credentials
+# =============================================================================
+# Workspace-specific configuration (contains credentials)
 infra/
+.databrickscfg
+*.env
+.env.*
 
-# Project documentation (local only)
+# Project overview documentation (local development notes)
 project_overview/
 
 # Model artifacts (optional - uncomment if needed)
@@ -72,20 +100,16 @@ project_overview/
 # *.h5
 # mlruns/
 
-# Lambda and EventBridge exports
-*.zip
-
-# Lambda migration - extracted dependencies (not needed in git)
-lambda_migration/migrated_functions/extracted/
-lambda_migration/migrated_functions/updated/
-
-# Lambda and EventBridge exports (large zip files)
+# =============================================================================
+# AWS Lambda Artifacts
+# =============================================================================
+# Lambda deployment packages (large zip files)
 *.zip
 all-lambdas.zip
 all-eventbridge.zip
 lambda_migration/
 
-# Lambda dependencies (installed at deploy time)
+# Lambda dependencies (installed at deploy time, not needed in git)
 research_agent/infrastructure/lambda/functions/*/boto*
 research_agent/infrastructure/lambda/functions/*/botocore*
 research_agent/infrastructure/lambda/functions/*/urllib3*
