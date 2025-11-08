@@ -7,7 +7,7 @@ Usage:
 
 Outputs:
     - production_forecasts/point_forecasts.parquet (local)
-    - commodity.silver.point_forecasts (Databricks)
+    - commodity.forecast.point_forecasts (Databricks)
 """
 
 import pandas as pd

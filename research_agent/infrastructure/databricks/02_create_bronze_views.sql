@@ -1,43 +1,44 @@
 -- ============================================
--- DATABRICKS BRONZE LAYER - Deduplication Views
+-- DATABRICKS BRONZE LAYER - Deduplication Tables
 -- ============================================
--- Creates views with automatic deduplication
+-- Creates tables with automatic deduplication
 -- Uses QUALIFY to keep only latest version of each record
+-- Tables use clean names: market, vix, macro, weather, cftc, gdelt
 
 USE CATALOG commodity;
 
 -- Market Data (Coffee & Sugar) - Full OHLCV data
-CREATE OR REPLACE VIEW commodity.bronze.market_data AS
+CREATE OR REPLACE TABLE commodity.bronze.market AS
 SELECT date, commodity, open, high, low, close, volume
 FROM commodity.landing.market_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date, commodity ORDER BY ingest_ts DESC) = 1;
 
 -- Macro Data (FX rates)
-CREATE OR REPLACE VIEW commodity.bronze.macro_data AS
+CREATE OR REPLACE TABLE commodity.bronze.macro AS
 SELECT *
 FROM commodity.landing.macro_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date ORDER BY ingest_ts DESC) = 1;
 
 -- VIX Data (volatility)
-CREATE OR REPLACE VIEW commodity.bronze.vix_data AS
+CREATE OR REPLACE TABLE commodity.bronze.vix AS
 SELECT date, vix
 FROM commodity.landing.vix_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date ORDER BY ingest_ts DESC) = 1;
 
 -- Weather Data
-CREATE OR REPLACE VIEW commodity.bronze.weather_data AS
+CREATE OR REPLACE TABLE commodity.bronze.weather AS
 SELECT *
 FROM commodity.landing.weather_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date, region, commodity ORDER BY ingest_ts DESC) = 1;
 
 -- CFTC Data (trader positioning)
-CREATE OR REPLACE VIEW commodity.bronze.cftc_data AS
+CREATE OR REPLACE TABLE commodity.bronze.cftc AS
 SELECT *
 FROM commodity.landing.cftc_data_inc
 QUALIFY ROW_NUMBER() OVER (PARTITION BY date, market_name ORDER BY ingest_ts DESC) = 1;
 
 -- GDELT News Sentiment (all records, no deduplication)
-CREATE OR REPLACE VIEW commodity.bronze.gdelt_sentiment AS
+CREATE OR REPLACE TABLE commodity.bronze.gdelt AS
 SELECT
   date,
   source_url,
@@ -49,12 +50,12 @@ SELECT
   all_names
 FROM commodity.landing.gdelt_sentiment_inc;
 
--- Verify views created
+-- Verify tables created
 USE CATALOG commodity;
-SHOW VIEWS IN commodity.bronze;
+SHOW TABLES IN commodity.bronze;
 
 -- Sample query: Coffee prices over time
-SELECT * FROM commodity.bronze.market_data
+SELECT * FROM commodity.bronze.market
 WHERE commodity = 'Coffee'
 ORDER BY date DESC
 LIMIT 10;

@@ -1,7 +1,7 @@
 """Production deployment script for weekly retraining.
 
 Trains best model on FULL historical data and stores forecasts
-in commodity.silver schema (point_forecasts, distributions, forecast_actuals).
+in commodity.forecast schema (point_forecasts, distributions, forecast_actuals).
 
 Run this script every Monday morning for production forecasts.
 """

@@ -1,6 +1,6 @@
 """Upload point_forecasts parquet to Databricks.
 
-Uploads local point_forecasts.parquet file to commodity.silver.point_forecasts table.
+Uploads local point_forecasts.parquet file to commodity.forecast.point_forecasts table.
 
 Usage:
     python upload_point_forecasts_to_databricks.py
@@ -49,7 +49,7 @@ def upload_point_forecasts_to_databricks(parquet_path: str = "production_forecas
     print("\n" + "="*80)
     print("✅ UPLOAD COMPLETE")
     print("="*80)
-    print(f"\nPoint forecasts available at: commodity.silver.point_forecasts")
+    print(f"\nPoint forecasts available at: commodity.forecast.point_forecasts")
     print(f"Total rows uploaded: {len(df):,}")
 
 

@@ -46,7 +46,7 @@ df = spark.table("commodity.silver.unified_data") \
     .filter("commodity = 'Coffee' AND is_trading_day = 1")
 ```
 
-## Output 1: commodity.silver.point_forecasts
+## Output 1: commodity.forecast.point_forecasts
 
 **Owner**: Forecast Agent (Connor - YOU)
 **Grain**: One row per (forecast_date, model_version, day_ahead)
@@ -83,14 +83,14 @@ df = spark.table("commodity.silver.unified_data") \
 ```sql
 -- Get 7-day ahead forecasts for backtesting (with actuals)
 SELECT forecast_date, forecast_mean, lower_95, upper_95, actual_close
-FROM commodity.silver.point_forecasts
+FROM commodity.forecast.point_forecasts
 WHERE day_ahead = 7
   AND has_data_leakage = FALSE  -- Filter out any bad data
   AND model_version = 'production_v1'
   AND forecast_date BETWEEN '2023-01-01' AND '2023-12-31'
 ```
 
-## Output 2: commodity.silver.distributions
+## Output 2: commodity.forecast.distributions
 
 **Owner**: Forecast Agent (Connor - YOU)
 **Grain**: One row per (forecast_start_date, model_version, path_id)
@@ -126,7 +126,7 @@ WHERE day_ahead = 7
 SELECT forecast_start_date,
        PERCENTILE(day_7, 0.05) as var_95,
        AVG(day_7) as mean_price
-FROM commodity.silver.distributions
+FROM commodity.forecast.distributions
 WHERE forecast_start_date = '2024-01-15'
   AND is_actuals = FALSE  -- Exclude path_id=0
   AND has_data_leakage = FALSE
@@ -138,13 +138,13 @@ GROUP BY forecast_start_date
 -- Get actuals from distributions (path_id=0)
 SELECT forecast_start_date,
        day_1, day_2, day_3, day_4, day_5, day_6, day_7
-FROM commodity.silver.distributions
+FROM commodity.forecast.distributions
 WHERE path_id = 0  -- Actuals row
   AND is_actuals = TRUE
 ORDER BY forecast_start_date DESC
 ```
 
-## Output 3: commodity.silver.forecast_actuals
+## Output 3: commodity.forecast.forecast_metadata
 
 **Owner**: Forecast Agent (Connor - YOU)
 **Grain**: One row per (forecast_date, commodity)
@@ -179,8 +179,8 @@ SELECT
   a.actual_close,
   pf.forecast_mean - a.actual_close as error,
   ABS(pf.forecast_mean - a.actual_close) as abs_error
-FROM commodity.silver.point_forecasts pf
-JOIN commodity.silver.forecast_actuals a
+FROM commodity.forecast.point_forecasts pf
+JOIN commodity.forecast.forecast_metadata a
   ON pf.forecast_date = a.forecast_date
   AND pf.commodity = a.commodity
 WHERE pf.day_ahead = 7
@@ -195,8 +195,8 @@ SELECT
   pf.forecast_mean * u.cop_usd as forecast_value_cop,
   a.actual_close * u.cop_usd as actual_value_cop,
   (pf.forecast_mean - a.actual_close) * u.cop_usd as error_cop
-FROM commodity.silver.point_forecasts pf
-JOIN commodity.silver.forecast_actuals a
+FROM commodity.forecast.point_forecasts pf
+JOIN commodity.forecast.forecast_metadata a
   ON pf.forecast_date = a.forecast_date AND pf.commodity = a.commodity
 JOIN commodity.silver.unified_data u
   ON a.forecast_date = u.date AND a.commodity = u.commodity

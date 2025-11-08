@@ -1,9 +1,9 @@
-"""Production forecast writer aligned with commodity.silver schema.
+"""Production forecast writer aligned with commodity.forecast schema.
 
 Writes forecasts to three production tables:
-- commodity.silver.point_forecasts
-- commodity.silver.distributions
-- commodity.silver.forecast_actuals
+- commodity.forecast.point_forecasts
+- commodity.forecast.distributions
+- commodity.forecast.forecast_actuals
 """
 
 import pandas as pd

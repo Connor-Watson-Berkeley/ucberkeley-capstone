@@ -115,7 +115,7 @@ def write_point_forecasts(forecasts_df, model_metadata):
 ```sql
 -- Verify no leakage in stored forecasts
 SELECT COUNT(*) as leakage_count
-FROM commodity.silver.point_forecasts
+FROM commodity.forecast.point_forecasts
 WHERE forecast_date <= training_cutoff_date;
 
 -- Should ALWAYS return 0

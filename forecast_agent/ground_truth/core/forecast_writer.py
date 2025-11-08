@@ -1,6 +1,6 @@
 """Forecast writer for Delta tables.
 
-Writes forecasts to commodity.silver.point_forecasts and distributions tables.
+Writes forecasts to commodity.forecast.point_forecasts and distributions tables.
 Includes data leakage detection.
 """
 
@@ -14,7 +14,7 @@ def write_point_forecast(spark: SparkSession, forecast_df: pd.DataFrame,
                          model_name: str, commodity: str,
                          training_end: pd.Timestamp,
                          parameters: dict = None,
-                         table_name: str = "commodity.silver.point_forecasts") -> None:
+                         table_name: str = "commodity.forecast.point_forecasts") -> None:
     """
     Write point forecast to Delta table with metadata.
 
@@ -82,7 +82,7 @@ def write_distribution_forecast(spark: SparkSession, paths_df: pd.DataFrame,
                                  model_name: str, commodity: str,
                                  training_end: pd.Timestamp,
                                  parameters: dict = None,
-                                 table_name: str = "commodity.silver.distributions") -> None:
+                                 table_name: str = "commodity.forecast.distributions") -> None:
     """
     Write distribution forecast (Monte Carlo paths) to Delta table.
 
@@ -142,7 +142,7 @@ def write_distribution_forecast(spark: SparkSession, paths_df: pd.DataFrame,
 
 def write_forecast_actuals(spark: SparkSession, actuals_df: pd.DataFrame,
                             commodity: str,
-                            table_name: str = "commodity.silver.forecast_actuals") -> None:
+                            table_name: str = "commodity.forecast.forecast_actuals") -> None:
     """
     Write realized prices (actuals) for forecast evaluation.
 

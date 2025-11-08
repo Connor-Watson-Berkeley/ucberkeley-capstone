@@ -16,27 +16,27 @@ WITH date_spine AS (
 -- Market Data: Full OHLCV data
 market_clean AS (
   SELECT date, commodity, open, high, low, close, volume
-  FROM commodity.bronze.market_data
+  FROM commodity.bronze.market
   WHERE date >= '2015-07-07'
 ),
 
 -- VIX: Simple DISTINCT (all duplicates are identical values)
 vix_clean AS (
   SELECT DISTINCT date, vix
-  FROM commodity.bronze.vix_data
+  FROM commodity.bronze.vix
   WHERE date >= '2015-07-07'
 ),
 
 -- Macro: Pick row with most non-null columns
 macro_ranked AS (
-  SELECT 
+  SELECT
     date,
     vnd_usd, cop_usd, idr_usd, etb_usd, hnl_usd, ugx_usd, pen_usd, xaf_usd,
     gtq_usd, gnf_usd, nio_usd, crc_usd, tzs_usd, kes_usd, lak_usd, pkr_usd,
     php_usd, egp_usd, ars_usd, rub_usd, try_usd, uah_usd, irr_usd, byn_usd,
     ROW_NUMBER() OVER (
-      PARTITION BY date 
-      ORDER BY 
+      PARTITION BY date
+      ORDER BY
         (CASE WHEN vnd_usd IS NOT NULL THEN 1 ELSE 0 END +
          CASE WHEN cop_usd IS NOT NULL THEN 1 ELSE 0 END +
          CASE WHEN idr_usd IS NOT NULL THEN 1 ELSE 0 END +
@@ -62,7 +62,7 @@ macro_ranked AS (
          CASE WHEN irr_usd IS NOT NULL THEN 1 ELSE 0 END +
          CASE WHEN byn_usd IS NOT NULL THEN 1 ELSE 0 END) DESC
     ) as rn
-  FROM commodity.bronze.macro_data
+  FROM commodity.bronze.macro
   WHERE date >= '2015-07-07'
 ),
 
@@ -198,7 +198,7 @@ weather_with_forward_fill AS (
     LAST_VALUE(wind_direction_deg, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_direction_deg_filled,
     LAST_VALUE(solar_radiation_mj_m2, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as solar_radiation_mj_m2_filled,
     LAST_VALUE(evapotranspiration_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as evapotranspiration_mm_filled
-  FROM commodity.bronze.weather_data
+  FROM commodity.bronze.weather
   WHERE date >= '2015-07-07'
 ),
 

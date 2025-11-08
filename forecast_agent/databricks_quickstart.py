@@ -220,12 +220,12 @@ display(distributions.filter("path_id <= 10").orderBy("path_id"))
 # COMMAND ----------
 
 # Write to commodity.silver schema (append mode)
-point_forecasts.write.mode("append").saveAsTable("commodity.silver.point_forecasts")
-distributions.write.mode("append").saveAsTable("commodity.silver.distributions")
+point_forecasts.write.mode("append").saveAsTable("commodity.forecast.point_forecasts")
+distributions.write.mode("append").saveAsTable("commodity.forecast.distributions")
 
 print("Written to Unity Catalog:")
-print("  - commodity.silver.point_forecasts")
-print("  - commodity.silver.distributions")
+print("  - commodity.forecast.point_forecasts")
+print("  - commodity.forecast.distributions")
 
 # COMMAND ----------
 
