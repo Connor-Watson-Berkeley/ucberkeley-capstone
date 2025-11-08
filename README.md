@@ -72,9 +72,9 @@ Research → Forecast → Trading
 - Market data + weather + macro + exchange rates
 
 ### Outputs:
-- `commodity.silver.point_forecasts` - 14-day forecasts with confidence intervals
-- `commodity.silver.distributions` - 2,000 Monte Carlo paths for risk analysis
-- `commodity.silver.forecast_actuals` - Realized close prices for backtesting
+- `commodity.forecast.point_forecasts` - 14-day forecasts with confidence intervals
+- `commodity.forecast.distributions` - 2,000 Monte Carlo paths for risk analysis
+- `commodity.forecast.forecast_metadata` - Model metadata and evaluation metrics
 
 See [docs/DATA_CONTRACTS.md](docs/DATA_CONTRACTS.md) for complete schemas.
 
@@ -86,7 +86,8 @@ See [docs/DATA_CONTRACTS.md](docs/DATA_CONTRACTS.md) for complete schemas.
 - ✅ **commodity.landing.*** - Raw incremental data (6 tables)
 - ✅ **commodity.bronze.*** - Deduplicated views (6 views)
 - ✅ **commodity.silver.unified_data** - Joined dataset (~75k rows)
-- ✅ **commodity.silver.distributions** - 22,000 rows (9 models, Coffee)
+- ✅ **commodity.forecast.distributions** - 22,000 rows (9 models, Coffee)
+- ✅ **commodity.forecast.point_forecasts** - Point forecasts with confidence intervals
 
 **Infrastructure**:
 - Lambda Functions deployed in us-west-2

@@ -1,67 +1,102 @@
-# Research Infrastructure
+# Research Agent Infrastructure
 
-Data collection pipeline for commodity price forecasting.
+**Data pipeline infrastructure for commodity forecasting platform.**
 
-## Architecture
+## 🔑 Setup
 
-```
-Lambda (AWS) → S3 (groundtruth-capstone) → Databricks (commodity catalog)
-```
-
-## Setup
-
-### 1. Deploy Lambda Functions
+1. **Create `.env` file** (NEVER commit this!)
 ```bash
-cd lambda
-./deploy_all_functions.sh
-./backfill_historical_data.sh  # Optional: Load historical data
+cp .env.example .env
+# Edit .env with your Databricks credentials
 ```
 
-### 2. Configure EventBridge Schedules
+2. **Install dependencies**
 ```bash
-cd eventbridge
-./setup_all_eventbridge_schedules.sh
+pip install python-dotenv databricks-sql-connector boto3
 ```
 
-### 3. Create Databricks Tables (via API)
+## 📂 Structure
+
+```
+infrastructure/
+├── .env                                    # Secrets (gitignored)
+├── .env.example                            # Template
+├── backfill_historical_weather_v2.py       # Weather backfill (production)
+├── create_weather_v2_bronze_table.py       # Create bronze table
+├── create_unified_data.py                  # Build unified_data table
+├── rebuild_all_layers.py                   # Rebuild bronze/silver/forecast
+├── unity_catalog_workaround.py             # SQL connector fallback
+├── databricks/                             # Databricks configs
+│   ├── setup_unity_catalog_credentials.py  # Unity Catalog setup
+│   ├── databricks_unity_catalog_*.json     # Cluster configs
+│   └── *.sql                               # SQL setup scripts
+├── tests/                                  # All tests & validation
+│   ├── README.md                           # Test documentation
+│   ├── validate_*.py                       # Data quality tests
+│   ├── check_*.py                          # Infrastructure checks
+│   └── test_*.py                           # Pipeline tests
+└── archive/                                # Old scripts (reference only)
+```
+
+## 🚀 Key Scripts
+
+### Weather Backfill (Production)
 ```bash
-# Set your Databricks token
-export DATABRICKS_TOKEN=<your-token>
-
-# Run automated setup
-python setup_databricks_pipeline.py
+# Backfill historical weather with corrected coordinates
+python backfill_historical_weather_v2.py --start-date 2015-07-07 --end-date 2025-11-05
 ```
 
-This creates:
-- `commodity` catalog with landing/bronze/silver schemas
-- Landing tables that read from S3
-- Bronze deduplication views
-
-**Alternative (Manual)**: Run SQL files in Databricks SQL Editor:
-```sql
-source databricks/01_create_landing_tables.sql
-source databricks/02_create_bronze_views.sql
+### Unity Catalog Setup
+```bash
+# Configure Unity Catalog storage credentials
+cd databricks
+python setup_unity_catalog_credentials.py
 ```
 
-## Data Sources
+### Data Pipeline
+```bash
+# Rebuild all data layers
+python rebuild_all_layers.py
 
-| Function | Data | Schedule | S3 Path |
-|----------|------|----------|---------|
-| market-data-fetcher | Coffee/Sugar prices (Yahoo Finance) | Daily 2AM UTC | landing/market_data/ |
-| weather-data-fetcher | Growing region weather (Open-Meteo) | Daily 2AM UTC | landing/weather_data/ |
-| vix-data-fetcher | VIX volatility index (FRED) | Daily 2AM UTC | landing/vix_data/ |
-| fx-calculator-fetcher | FX rates (FRED) | Daily 2AM UTC | landing/macro_data/ |
-| cftc-data-fetcher | Trader positioning (CFTC) | Daily 2AM UTC | landing/cftc_data/ |
-| gdelt-processor | News sentiment (GDELT GKG) | Daily 2AM UTC | landing/gdelt/filtered/ |
-
-## Databricks Tables
-
-**Landing** (`commodity.landing.*_inc`): Raw S3 data with `ingest_ts`
-**Bronze** (`commodity.bronze.*_data`): Deduplicated views using `QUALIFY ROW_NUMBER()`
-
-Query example:
-```sql
-SELECT * FROM commodity.bronze.market_data
-WHERE commodity = 'Coffee'
-ORDER BY date DESC LIMIT 100;
+# Create/update unified_data
+python create_unified_data.py
 ```
+
+## 🧪 Testing
+
+See [`tests/README.md`](tests/README.md) for test documentation.
+
+```bash
+# Run validation
+python tests/validate_july2021_frost.py
+python tests/validate_data_quality.py
+
+# Check catalog structure
+python tests/check_catalog_structure.py
+
+# Full pipeline test
+python tests/test_full_pipeline.py
+```
+
+## 📋 Utilities
+
+- `dashboard_pipeline_health.py` - Pipeline monitoring dashboard
+- `list_databricks_repos.py` - List Databricks repos
+- `pull_databricks_repo.py` - Pull repo updates
+- `load_historical_to_databricks.py` - Load historical data
+
+## 📖 Documentation
+
+- `DATABRICKS_MIGRATION_GUIDE.md` - Complete migration guide
+- `MIGRATION_PREFLIGHT_CHECKLIST.md` - Quick migration checklist
+- `CLEANUP_PLAN.md` - Cleanup decisions (this cleanup)
+
+## 🔒 Security
+
+- **NEVER commit `.env`** - Contains secrets
+- **NEVER hardcode credentials** - Use environment variables
+- All scripts load from `.env` via `python-dotenv`
+
+## 📦 Archive
+
+`archive/` contains old scripts kept for reference. Not used in production.

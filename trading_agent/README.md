@@ -7,9 +7,9 @@
 Convert forecast distributions into trading signals with risk management.
 
 ## Inputs
-- `commodity.silver.point_forecasts` - 14-day forecasts with actuals (backfill)
-- `commodity.silver.distributions` - 2,000 Monte Carlo paths (path_id=0 is actuals)
-- `commodity.silver.forecast_actuals` - Historical actuals table
+- `commodity.forecast.point_forecasts` - 14-day forecasts with actuals (backfill)
+- `commodity.forecast.distributions` - 2,000 Monte Carlo paths (path_id=0 is actuals)
+- `commodity.forecast.forecast_metadata` - Historical actuals table
 
 ## Outputs
 - Trading signals (long/short/neutral)
@@ -30,7 +30,7 @@ SELECT
   upper_95,
   actual_close,  -- NULL for future dates
   has_data_leakage  -- Should always be FALSE (data quality check)
-FROM commodity.silver.point_forecasts
+FROM commodity.forecast.point_forecasts
 WHERE day_ahead = 7
   AND model_version = 'sarimax_weather_v1'
   AND has_data_leakage = FALSE  -- Filter out any bad data
@@ -47,7 +47,7 @@ SELECT
   PERCENTILE(day_7, 0.01) as cvar_99,
   AVG(day_7) as mean_price,
   STDDEV(day_7) as price_volatility
-FROM commodity.silver.distributions
+FROM commodity.forecast.distributions
 WHERE model_version = 'sarimax_weather_v1'
   AND is_actuals = FALSE  -- Exclude path_id=0 (actuals)
   AND has_data_leakage = FALSE
@@ -61,7 +61,7 @@ SELECT
   forecast_start_date,
   day_1, day_2, day_3, day_4, day_5, day_6, day_7,
   day_8, day_9, day_10, day_11, day_12, day_13, day_14
-FROM commodity.silver.distributions
+FROM commodity.forecast.distributions
 WHERE path_id = 0  -- Actuals row
   AND is_actuals = TRUE
 ORDER BY forecast_start_date DESC
@@ -84,7 +84,7 @@ SELECT
     WHEN actual_close IS NOT NULL THEN 'Backfill'
     ELSE 'Future Forecast'
   END as data_type
-FROM commodity.silver.point_forecasts
+FROM commodity.forecast.point_forecasts
 WHERE day_ahead = 7
   AND model_version = 'sarimax_weather_v1'
   AND has_data_leakage = FALSE
@@ -99,8 +99,8 @@ SELECT
   pf.forecast_mean,
   a.actual_close,
   pf.forecast_mean - a.actual_close as error
-FROM commodity.silver.point_forecasts pf
-JOIN commodity.silver.forecast_actuals a
+FROM commodity.forecast.point_forecasts pf
+JOIN commodity.forecast.forecast_metadata a
   ON pf.forecast_date = a.forecast_date
   AND pf.commodity = a.commodity
 WHERE pf.day_ahead = 7
@@ -114,8 +114,8 @@ SELECT
   pf.forecast_date,
   pf.forecast_mean * u.cop_usd as forecast_value_cop,
   a.actual_close * u.cop_usd as actual_value_cop
-FROM commodity.silver.point_forecasts pf
-JOIN commodity.silver.forecast_actuals a
+FROM commodity.forecast.point_forecasts pf
+JOIN commodity.forecast.forecast_metadata a
   ON pf.forecast_date = a.forecast_date AND pf.commodity = a.commodity
 JOIN commodity.silver.unified_data u
   ON a.forecast_date = u.date AND a.commodity = u.commodity
