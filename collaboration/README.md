@@ -12,8 +12,9 @@ This folder facilitates coordination between the Research Agent and Trading Agen
 
 ## Files
 
-- **RESEARCH_AGENT_TODO.md** - Research Agent team tasks and progress
-- **TRADING_AGENT_TODO.md** - Trading Agent team tasks and progress
+- **PRIORITIZED_BACKLOG.md** - **START HERE** - Prioritized tasks for both teams
+- **RESEARCH_AGENT_TODO.md** - Research Agent team tasks and progress (legacy)
+- **TRADING_AGENT_TODO.md** - Trading Agent team tasks and progress (legacy)
 - **REQUESTS.md** - Inter-team requests and questions
 - **WARNINGS.md** - Critical issues, breaking changes, and alerts
 - **DATA_STATUS.md** - Current status of data pipeline and availability
