@@ -30,6 +30,13 @@ manifest.mf
 presentation_slides.html
 presentation_diagrams/
 
+# Test scripts for exploration (not needed in repo)
+test_connection.py
+discover_warehouses.py
+explore_tables.py
+explore_workspace.py
+query_predictions.py
+
 # Archived old scripts (keep in git for reference)
 # research_agent/infrastructure/archive/
 
