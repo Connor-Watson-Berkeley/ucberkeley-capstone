@@ -151,3 +151,4 @@ research_agent/infrastructure/lambda/functions/*/numpy*
 research_agent/infrastructure/lambda/functions/*/bin/
 research_agent/infrastructure/lambda/functions/*/*.dist-info/
 research_agent/infrastructure/lambda/functions/*/.libs*/
+*.crc
