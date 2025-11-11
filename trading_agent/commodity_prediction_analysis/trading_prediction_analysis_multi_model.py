@@ -1,25 +1,4 @@
 # Databricks notebook source
-# The /files/ in the URL maps to /FileStore/ on DBFS
-file_path = "dbfs:/Volumes/commodity/silver/coffee_forecast_volume/distributions/coffee_distributions_sarimax_v0.csv"
-# file_path = "dbfs:/FileStore/coffee_forecasts/distributions/coffee_point_distribution_sarimax_v0.csv"
-
-
-# Let's first just check if it exists
-dbutils.fs.ls(file_path)
-
-# If the command above succeeds, then you can read it:
-df = spark.read.format("csv") \
-               .option("header", "true") \
-               .option("inferSchema", "true") \
-               .load(file_path)
-
-display(df.limit(10))
-
-df.select("model_version").distinct().show()
-
-
-# COMMAND ----------
-
 # NOTEBOOK 00: SETUP AND CONFIGURATION (UPDATED)
 # ============================================================================
 # Databricks notebook source
