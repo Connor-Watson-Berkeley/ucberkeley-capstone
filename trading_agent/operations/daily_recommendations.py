@@ -100,33 +100,55 @@ def get_latest_prediction(commodity, model_version, connection):
     return prediction_matrix, forecast_date, generation_ts
 
 
-def get_exchange_rates(connection, currency_pairs=['COP/USD', 'VND/USD']):
+def get_exchange_rates(connection, currency_pairs=None):
     """
     Get latest exchange rates from Databricks.
 
     Args:
         connection: Databricks SQL connection
-        currency_pairs: List of currency pairs to fetch (e.g., ['COP/USD', 'VND/USD'])
+        currency_pairs: Optional list of specific currency pairs to fetch.
+                       If None, fetches all available pairs.
 
     Returns:
         dict: {currency_pair: rate}
     """
     cursor = connection.cursor()
 
-    # Query latest exchange rates for each currency pair
-    rates = {}
-    for pair in currency_pairs:
+    if currency_pairs is None:
+        # Query all available currency pairs with their latest rates
         cursor.execute("""
-            SELECT rate
-            FROM commodity.bronze.fx_rates
-            WHERE currency_pair = %s
-            ORDER BY date DESC
-            LIMIT 1
-        """, (pair,))
+            WITH ranked_rates AS (
+                SELECT
+                    currency_pair,
+                    rate,
+                    date,
+                    ROW_NUMBER() OVER (PARTITION BY currency_pair ORDER BY date DESC) as rn
+                FROM commodity.bronze.fx_rates
+            )
+            SELECT currency_pair, rate
+            FROM ranked_rates
+            WHERE rn = 1
+        """)
 
-        result = cursor.fetchone()
-        if result:
-            rates[pair] = result[0]
+        rates = {}
+        for row in cursor.fetchall():
+            rates[row[0]] = row[1]
+
+    else:
+        # Query specific currency pairs
+        rates = {}
+        for pair in currency_pairs:
+            cursor.execute("""
+                SELECT rate
+                FROM commodity.bronze.fx_rates
+                WHERE currency_pair = %s
+                ORDER BY date DESC
+                LIMIT 1
+            """, (pair,))
+
+            result = cursor.fetchone()
+            if result:
+                rates[pair] = result[0]
 
     cursor.close()
     return rates
@@ -176,8 +198,8 @@ def get_current_state(commodity, connection):
     inventory = 35.5  # tons
     days_since_harvest = 45
 
-    # Get exchange rates
-    exchange_rates = get_exchange_rates(connection, currency_pairs=['COP/USD', 'VND/USD'])
+    # Get all available exchange rates
+    exchange_rates = get_exchange_rates(connection)
 
     return {
         'inventory': inventory,
