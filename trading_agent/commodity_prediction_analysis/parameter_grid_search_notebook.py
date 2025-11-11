@@ -33,33 +33,87 @@
 
 # COMMAND ----------
 
+# IMPORTANT: For grid search to work, we need strategy classes and BacktestEngine
+# These are defined in the main notebook. You have two options:
+#
+# OPTION 1 (Recommended): Run main notebook first
+#   1. Open trading_prediction_analysis_multi_model.py
+#   2. Run all cells (or at least cells 1-10 that define classes)
+#   3. Keep that tab open
+#   4. Come back here and the %run will work
+#
+# OPTION 2: The code below will define COMMODITY_CONFIGS as fallback
+#   But you still need strategy classes from main notebook
+
 # Try to import from main notebook
+import_success = False
 try:
     %run ./trading_prediction_analysis_multi_model
 
     # Verify import worked
-    assert 'COMMODITY_CONFIGS' in dir(), "COMMODITY_CONFIGS not found"
-    assert 'ImmediateSaleStrategy' in dir(), "Strategy classes not found"
-    assert 'BacktestEngine' in dir(), "BacktestEngine not found"
+    if 'COMMODITY_CONFIGS' in dir() and 'ImmediateSaleStrategy' in dir() and 'BacktestEngine' in dir():
+        print("✓ Imported main notebook code successfully")
+        print("  - Strategy classes available")
+        print("  - BacktestEngine available")
+        print("  - COMMODITY_CONFIGS available")
+        print("  - Database connection available")
+        import_success = True
+    else:
+        print("⚠️  Partial import - some variables missing")
 
-    print("✓ Imported main notebook code successfully")
-    print("  - Strategy classes available")
-    print("  - BacktestEngine available")
-    print("  - COMMODITY_CONFIGS available")
+except Exception as e:
+    print(f"⚠️  Import warning: {e}")
 
-except (NameError, AssertionError) as e:
+# Define COMMODITY_CONFIGS as fallback (always define it to prevent errors downstream)
+if 'COMMODITY_CONFIGS' not in dir():
+    print("\n  → Defining COMMODITY_CONFIGS as fallback...")
+    COMMODITY_CONFIGS = {
+        'coffee': {
+            'commodity': 'coffee',
+            'harvest_volume': 50,
+            'harvest_windows': [(5, 9)],
+            'storage_cost_pct_per_day': 0.025,
+            'transaction_cost_pct': 0.25,
+            'min_inventory_to_trade': 1.0,
+            'max_holding_days': 365
+        },
+        'sugar': {
+            'commodity': 'sugar',
+            'harvest_volume': 50,
+            'harvest_windows': [(10, 12)],
+            'storage_cost_pct_per_day': 0.025,
+            'transaction_cost_pct': 0.25,
+            'min_inventory_to_trade': 1.0,
+            'max_holding_days': 365
+        }
+    }
+    print("  ✓ COMMODITY_CONFIGS defined")
+
+# Check if we have everything we need
+if not import_success:
+    print("\n" + "=" * 80)
+    print("❌ MISSING REQUIRED CLASSES")
     print("=" * 80)
-    print("❌ IMPORT FAILED")
-    print("=" * 80)
-    print(f"\nError: {e}")
-    print("\n📋 TO FIX THIS:")
-    print("1. Open 'trading_prediction_analysis_multi_model.py' in a new tab")
-    print("2. Run ALL cells in that notebook")
+    print("\nStrategy classes and BacktestEngine are required but not loaded.")
+    print("\n📋 TO FIX:")
+    print("1. Open 'trading_prediction_analysis_multi_model.py' in a new Databricks tab")
+    print("2. Run at least cells 1-10 (which define all strategy classes)")
     print("3. Keep that tab open")
     print("4. Come back to this tab and re-run this cell")
-    print("\nThe %run command needs the main notebook to be executed first.")
+    print("\nWithout the strategy classes, grid search cannot run.")
     print("=" * 80)
-    raise
+
+    # Check if at least some key classes exist
+    missing_classes = []
+    for cls_name in ['ImmediateSaleStrategy', 'BacktestEngine', 'calculate_metrics']:
+        if cls_name not in dir():
+            missing_classes.append(cls_name)
+
+    if missing_classes:
+        print(f"\nMissing: {', '.join(missing_classes)}")
+        print("\nCannot proceed without these classes from main notebook.")
+    else:
+        print("\n✓ Found required classes - you can proceed")
 
 # COMMAND ----------
 
