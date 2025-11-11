@@ -3247,14 +3247,28 @@ for CURRENT_COMMODITY in COMMODITY_CONFIGS.keys():
         )
         print(f"✓ Loaded {len(prices)} days of actual price data from distributions table")
     else:
-        # Fallback to CSV if no models available (shouldn't happen in production)
-        print("  ⚠️  No models found in Unity Catalog, falling back to CSV")
-        if USE_DELTA:
-            prices = spark.table(DATA_PATHS['prices_prepared']).toPandas()
-        else:
-            prices = pd.read_csv(DATA_PATHS['prices_prepared'], parse_dates=['date'])
+        # Fallback: load directly from bronze.market_data table
+        # This shouldn't happen in production (means no forecast models available)
+        print("  ⚠️  No models found in Unity Catalog, loading actuals from bronze.market_data")
+
+        cursor = db_connection.cursor()
+        cursor.execute("""
+            SELECT date, close as price
+            FROM commodity.bronze.market_data
+            WHERE commodity = %s
+            ORDER BY date
+        """, (CURRENT_COMMODITY.capitalize(),))
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        if len(rows) == 0:
+            raise ValueError(f"No price data found in commodity.bronze.market_data for {CURRENT_COMMODITY}")
+
+        prices = pd.DataFrame(rows, columns=['date', 'price'])
         prices['date'] = pd.to_datetime(prices['date'])
-        print(f"✓ Loaded {len(prices)} days of price data from CSV")
+        prices = prices.sort_values('date').reset_index(drop=True)
+        print(f"✓ Loaded {len(prices)} days of price data from bronze.market_data")
 
     # --------------------------------------------------------------------------
     # Add synthetic models at various accuracy levels
