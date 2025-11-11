@@ -20,20 +20,46 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Import Main Notebook Code
+# MAGIC ## Setup Instructions
 # MAGIC
-# MAGIC Import all strategy classes, BacktestEngine, and helper functions from the main multi-model notebook.
+# MAGIC **IMPORTANT:** Before running this grid search notebook, you must:
+# MAGIC
+# MAGIC 1. Open `trading_prediction_analysis_multi_model.py` in Databricks
+# MAGIC 2. Run ALL cells in that notebook (this loads all strategy classes and BacktestEngine into memory)
+# MAGIC 3. Keep that notebook tab open
+# MAGIC 4. Then come back to this grid search notebook and run it
+# MAGIC
+# MAGIC The `%run` command below will access the variables from the main notebook's execution context.
 
 # COMMAND ----------
 
-# Import all code from main notebook (strategies, backtest engine, etc.)
-%run ./trading_prediction_analysis_multi_model
+# Try to import from main notebook
+try:
+    %run ./trading_prediction_analysis_multi_model
 
-print("✓ Imported main notebook code successfully")
-print("  - Strategy classes available")
-print("  - BacktestEngine available")
-print("  - COMMODITY_CONFIGS available")
-print("  - Database connection available")
+    # Verify import worked
+    assert 'COMMODITY_CONFIGS' in dir(), "COMMODITY_CONFIGS not found"
+    assert 'ImmediateSaleStrategy' in dir(), "Strategy classes not found"
+    assert 'BacktestEngine' in dir(), "BacktestEngine not found"
+
+    print("✓ Imported main notebook code successfully")
+    print("  - Strategy classes available")
+    print("  - BacktestEngine available")
+    print("  - COMMODITY_CONFIGS available")
+
+except (NameError, AssertionError) as e:
+    print("=" * 80)
+    print("❌ IMPORT FAILED")
+    print("=" * 80)
+    print(f"\nError: {e}")
+    print("\n📋 TO FIX THIS:")
+    print("1. Open 'trading_prediction_analysis_multi_model.py' in a new tab")
+    print("2. Run ALL cells in that notebook")
+    print("3. Keep that tab open")
+    print("4. Come back to this tab and re-run this cell")
+    print("\nThe %run command needs the main notebook to be executed first.")
+    print("=" * 80)
+    raise
 
 # COMMAND ----------
 
