@@ -431,43 +431,251 @@ All prices and financial impact are automatically calculated in all available cu
 
 ### WhatsApp Integration
 
-This JSON format is designed for messaging services. Example WhatsApp message template:
+This JSON format is designed for messaging services to send personalized recommendations to commodity producers.
 
+#### Step-by-Step Implementation Guide
+
+**1. Generate the daily recommendations:**
+```bash
+python operations/daily_recommendations.py \
+  --commodity coffee \
+  --model sarimax_auto_weather_v1 \
+  --output-json recommendations.json
 ```
-━━━━━━━━━━━━━━━━━━━━━━
+
+**2. In your messaging service, load the JSON:**
+```python
+import json
+
+with open('recommendations.json', 'r') as f:
+    data = json.load(f)
+
+# Get the first model's recommendations
+rec = data['recommendations'][0]
+```
+
+**3. Look up the user's region and determine their currency:**
+
+The JSON contains all available currencies. Your messaging service should:
+- Store user profile with their region (e.g., "Antioquia, Colombia")
+- Map region to currency code (e.g., Colombia → COP)
+- Extract the appropriate currency from the JSON
+
+```python
+# Example user profile lookup
+user = get_user_profile(phone_number)  # Your user database
+region = user['region']  # e.g., "Antioquia, Colombia"
+
+# Map region to currency
+REGION_TO_CURRENCY = {
+    'Colombia': 'COP',
+    'Vietnam': 'VND',
+    'Brazil': 'BRL',
+    'India': 'INR',
+    'Thailand': 'THB',
+    'Indonesia': 'IDR',
+    'Ethiopia': 'ETB',
+    'Honduras': 'HNL',
+    'Uganda': 'UGX',
+    'Mexico': 'MXN',
+    # ... add more as needed
+}
+
+currency = REGION_TO_CURRENCY.get(user['country'], 'USD')
+```
+
+**4. Extract prices in the user's local currency:**
+
+```python
+# Check if the currency is available in the data
+if currency in rec['market']['local_prices']:
+    current_price_local = rec['market']['local_prices'][currency]
+    exchange_rate = rec['market']['exchange_rates'][f'{currency}/USD']
+
+    # Get financial impact in local currency
+    sell_now = rec['recommendation']['financial_impact']['local_currency']['sell_now_value'][currency]
+    wait_value = rec['recommendation']['financial_impact']['local_currency']['wait_value'][currency]
+    potential_gain = rec['recommendation']['financial_impact']['local_currency']['potential_gain'][currency]
+else:
+    # Fallback to USD if currency not available
+    current_price_local = rec['market']['current_price_usd']
+    currency = 'USD'
+    sell_now = rec['recommendation']['financial_impact']['usd']['sell_now_value']
+    wait_value = rec['recommendation']['financial_impact']['usd']['wait_value']
+    potential_gain = rec['recommendation']['financial_impact']['usd']['potential_gain']
+```
+
+**5. Format values with appropriate number formatting:**
+
+```python
+# Format numbers for readability
+def format_currency(amount, currency):
+    """Format currency based on typical conventions."""
+    if currency == 'COP':
+        # Colombian Peso: usually shown without decimals
+        return f"{amount:,.0f}"
+    elif currency == 'VND':
+        # Vietnamese Dong: usually shown without decimals
+        return f"{amount:,.0f}"
+    elif currency == 'USD':
+        # USD: show 2 decimals
+        return f"{amount:,.2f}"
+    else:
+        # Default: 2 decimals
+        return f"{amount:,.2f}"
+
+# Example usage
+current_price_formatted = format_currency(current_price_local, currency)
+sell_now_formatted = format_currency(sell_now, currency)
+wait_formatted = format_currency(wait_value, currency)
+gain_formatted = format_currency(potential_gain, currency)
+```
+
+**6. Construct the WhatsApp message:**
+
+```python
+# Extract data from JSON
+action = rec['recommendation']['action']
+trend_pct = rec['market']['trend_7d_pct']
+trend_dir = rec['market']['trend_direction']
+best_window = rec['forecast']['best_window']['days']
+stock = rec['inventory']['stock_tons']
+days_held = rec['inventory']['days_held']
+gain_pct = rec['recommendation']['financial_impact']['usd']['potential_gain_pct']
+
+# Currency symbol lookup
+CURRENCY_SYMBOLS = {
+    'USD': '$', 'COP': '$', 'BRL': 'R$', 'EUR': '€',
+    'GBP': '£', 'JPY': '¥', 'INR': '₹', 'MXN': '$',
+    'VND': '₫', 'THB': '฿', 'IDR': 'Rp'
+}
+symbol = CURRENCY_SYMBOLS.get(currency, currency)
+
+# Build the message
+message = f"""━━━━━━━━━━━━━━━━━━━━━━
 🌱 COFFEE MARKET UPDATE
 ━━━━━━━━━━━━━━━━━━━━━━
-📅 {date}
+📅 {rec['timestamp'][:10]}
+📍 Your Region: {user['region']}
 
 CURRENT MARKET
-💵 Today: ${current_price_usd}/ton
-📊 7-day trend: {trend_direction} {trend_7d_pct}%
+💵 Today: {symbol}{current_price_formatted}/ton
+📊 7-day trend: {trend_dir} {trend_pct:+.1f}%
 
 FORECAST (14 days)
-🔮 Expected: ${min}-${max}/ton
-🎯 Best sale window: Days {best_window_days}
+🔮 Expected: {symbol}{format_currency(rec['forecast']['price_range_usd']['min'] * exchange_rate, currency)}-{format_currency(rec['forecast']['price_range_usd']['max'] * exchange_rate, currency)}/ton
+🎯 Best sale window: Days {best_window[0]}-{best_window[-1]}
 
 YOUR INVENTORY
-📦 Stock: {stock_tons} tons
+📦 Stock: {stock:.1f} tons
 ⏰ Held: {days_held} days
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🎯 RECOMMENDATION
 ━━━━━━━━━━━━━━━━━━━━━━
-✅ {action} - {reasoning}
+{'✅ HOLD' if action == 'HOLD' else '💰 SELL'} - Wait for better prices
 
-Wait for forecast window: ${wait_value}
-Sell today: ${sell_now_value}
-Potential gain: ${potential_gain} ({potential_gain_pct}%)
+Wait for forecast window: {symbol}{wait_formatted}
+Sell today: {symbol}{sell_now_formatted}
+Potential gain: {symbol}{gain_formatted} ({gain_pct:+.1f}%)
 
 Next update: Tomorrow 6 AM
+"""
 ```
 
-**Implementation:**
-1. Run daily_recommendations.py with `--output-json`
-2. Parse JSON in messaging service
-3. Populate template with values
-4. Send via WhatsApp API (Twilio, MessageBird, etc.)
+**7. Send via WhatsApp API:**
+
+```python
+# Using Twilio
+from twilio.rest import Client
+
+client = Client(account_sid, auth_token)
+message = client.messages.create(
+    body=message,
+    from_='whatsapp:+14155238886',  # Twilio sandbox or your number
+    to=f'whatsapp:{user["phone_number"]}'
+)
+
+# Or using MessageBird, Vonage, etc.
+```
+
+#### Key Data Mapping Reference
+
+| WhatsApp Field | JSON Path |
+|----------------|-----------|
+| Current price (local) | `market.local_prices[CURRENCY]` |
+| 7-day trend | `market.trend_7d_pct` |
+| Trend direction | `market.trend_direction` |
+| Forecast range (local) | `forecast.price_range_usd.min/max` × `exchange_rates[CURRENCY/USD]` |
+| Best window days | `forecast.best_window.days` |
+| Stock (tons) | `inventory.stock_tons` |
+| Days held | `inventory.days_held` |
+| Action (HOLD/SELL) | `recommendation.action` |
+| Sell now value (local) | `recommendation.financial_impact.local_currency.sell_now_value[CURRENCY]` |
+| Wait value (local) | `recommendation.financial_impact.local_currency.wait_value[CURRENCY]` |
+| Potential gain (local) | `recommendation.financial_impact.local_currency.potential_gain[CURRENCY]` |
+| Potential gain % | `recommendation.financial_impact.usd.potential_gain_pct` |
+| User region | User profile (not in JSON - your database) |
+
+#### Complete Example
+
+```python
+def send_coffee_recommendation(phone_number, recommendations_file):
+    """
+    Send personalized WhatsApp recommendation to a farmer.
+
+    Args:
+        phone_number: User's WhatsApp number
+        recommendations_file: Path to recommendations.json
+    """
+    # Load recommendations
+    with open(recommendations_file) as f:
+        data = json.load(f)
+    rec = data['recommendations'][0]
+
+    # Get user profile
+    user = get_user_profile(phone_number)
+    currency = get_user_currency(user['country'])
+
+    # Check if currency available, fallback to USD
+    if currency not in rec['market']['local_prices']:
+        currency = 'USD'
+        exchange_rate = 1.0
+    else:
+        exchange_rate = rec['market']['exchange_rates'][f'{currency}/USD']
+
+    # Extract and format values
+    if currency == 'USD':
+        current_price = rec['market']['current_price_usd']
+        sell_now = rec['recommendation']['financial_impact']['usd']['sell_now_value']
+        wait_val = rec['recommendation']['financial_impact']['usd']['wait_value']
+        gain = rec['recommendation']['financial_impact']['usd']['potential_gain']
+    else:
+        current_price = rec['market']['local_prices'][currency]
+        sell_now = rec['recommendation']['financial_impact']['local_currency']['sell_now_value'][currency]
+        wait_val = rec['recommendation']['financial_impact']['local_currency']['wait_value'][currency]
+        gain = rec['recommendation']['financial_impact']['local_currency']['potential_gain'][currency]
+
+    # Build message (see template above)
+    message = build_whatsapp_message(rec, user, currency, ...)
+
+    # Send
+    send_whatsapp(phone_number, message)
+```
+
+#### Important Notes
+
+1. **Currency Availability**: Always check if the user's currency exists in `local_prices` before accessing it. Fallback to USD if not available.
+
+2. **Region Storage**: The JSON does NOT include user region - this must come from your user profile database.
+
+3. **Exchange Rate Updates**: Exchange rates are pulled fresh from Databricks each time the script runs, ensuring up-to-date conversions.
+
+4. **Number Formatting**: Different currencies have different conventions (e.g., VND and COP typically don't show decimals).
+
+5. **Forecast Values**: Forecast prices are in USD by default. To convert to local currency, multiply by the exchange rate: `forecast_price_usd × exchange_rate`
+
+6. **Percentage Gain**: `potential_gain_pct` is the same in all currencies (it's a ratio), so use the USD value.
 
 ---
 
