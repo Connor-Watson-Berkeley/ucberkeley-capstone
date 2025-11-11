@@ -1,45 +1,43 @@
 # Trading Agent Technical Documentation
 
-This folder contains technical documentation for implementation details, analyses, and archived results.
+This folder contains technical documentation for implementation details and analyses.
 
 ---
 
 ## Contents
 
-### Analysis Documentation
+### Multi-Model Analysis
 
-**[ACCURACY_THRESHOLD_ANALYSIS.md](ACCURACY_THRESHOLD_ANALYSIS.md)**
-- Synthetic prediction generation methodology
-- Accuracy threshold analysis (50%-100%)
-- Key finding: 70% minimum accuracy needed for profitability
-- Comparison of real models to synthetic benchmarks
+**[MULTI_MODEL_ANALYSIS.md](MULTI_MODEL_ANALYSIS.md)**
 
-**[MULTI_MODEL_MODIFICATIONS.md](MULTI_MODEL_MODIFICATIONS.md)**
-- Changes made to create multi-model notebook
-- Unity Catalog integration details
-- Nested loop structure (commodity → model)
-- Result storage format
+Comprehensive guide to the multi-model backtesting framework:
+- **Implementation details**: Unity Catalog connection, model discovery, data loading
+- **Synthetic predictions**: How accuracy-controlled forecasts are generated
+- **Accuracy threshold analysis**: Finding that 70% accuracy is minimum for profitability
+- **Real model benchmarking**: Comparison to synthetic accuracy levels
+- **Usage examples**: Running analysis, comparing models, interpreting results
+- **Statistical insights**: Performance vs accuracy, diminishing returns, ceiling analysis
 
-**[DATA_FORMAT_VERIFICATION.md](DATA_FORMAT_VERIFICATION.md)**
-- Data format compatibility testing
-- Verification that `forecast_loader.py` produces correct format
-- Example data structures and transformations
-
-### Historical Results
-
-**[backtest_results.md](backtest_results.md)**
-- Archived backtest results from 42 historical windows
-- Model performance comparison (MAE, RMSE, MAPE)
-- Legacy results - superseded by multi-model analysis
+**Key Finding:** Best real model (`sarimax_auto_weather_v1`) performs at ~75% effective accuracy, providing $2,390 advantage over baseline strategies.
 
 ---
 
 ## For Users
 
 If you're looking for user-facing documentation:
+- **Quick Start & Overview**: [`../README.md`](../README.md)
 - **Daily Recommendations**: [`../operations/README.md`](../operations/README.md)
-- **Data Access Guide**: [`../FORECAST_API_GUIDE.md`](../FORECAST_API_GUIDE.md)
-- **Main README**: [`../README.md`](../README.md)
+- **Unity Catalog Queries**: [`../FORECAST_API_GUIDE.md`](../FORECAST_API_GUIDE.md)
+
+---
+
+## Archived Documentation
+
+Previous versions of technical documentation have been consolidated:
+- ~~MULTI_MODEL_MODIFICATIONS.md~~ → Merged into MULTI_MODEL_ANALYSIS.md
+- ~~ACCURACY_THRESHOLD_ANALYSIS.md~~ → Merged into MULTI_MODEL_ANALYSIS.md
+- ~~DATA_FORMAT_VERIFICATION.md~~ → Removed (historical verification, no longer needed)
+- ~~backtest_results.md~~ → Removed (outdated Nov 1 results, superseded by multi-model analysis)
 
 ---
 
