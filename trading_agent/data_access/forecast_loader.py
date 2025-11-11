@@ -243,6 +243,93 @@ def transform_to_prediction_matrices(
     return prediction_matrices
 
 
+def load_actuals_from_distributions(commodity: str, model_version: str, connection,
+                                     start_date: Optional[str] = None,
+                                     end_date: Optional[str] = None) -> pd.DataFrame:
+    """
+    Load actual prices from the distributions table.
+
+    The distributions table stores actuals with is_actuals=True and path_id=0.
+    This function extracts those actuals and reshapes them into a standard
+    date/price format for backtesting.
+
+    Args:
+        commodity: str - 'Coffee' or 'Sugar' (case-sensitive)
+        model_version: str - Model identifier (actuals are same across models, but
+                            query still requires model_version)
+        connection: Databricks SQL connection
+        start_date: Optional[str] - Filter dates >= this (YYYY-MM-DD)
+        end_date: Optional[str] - Filter dates <= this (YYYY-MM-DD)
+
+    Returns:
+        DataFrame with columns:
+            - date: pd.Timestamp - The actual date
+            - price: float - The actual closing price
+
+    Example:
+        >>> prices = load_actuals_from_distributions('Coffee', 'sarimax_auto_weather_v1', conn)
+        >>> prices.head()
+                  date   price
+        0  2020-01-01  100.50
+        1  2020-01-02  101.20
+        ...
+    """
+    # Load distributions (includes both forecasts and actuals)
+    df = load_forecast_distributions(
+        commodity=commodity,
+        model_version=model_version,
+        connection=connection,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    if len(df) == 0:
+        return pd.DataFrame(columns=['date', 'price'])
+
+    # Filter to only actuals
+    actuals_df = df[df['is_actuals'] == True].copy()
+
+    if len(actuals_df) == 0:
+        return pd.DataFrame(columns=['date', 'price'])
+
+    # Get day columns
+    day_cols = [f'day_{i}' for i in range(1, 15)]
+
+    # Reshape: Each row has 14 days of actuals
+    # We need to unpack them into individual date/price rows
+    price_records = []
+
+    for _, row in actuals_df.iterrows():
+        forecast_start = pd.Timestamp(row['forecast_start_date'])
+
+        # Each day column represents the actual price N days after forecast_start
+        for day_num in range(1, 15):
+            day_col = f'day_{day_num}'
+            actual_date = forecast_start + pd.Timedelta(days=day_num)
+            actual_price = row[day_col]
+
+            if pd.notna(actual_price):  # Skip NaN values
+                price_records.append({
+                    'date': actual_date,
+                    'price': actual_price
+                })
+
+    # Convert to DataFrame
+    prices_df = pd.DataFrame(price_records)
+
+    if len(prices_df) == 0:
+        return pd.DataFrame(columns=['date', 'price'])
+
+    # Remove duplicates (same date might appear in multiple forecast windows)
+    # Keep the most recent entry (last occurrence)
+    prices_df = prices_df.drop_duplicates(subset=['date'], keep='last')
+
+    # Sort by date
+    prices_df = prices_df.sort_values('date').reset_index(drop=True)
+
+    return prices_df
+
+
 def get_data_summary(commodity: str, model_version: str, connection) -> Dict:
     """
     Get summary statistics for a commodity/model combination.

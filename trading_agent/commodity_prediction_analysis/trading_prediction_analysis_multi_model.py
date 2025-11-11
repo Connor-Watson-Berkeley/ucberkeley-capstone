@@ -3225,24 +3225,36 @@ for CURRENT_COMMODITY in COMMODITY_CONFIGS.keys():
     DATA_PATHS = get_data_paths(CURRENT_COMMODITY)
 
     # --------------------------------------------------------------------------
-    # Load prepared data (once per commodity)
-    # --------------------------------------------------------------------------
-    print(f"\nLoading prepared data for {CURRENT_COMMODITY.upper()}...")
-
-    if USE_DELTA:
-        prices = spark.table(DATA_PATHS['prices_prepared']).toPandas()
-    else:
-        prices = pd.read_csv(DATA_PATHS['prices_prepared'], parse_dates=['date'])
-
-    prices['date'] = pd.to_datetime(prices['date'])
-    print(f"✓ Loaded {len(prices)} days of price data")
-
-    # --------------------------------------------------------------------------
     # Query available models from Unity Catalog
     # --------------------------------------------------------------------------
     print(f"\nQuerying available models for {CURRENT_COMMODITY.upper()}...")
     real_models = get_available_models(CURRENT_COMMODITY.capitalize(), db_connection)
     print(f"✓ Found {len(real_models)} real models from Unity Catalog: {', '.join(real_models)}")
+
+    # --------------------------------------------------------------------------
+    # Load actual prices from Unity Catalog
+    # --------------------------------------------------------------------------
+    print(f"\nLoading actual prices for {CURRENT_COMMODITY.upper()} from Unity Catalog...")
+
+    # Actuals are stored in the distributions table with is_actuals=True
+    # They're the same across all models, so we can load using any model
+    if len(real_models) > 0:
+        from data_access.forecast_loader import load_actuals_from_distributions
+        prices = load_actuals_from_distributions(
+            commodity=CURRENT_COMMODITY.capitalize(),
+            model_version=real_models[0],  # Use first model (actuals are same for all)
+            connection=db_connection
+        )
+        print(f"✓ Loaded {len(prices)} days of actual price data from distributions table")
+    else:
+        # Fallback to CSV if no models available (shouldn't happen in production)
+        print("  ⚠️  No models found in Unity Catalog, falling back to CSV")
+        if USE_DELTA:
+            prices = spark.table(DATA_PATHS['prices_prepared']).toPandas()
+        else:
+            prices = pd.read_csv(DATA_PATHS['prices_prepared'], parse_dates=['date'])
+        prices['date'] = pd.to_datetime(prices['date'])
+        print(f"✓ Loaded {len(prices)} days of price data from CSV")
 
     # --------------------------------------------------------------------------
     # Add synthetic models at various accuracy levels
