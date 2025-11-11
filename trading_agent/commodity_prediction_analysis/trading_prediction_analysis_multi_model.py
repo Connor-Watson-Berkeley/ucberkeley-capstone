@@ -144,6 +144,40 @@ ANALYSIS_CONFIG = {
 
 # COMMAND ----------
 
+# Setup Databricks connection for Unity Catalog queries
+# This is defined early so it's available when grid search imports this file via %run
+from databricks import sql
+import os
+
+# Get connection details from environment or Databricks secrets
+try:
+    # Try to get from Databricks secrets first
+    DATABRICKS_HOST = dbutils.secrets.get(scope="default", key="databricks_host")
+    DATABRICKS_TOKEN = dbutils.secrets.get(scope="default", key="databricks_token")
+    DATABRICKS_HTTP_PATH = dbutils.secrets.get(scope="default", key="databricks_http_path")
+except:
+    # Fallback to environment variables
+    DATABRICKS_HOST = os.getenv("DATABRICKS_HOST", "").replace("https://", "")
+    DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
+    DATABRICKS_HTTP_PATH = os.getenv("DATABRICKS_HTTP_PATH")
+
+# Create connection
+db_connection = sql.connect(
+    server_hostname=DATABRICKS_HOST,
+    http_path=DATABRICKS_HTTP_PATH,
+    access_token=DATABRICKS_TOKEN
+)
+
+print("✓ Connected to Databricks Unity Catalog")
+
+# Add parent directory to path for data_access imports
+import sys
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# COMMAND ----------
+
 # Harvest Schedule Calculation Functions
 
 def calculate_weeks_in_window(start_month, end_month):
@@ -3155,34 +3189,8 @@ import numpy as np
 
 # COMMAND ----------
 
-# Setup Databricks connection for Unity Catalog queries
-from databricks import sql
-import os
-
-# Get connection details from environment or Databricks secrets
-try:
-    # Try to get from Databricks secrets first
-    DATABRICKS_HOST = dbutils.secrets.get(scope="default", key="databricks_host")
-    DATABRICKS_TOKEN = dbutils.secrets.get(scope="default", key="databricks_token")
-    DATABRICKS_HTTP_PATH = dbutils.secrets.get(scope="default", key="databricks_http_path")
-except:
-    # Fallback to environment variables
-    DATABRICKS_HOST = os.getenv("DATABRICKS_HOST", "").replace("https://", "")
-    DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
-    DATABRICKS_HTTP_PATH = os.getenv("DATABRICKS_HTTP_PATH")
-
-# Create connection
-db_connection = sql.connect(
-    server_hostname=DATABRICKS_HOST,
-    http_path=DATABRICKS_HTTP_PATH,
-    access_token=DATABRICKS_TOKEN
-)
-
-print("✓ Connected to Databricks Unity Catalog")
-
-# Import model querying function
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Database connection and imports are now at top of notebook (after ANALYSIS_CONFIG)
+# This allows grid search to import them via %run
 from data_access.forecast_loader import get_available_models
 
 # COMMAND ----------
