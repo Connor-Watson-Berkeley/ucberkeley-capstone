@@ -103,6 +103,7 @@ RECOMMENDATIONS COMPLETE
 | `--commodity` | Commodity to analyze (required) | `--commodity coffee` |
 | `--model` | Specific model to use | `--model sarimax_auto_weather_v1` |
 | `--all-models` | Process all available models | `--all-models` |
+| `--output-json` | Save structured data as JSON file | `--output-json recommendations.json` |
 
 **Note:** Must specify either `--model` or `--all-models`
 
@@ -282,6 +283,124 @@ Higher numbers indicate stronger signal:
 - Consensus %: 70%+ is strong, 50-60% is weak
 - Uncertainty: <5% is low, >15% is high
 - Net benefit: >$100 is significant
+
+---
+
+## JSON Output Format
+
+When using `--output-json`, the script generates structured data suitable for messaging services (WhatsApp, SMS, etc.).
+
+### Example Usage
+
+```bash
+python operations/daily_recommendations.py \
+  --commodity coffee \
+  --model sarimax_auto_weather_v1 \
+  --output-json recommendations.json
+```
+
+### Output Structure
+
+```json
+{
+  "generated_at": "2025-11-10T14:30:15.123456",
+  "commodity": "coffee",
+  "models_processed": 1,
+  "recommendations": [
+    {
+      "timestamp": "2025-11-10T14:30:15.123456",
+      "commodity": "coffee",
+      "model": {
+        "name": "sarimax_auto_weather_v1",
+        "forecast_date": "2025-11-10",
+        "generation_timestamp": "2025-11-10 06:00:00",
+        "simulation_paths": 2000,
+        "forecast_horizon_days": 14
+      },
+      "market": {
+        "current_price_usd": 105.50,
+        "trend_7d_pct": 3.2,
+        "trend_direction": "↑"
+      },
+      "forecast": {
+        "horizon_days": 14,
+        "price_range_usd": {
+          "min": 98.20,
+          "max": 112.80,
+          "median": 106.40
+        },
+        "best_window": {
+          "days": [8, 9, 10],
+          "expected_price_usd": 109.50
+        },
+        "daily_forecast": {
+          "day_1": {"median": 105.80, "p25": 103.20, "p75": 108.40},
+          "day_2": {"median": 106.10, "p25": 103.50, "p75": 108.90}
+        }
+      },
+      "inventory": {
+        "stock_tons": 35.5,
+        "days_held": 45
+      },
+      "recommendation": {
+        "action": "HOLD",
+        "quantity_tons": 0.0,
+        "confidence": {
+          "strategies_agreeing": 4,
+          "total_strategies": 5
+        },
+        "financial_impact_usd": {
+          "sell_now_value": 3745.25,
+          "wait_value": 3887.25,
+          "potential_gain": 142.00,
+          "potential_gain_pct": 3.79
+        }
+      },
+      "all_strategies": [...]
+    }
+  ]
+}
+```
+
+### WhatsApp Integration
+
+This JSON format is designed for messaging services. Example WhatsApp message template:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━
+🌱 COFFEE MARKET UPDATE
+━━━━━━━━━━━━━━━━━━━━━━
+📅 {date}
+
+CURRENT MARKET
+💵 Today: ${current_price_usd}/ton
+📊 7-day trend: {trend_direction} {trend_7d_pct}%
+
+FORECAST (14 days)
+🔮 Expected: ${min}-${max}/ton
+🎯 Best sale window: Days {best_window_days}
+
+YOUR INVENTORY
+📦 Stock: {stock_tons} tons
+⏰ Held: {days_held} days
+
+━━━━━━━━━━━━━━━━━━━━━━
+🎯 RECOMMENDATION
+━━━━━━━━━━━━━━━━━━━━━━
+✅ {action} - {reasoning}
+
+Wait for forecast window: ${wait_value}
+Sell today: ${sell_now_value}
+Potential gain: ${potential_gain} ({potential_gain_pct}%)
+
+Next update: Tomorrow 6 AM
+```
+
+**Implementation:**
+1. Run daily_recommendations.py with `--output-json`
+2. Parse JSON in messaging service
+3. Populate template with values
+4. Send via WhatsApp API (Twilio, MessageBird, etc.)
 
 ---
 

@@ -7,6 +7,7 @@ Run this daily when new forecasts are available.
 Usage:
     python daily_recommendations.py --commodity coffee --model sarimax_auto_weather_v1
     python daily_recommendations.py --commodity sugar --all-models
+    python daily_recommendations.py --commodity coffee --model sarimax_auto_weather_v1 --output-json recommendations.json
 """
 
 import sys
@@ -17,6 +18,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import argparse
+import json
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -254,12 +256,91 @@ def initialize_strategies(commodity_config):
     return strategies
 
 
+def analyze_forecast(prediction_matrix, current_price):
+    """
+    Analyze forecast to extract key insights for messaging.
+
+    Returns:
+        dict with: price_range, best_window, expected_prices_by_day
+    """
+    # Calculate statistics across all paths for each day
+    median_by_day = np.median(prediction_matrix, axis=0)
+    p25_by_day = np.percentile(prediction_matrix, 25, axis=0)
+    p75_by_day = np.percentile(prediction_matrix, 75, axis=0)
+
+    # Overall forecast range (across all 14 days)
+    forecast_min = np.percentile(prediction_matrix, 10)  # 10th percentile
+    forecast_max = np.percentile(prediction_matrix, 90)  # 90th percentile
+
+    # Find best sale window (highest median prices, look for 3-day windows)
+    best_window_start = 0
+    best_window_avg = 0
+
+    for start_day in range(len(median_by_day) - 2):
+        window_avg = np.mean(median_by_day[start_day:start_day + 3])
+        if window_avg > best_window_avg:
+            best_window_avg = window_avg
+            best_window_start = start_day
+
+    best_window_days = list(range(best_window_start + 1, best_window_start + 4))  # 1-indexed
+
+    return {
+        'price_range': {
+            'min': forecast_min,
+            'max': forecast_max,
+            'median': np.median(prediction_matrix)
+        },
+        'best_window': {
+            'days': best_window_days,
+            'expected_price': best_window_avg
+        },
+        'daily_forecast': {
+            f'day_{i+1}': {
+                'median': median_by_day[i],
+                'p25': p25_by_day[i],
+                'p75': p75_by_day[i]
+            }
+            for i in range(len(median_by_day))
+        }
+    }
+
+
+def calculate_financial_impact(state, forecast_analysis, recommendation):
+    """
+    Calculate financial impact of recommendation vs alternatives.
+
+    Returns:
+        dict with: sell_now_value, wait_value, potential_gain
+    """
+    inventory = state['inventory']
+    current_price = state['current_price']
+
+    # Value if sell today
+    sell_now_value = inventory * current_price
+
+    # Value if wait for best window (from forecast)
+    best_window_price = forecast_analysis['best_window']['expected_price']
+    wait_value = inventory * best_window_price
+
+    # Potential gain/loss
+    potential_gain = wait_value - sell_now_value
+    potential_gain_pct = (potential_gain / sell_now_value) * 100
+
+    return {
+        'sell_now_value': sell_now_value,
+        'wait_value': wait_value,
+        'potential_gain': potential_gain,
+        'potential_gain_pct': potential_gain_pct
+    }
+
+
 def generate_recommendations(state, prediction_matrix, commodity_config):
     """
     Generate recommendations for all strategies.
 
     Returns:
-        DataFrame with recommendations
+        tuple: (recommendations_df, structured_data)
+            structured_data contains all info needed for WhatsApp message
     """
     strategies = initialize_strategies(commodity_config)
 
@@ -311,7 +392,91 @@ def generate_recommendations(state, prediction_matrix, commodity_config):
                 'Uses Predictions': 'Yes' if needs_predictions else 'No'
             })
 
-    return pd.DataFrame(recommendations)
+    recommendations_df = pd.DataFrame(recommendations)
+
+    # Analyze forecast for structured output
+    forecast_analysis = analyze_forecast(prediction_matrix, current_price)
+
+    # Calculate 7-day price trend
+    prices_7d = price_history['price'].tail(7)
+    trend_7d_pct = ((prices_7d.iloc[-1] - prices_7d.iloc[0]) / prices_7d.iloc[0]) * 100
+    trend_direction = '↑' if trend_7d_pct > 0 else '↓'
+
+    # Determine primary recommendation (consensus from prediction-based strategies)
+    prediction_strategies = recommendations_df[recommendations_df['Uses Predictions'] == 'Yes']
+    sell_count = (prediction_strategies['Action'] == 'SELL').sum()
+    hold_count = (prediction_strategies['Action'] == 'HOLD').sum()
+
+    primary_action = 'SELL' if sell_count > hold_count else 'HOLD'
+
+    # Get recommended quantity (average from SELL recommendations)
+    if primary_action == 'SELL':
+        sell_recs = prediction_strategies[prediction_strategies['Action'] == 'SELL']
+        recommended_quantity = sell_recs['Quantity (tons)'].mean() if len(sell_recs) > 0 else 0
+    else:
+        recommended_quantity = 0
+
+    # Calculate financial impact
+    financial_impact = calculate_financial_impact(state, forecast_analysis, {
+        'action': primary_action,
+        'quantity': recommended_quantity
+    })
+
+    # Structure data for WhatsApp message
+    structured_data = {
+        'timestamp': datetime.now().isoformat(),
+        'commodity': commodity_config['commodity'],
+        'market': {
+            'current_price_usd': current_price,
+            'trend_7d_pct': trend_7d_pct,
+            'trend_direction': trend_direction
+        },
+        'forecast': {
+            'horizon_days': 14,
+            'price_range_usd': {
+                'min': forecast_analysis['price_range']['min'],
+                'max': forecast_analysis['price_range']['max']
+            },
+            'best_window': {
+                'days': forecast_analysis['best_window']['days'],
+                'expected_price_usd': forecast_analysis['best_window']['expected_price']
+            },
+            'daily_forecast': forecast_analysis['daily_forecast']
+        },
+        'inventory': {
+            'stock_tons': inventory,
+            'days_held': day
+        },
+        'recommendation': {
+            'action': primary_action,
+            'quantity_tons': recommended_quantity,
+            'confidence': {
+                'strategies_agreeing': sell_count if primary_action == 'SELL' else hold_count,
+                'total_strategies': len(prediction_strategies)
+            },
+            'financial_impact_usd': {
+                'sell_now_value': financial_impact['sell_now_value'],
+                'wait_value': financial_impact['wait_value'],
+                'potential_gain': financial_impact['potential_gain'],
+                'potential_gain_pct': financial_impact['potential_gain_pct']
+            }
+        },
+        'all_strategies': recommendations_df.to_dict('records')
+    }
+
+    return recommendations_df, structured_data
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder for NumPy types."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
 
 
 def main():
@@ -321,6 +486,7 @@ def main():
     parser.add_argument('--model', help='Specific model to use (e.g., sarimax_auto_weather_v1)')
     parser.add_argument('--all-models', action='store_true',
                        help='Generate recommendations for all available models')
+    parser.add_argument('--output-json', help='Output structured data as JSON to specified file path')
 
     args = parser.parse_args()
 
@@ -384,6 +550,9 @@ def main():
 
     print()
 
+    # Storage for JSON output (if requested)
+    all_structured_data = []
+
     # Generate recommendations for each model
     for model in models:
         print("=" * 80)
@@ -404,18 +573,31 @@ def main():
             print()
 
             # Generate recommendations
-            recommendations = generate_recommendations(state, prediction, commodity_config)
+            recommendations_df, structured_data = generate_recommendations(state, prediction, commodity_config)
+
+            # Add model info to structured data
+            structured_data['model'] = {
+                'name': model,
+                'forecast_date': str(forecast_date),
+                'generation_timestamp': str(generation_ts),
+                'simulation_paths': int(prediction.shape[0]),
+                'forecast_horizon_days': int(prediction.shape[1])
+            }
+
+            # Store for JSON output
+            if args.output_json:
+                all_structured_data.append(structured_data)
 
             # Display
             print("Recommendations:")
-            print(recommendations.to_string(index=False))
+            print(recommendations_df.to_string(index=False))
             print()
 
             # Highlight key recommendations
-            sell_recs = recommendations[recommendations['Action'] == 'SELL']
+            sell_recs = recommendations_df[recommendations_df['Action'] == 'SELL']
             if len(sell_recs) > 0:
                 total_sell = sell_recs['Quantity (tons)'].sum()
-                print(f"📊 Summary: {len(sell_recs)}/{len(recommendations)} strategies recommend SELL")
+                print(f"📊 Summary: {len(sell_recs)}/{len(recommendations_df)} strategies recommend SELL")
                 print(f"   Total recommended: {total_sell:.1f} tons ({total_sell/state['inventory']*100:.1f}% of inventory)")
             else:
                 print(f"📊 Summary: All strategies recommend HOLD")
@@ -428,6 +610,26 @@ def main():
             continue
 
     connection.close()
+
+    # Save JSON output if requested
+    if args.output_json and len(all_structured_data) > 0:
+        print()
+        print(f"Saving structured data to {args.output_json}...")
+
+        # Prepare output
+        output = {
+            'generated_at': datetime.now().isoformat(),
+            'commodity': args.commodity,
+            'models_processed': len(all_structured_data),
+            'recommendations': all_structured_data
+        }
+
+        # Write to file
+        with open(args.output_json, 'w') as f:
+            json.dump(output, f, indent=2, cls=NumpyEncoder)
+
+        print(f"✓ Structured data saved ({len(all_structured_data)} models)")
+        print()
 
     print("=" * 80)
     print("RECOMMENDATIONS COMPLETE")
