@@ -1,7 +1,4 @@
 # Databricks notebook source
-# NOTEBOOK 00: SETUP AND CONFIGURATION (UPDATED)
-# ============================================================================
-# Databricks notebook source
 # MAGIC %md
 # MAGIC # Configuration and Setup
 # MAGIC Define all parameters for both commodities
