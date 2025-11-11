@@ -100,6 +100,38 @@ def get_latest_prediction(commodity, model_version, connection):
     return prediction_matrix, forecast_date, generation_ts
 
 
+def get_exchange_rates(connection, currency_pairs=['COP/USD', 'VND/USD']):
+    """
+    Get latest exchange rates from Databricks.
+
+    Args:
+        connection: Databricks SQL connection
+        currency_pairs: List of currency pairs to fetch (e.g., ['COP/USD', 'VND/USD'])
+
+    Returns:
+        dict: {currency_pair: rate}
+    """
+    cursor = connection.cursor()
+
+    # Query latest exchange rates for each currency pair
+    rates = {}
+    for pair in currency_pairs:
+        cursor.execute("""
+            SELECT rate
+            FROM commodity.bronze.fx_rates
+            WHERE currency_pair = %s
+            ORDER BY date DESC
+            LIMIT 1
+        """, (pair,))
+
+        result = cursor.fetchone()
+        if result:
+            rates[pair] = result[0]
+
+    cursor.close()
+    return rates
+
+
 def get_current_state(commodity, connection):
     """
     Get current state for operational decision-making.
@@ -108,7 +140,7 @@ def get_current_state(commodity, connection):
     For now, uses placeholder values.
 
     Returns:
-        dict with: inventory, days_since_harvest, current_price, price_history
+        dict with: inventory, days_since_harvest, current_price, price_history, exchange_rates
     """
     # Get latest price
     cursor = connection.cursor()
@@ -144,12 +176,16 @@ def get_current_state(commodity, connection):
     inventory = 35.5  # tons
     days_since_harvest = 45
 
+    # Get exchange rates
+    exchange_rates = get_exchange_rates(connection, currency_pairs=['COP/USD', 'VND/USD'])
+
     return {
         'inventory': inventory,
         'days_since_harvest': days_since_harvest,
         'current_price': current_price,
         'price_history': price_history,
-        'current_date': datetime.now()
+        'current_date': datetime.now(),
+        'exchange_rates': exchange_rates
     }
 
 
@@ -310,27 +346,42 @@ def calculate_financial_impact(state, forecast_analysis, recommendation):
     Calculate financial impact of recommendation vs alternatives.
 
     Returns:
-        dict with: sell_now_value, wait_value, potential_gain
+        dict with: sell_now_value, wait_value, potential_gain (in USD and local currencies)
     """
     inventory = state['inventory']
     current_price = state['current_price']
+    exchange_rates = state.get('exchange_rates', {})
 
-    # Value if sell today
-    sell_now_value = inventory * current_price
+    # Value if sell today (USD)
+    sell_now_value_usd = inventory * current_price
 
-    # Value if wait for best window (from forecast)
+    # Value if wait for best window (from forecast) (USD)
     best_window_price = forecast_analysis['best_window']['expected_price']
-    wait_value = inventory * best_window_price
+    wait_value_usd = inventory * best_window_price
 
-    # Potential gain/loss
-    potential_gain = wait_value - sell_now_value
-    potential_gain_pct = (potential_gain / sell_now_value) * 100
+    # Potential gain/loss (USD)
+    potential_gain_usd = wait_value_usd - sell_now_value_usd
+    potential_gain_pct = (potential_gain_usd / sell_now_value_usd) * 100
+
+    # Convert to local currencies
+    sell_now_local = {}
+    wait_value_local = {}
+    potential_gain_local = {}
+
+    for pair, rate in exchange_rates.items():
+        currency_code = pair.split('/')[0]
+        sell_now_local[currency_code] = sell_now_value_usd * rate
+        wait_value_local[currency_code] = wait_value_usd * rate
+        potential_gain_local[currency_code] = potential_gain_usd * rate
 
     return {
-        'sell_now_value': sell_now_value,
-        'wait_value': wait_value,
-        'potential_gain': potential_gain,
-        'potential_gain_pct': potential_gain_pct
+        'sell_now_value': sell_now_value_usd,
+        'wait_value': wait_value_usd,
+        'potential_gain': potential_gain_usd,
+        'potential_gain_pct': potential_gain_pct,
+        'sell_now_value_local': sell_now_local,
+        'wait_value_local': wait_value_local,
+        'potential_gain_local': potential_gain_local
     }
 
 
@@ -422,6 +473,16 @@ def generate_recommendations(state, prediction_matrix, commodity_config):
         'quantity': recommended_quantity
     })
 
+    # Get exchange rates from state
+    exchange_rates = state.get('exchange_rates', {})
+
+    # Calculate local currency prices if exchange rates available
+    local_prices = {}
+    for pair, rate in exchange_rates.items():
+        # Extract currency code (e.g., "COP" from "COP/USD")
+        currency_code = pair.split('/')[0]
+        local_prices[currency_code] = current_price * rate
+
     # Structure data for WhatsApp message
     structured_data = {
         'timestamp': datetime.now().isoformat(),
@@ -429,7 +490,9 @@ def generate_recommendations(state, prediction_matrix, commodity_config):
         'market': {
             'current_price_usd': current_price,
             'trend_7d_pct': trend_7d_pct,
-            'trend_direction': trend_direction
+            'trend_direction': trend_direction,
+            'exchange_rates': exchange_rates,
+            'local_prices': local_prices
         },
         'forecast': {
             'horizon_days': 14,
@@ -454,11 +517,18 @@ def generate_recommendations(state, prediction_matrix, commodity_config):
                 'strategies_agreeing': sell_count if primary_action == 'SELL' else hold_count,
                 'total_strategies': len(prediction_strategies)
             },
-            'financial_impact_usd': {
-                'sell_now_value': financial_impact['sell_now_value'],
-                'wait_value': financial_impact['wait_value'],
-                'potential_gain': financial_impact['potential_gain'],
-                'potential_gain_pct': financial_impact['potential_gain_pct']
+            'financial_impact': {
+                'usd': {
+                    'sell_now_value': financial_impact['sell_now_value'],
+                    'wait_value': financial_impact['wait_value'],
+                    'potential_gain': financial_impact['potential_gain'],
+                    'potential_gain_pct': financial_impact['potential_gain_pct']
+                },
+                'local_currency': {
+                    'sell_now_value': financial_impact['sell_now_value_local'],
+                    'wait_value': financial_impact['wait_value_local'],
+                    'potential_gain': financial_impact['potential_gain_local']
+                }
             }
         },
         'all_strategies': recommendations_df.to_dict('records')
