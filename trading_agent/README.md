@@ -120,10 +120,8 @@ trading_agent/
 │   └── trading_prediction_analysis.py              # Single model
 │
 ├── docs/                              # Technical documentation
-│   ├── ACCURACY_THRESHOLD_ANALYSIS.md  # Synthetic model analysis
-│   ├── MULTI_MODEL_MODIFICATIONS.md    # Multi-model notebook changes
-│   ├── DATA_FORMAT_VERIFICATION.md     # Format compatibility tests
-│   └── backtest_results.md             # Historical backtest results
+│   ├── README.md                       # Index of technical docs
+│   └── MULTI_MODEL_ANALYSIS.md         # Multi-model framework guide
 │
 └── analysis/                          # Analysis framework
     ├── model_runner.py                # Multi-model orchestration
@@ -193,10 +191,7 @@ Structured JSON output ready for messaging services:
 - **[operations/README.md](operations/README.md)** - Daily recommendations & WhatsApp integration
 
 ### Technical Documentation
-- **[docs/ACCURACY_THRESHOLD_ANALYSIS.md](docs/ACCURACY_THRESHOLD_ANALYSIS.md)** - Synthetic prediction methodology
-- **[docs/MULTI_MODEL_MODIFICATIONS.md](docs/MULTI_MODEL_MODIFICATIONS.md)** - Multi-model notebook changes
-- **[docs/DATA_FORMAT_VERIFICATION.md](docs/DATA_FORMAT_VERIFICATION.md)** - Data format compatibility
-- **[docs/backtest_results.md](docs/backtest_results.md)** - Historical backtest results (archive)
+- **[docs/MULTI_MODEL_ANALYSIS.md](docs/MULTI_MODEL_ANALYSIS.md)** - Multi-model framework implementation & accuracy threshold analysis
 
 ### Project Management
 - **[../collaboration/TRADING_AGENT_TODO.md](../collaboration/TRADING_AGENT_TODO.md)** - Current status & roadmap
