@@ -20,6 +20,24 @@
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Import Main Notebook Code
+# MAGIC
+# MAGIC Import all strategy classes, BacktestEngine, and helper functions from the main multi-model notebook.
+
+# COMMAND ----------
+
+# Import all code from main notebook (strategies, backtest engine, etc.)
+%run ./trading_prediction_analysis_multi_model
+
+print("✓ Imported main notebook code successfully")
+print("  - Strategy classes available")
+print("  - BacktestEngine available")
+print("  - COMMODITY_CONFIGS available")
+print("  - Database connection available")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Configuration
 
 # COMMAND ----------
