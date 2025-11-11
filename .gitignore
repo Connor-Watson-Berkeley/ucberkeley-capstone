@@ -36,6 +36,12 @@ discover_warehouses.py
 explore_tables.py
 explore_workspace.py
 query_predictions.py
+trading_agent/test_integration.py
+trading_agent/test_full_integration.py
+trading_agent/test_single_model_run.py
+
+# Test output directories
+trading_agent/output/
 
 # Archived old scripts (keep in git for reference)
 # research_agent/infrastructure/archive/

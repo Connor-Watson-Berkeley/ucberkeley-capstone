@@ -261,26 +261,73 @@ def create_harvest_schedule(date_range, harvest_windows, annual_volume):
 
 # COMMAND ----------
 
-def load_prediction_matrices(commodity_name):
+def load_prediction_matrices(commodity_name, model_version=None, connection=None):
     """
-    Load prediction matrices with automatic fallback from real to synthetic.
-    
+    Load prediction matrices from Unity Catalog or local files (fallback).
+
     Args:
         commodity_name: string, name of commodity (e.g., 'coffee', 'sugar')
-    
+        model_version: string, optional - model identifier (e.g., 'sarimax_auto_weather_v1')
+                      If provided, loads from Unity Catalog using this model
+        connection: Databricks SQL connection, optional
+                   Required if model_version is provided
+
     Returns:
-        tuple: (prediction_matrices dict, source string 'REAL' or 'SYNTHETIC')
-    
+        tuple: (prediction_matrices dict, source string)
+               Source string format: 'UNITY_CATALOG:<model>' or 'REAL' or 'SYNTHETIC'
+
     Raises:
-        FileNotFoundError: If neither real nor synthetic predictions exist
+        FileNotFoundError: If neither Unity Catalog nor local files have data
+        ValueError: If model_version provided without connection
     """
+    # NEW: Unity Catalog path (requires both model_version and connection)
+    if model_version is not None:
+        if connection is None:
+            raise ValueError("connection parameter required when model_version is specified")
+
+        try:
+            # Import data access layer
+            import sys
+            import os
+            parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if parent_dir not in sys.path:
+                sys.path.insert(0, parent_dir)
+
+            from data_access.forecast_loader import (
+                load_forecast_distributions,
+                transform_to_prediction_matrices
+            )
+
+            # Load from Unity Catalog
+            print(f"✓ Loading from Unity Catalog: {commodity_name.capitalize()} - {model_version}")
+            df = load_forecast_distributions(
+                commodity=commodity_name.capitalize(),
+                model_version=model_version,
+                connection=connection
+            )
+
+            if len(df) == 0:
+                raise ValueError(f"No data found in Unity Catalog for {commodity_name} - {model_version}")
+
+            # Transform to prediction matrices format
+            prediction_matrices = transform_to_prediction_matrices(df)
+            predictions_source = f'UNITY_CATALOG:{model_version}'
+
+            print(f"✓ Loaded {len(prediction_matrices)} prediction matrices from Unity Catalog")
+            return prediction_matrices, predictions_source
+
+        except Exception as e:
+            print(f"⚠️  Failed to load from Unity Catalog: {e}")
+            print(f"   Falling back to local files...")
+
+    # LEGACY: Local file path (backward compatibility)
     DATA_PATHS = get_data_paths(commodity_name)
     prediction_matrices = None
     predictions_source = None
-    
+
     real_matrix_path = DATA_PATHS['prediction_matrices_real']
     synthetic_matrix_path = DATA_PATHS['prediction_matrices']
-    
+
     # Try real predictions first
     if os.path.exists(real_matrix_path):
         try:
@@ -291,7 +338,7 @@ def load_prediction_matrices(commodity_name):
         except Exception as e:
             print(f"⚠️  Failed to load real predictions: {e}")
             print(f"   Falling back to synthetic predictions...")
-    
+
     # Fall back to synthetic if real not available or failed
     if prediction_matrices is None:
         if os.path.exists(synthetic_matrix_path):
@@ -304,7 +351,7 @@ def load_prediction_matrices(commodity_name):
                 f"No prediction matrices found for {commodity_name}. "
                 f"Please run Notebook 00A (synthetic) or 01B (real) first."
             )
-    
+
     return prediction_matrices, predictions_source
 
 # COMMAND ----------
