@@ -323,11 +323,23 @@ python operations/daily_recommendations.py \
         "trend_direction": "↑",
         "exchange_rates": {
           "COP/USD": 3876.50,
-          "VND/USD": 23450.00
+          "VND/USD": 23450.00,
+          "BRL/USD": 5.12,
+          "INR/USD": 83.25,
+          "THB/USD": 34.80,
+          "IDR/USD": 15678.00,
+          "ETB/USD": 56.50,
+          "...": "..."
         },
         "local_prices": {
           "COP": 408967.50,
-          "VND": 2473975.00
+          "VND": 2473975.00,
+          "BRL": 539.76,
+          "INR": 8783.87,
+          "THB": 3671.40,
+          "IDR": 1654026.00,
+          "ETB": 5960.75,
+          "...": "..."
         }
       },
       "forecast": {
@@ -367,15 +379,24 @@ python operations/daily_recommendations.py \
           "local_currency": {
             "sell_now_value": {
               "COP": 14516593.75,
-              "VND": 87825612.50
+              "VND": 87825612.50,
+              "BRL": 19175.68,
+              "INR": 311858.56,
+              "...": "..."
             },
             "wait_value": {
               "COP": 15067043.75,
-              "VND": 91146062.50
+              "VND": 91146062.50,
+              "BRL": 19901.28,
+              "INR": 323594.06,
+              "...": "..."
             },
             "potential_gain": {
               "COP": 550450.00,
-              "VND": 3320450.00
+              "VND": 3320450.00,
+              "BRL": 725.60,
+              "INR": 11735.50,
+              "...": "..."
             }
           }
         }
@@ -385,6 +406,28 @@ python operations/daily_recommendations.py \
   ]
 }
 ```
+
+### Currency Support
+
+The system automatically fetches **all available exchange rates** from `commodity.bronze.fx_rates`, including:
+
+**Major commodity producers:**
+- **COP** (Colombian Peso) - Coffee
+- **VND** (Vietnamese Dong) - Coffee
+- **BRL** (Brazilian Real) - Coffee, Sugar
+- **INR** (Indian Rupee) - Sugar
+- **THB** (Thai Baht) - Sugar
+- **IDR** (Indonesian Rupiah) - Coffee
+- **ETB** (Ethiopian Birr) - Coffee
+- **HNL** (Honduran Lempira) - Coffee
+- **UGX** (Ugandan Shilling) - Coffee
+- **MXN** (Mexican Peso) - Coffee
+- And many more...
+
+**Major economies:**
+- EUR, GBP, JPY, CNY, AUD, CHF, KRW, ZAR
+
+All prices and financial impact are automatically calculated in all available currencies.
 
 ### WhatsApp Integration
 
