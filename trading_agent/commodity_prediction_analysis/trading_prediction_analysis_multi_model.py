@@ -535,7 +535,7 @@ print("\n✓ Configuration complete")
 
 # COMMAND ----------
 
-# MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./00_setup_and_config
 
 # COMMAND ----------
 
@@ -868,7 +868,7 @@ print("\n✓ Ready to run Notebook 01 - Data Preparation!")
 
 # COMMAND ----------
 
-# MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./00_setup_and_config
 
 # COMMAND ----------
 
@@ -1120,7 +1120,7 @@ print("\n✓ Data preparation complete for all commodities")
 
 # COMMAND ----------
 
-# MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./00_setup_and_config
 
 # COMMAND ----------
 
@@ -1321,7 +1321,7 @@ print("\n✓ Ready for backtesting with real prediction data")
 
 # COMMAND ----------
 
-#### MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./00_setup_and_config
 
 # COMMAND ----------
 
@@ -2682,8 +2682,8 @@ print("=" * 80)
 
 # COMMAND ----------
 
-# MAGIC %run ./00_setup_and_config
-# MAGIC %run ./02_strategy_implementations
+# Legacy: # MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./02_strategy_implementations
 
 # COMMAND ----------
 
@@ -3136,9 +3136,9 @@ print("NEW: Costs are percentage-based and scale automatically with commodity va
 
 # COMMAND ----------
 
-#### MAGIC %run ./00_setup_and_config
-#### MAGIC %run ./02_strategy_implementations
-#### MAGIC %run ./03_backtesting_engine
+# Legacy: # MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./02_strategy_implementations
+# Legacy: # MAGIC %run ./03_backtesting_engine
 
 # COMMAND ----------
 
@@ -4234,7 +4234,7 @@ print(f"% of total harvest: {(total/(50*8))*100:.1f}%")
 
 # COMMAND ----------
 
-# MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./00_setup_and_config
 
 # COMMAND ----------
 
@@ -4523,7 +4523,7 @@ print("\n✓ Statistical validation complete for all commodities")
 
 # COMMAND ----------
 
-# MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./00_setup_and_config
 
 # COMMAND ----------
 
@@ -4779,9 +4779,9 @@ print("\n✓ Feature importance analysis complete for all commodities")
 
 # COMMAND ----------
 
-# MAGIC %run ./00_setup_and_config
-# MAGIC %run ./02_strategy_implementations
-# MAGIC %run ./03_backtesting_engine
+# Legacy: # MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./02_strategy_implementations
+# Legacy: # MAGIC %run ./03_backtesting_engine
 
 # COMMAND ----------
 
@@ -5125,7 +5125,7 @@ print("\n✓ Sensitivity analysis complete for all commodities")
 
 # COMMAND ----------
 
-# MAGIC %run ./00_setup_and_config
+# Legacy: # MAGIC %run ./00_setup_and_config
 
 # COMMAND ----------
 
