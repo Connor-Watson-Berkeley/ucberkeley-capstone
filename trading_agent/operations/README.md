@@ -320,7 +320,15 @@ python operations/daily_recommendations.py \
       "market": {
         "current_price_usd": 105.50,
         "trend_7d_pct": 3.2,
-        "trend_direction": "↑"
+        "trend_direction": "↑",
+        "exchange_rates": {
+          "COP/USD": 3876.50,
+          "VND/USD": 23450.00
+        },
+        "local_prices": {
+          "COP": 408967.50,
+          "VND": 2473975.00
+        }
       },
       "forecast": {
         "horizon_days": 14,
@@ -349,11 +357,27 @@ python operations/daily_recommendations.py \
           "strategies_agreeing": 4,
           "total_strategies": 5
         },
-        "financial_impact_usd": {
-          "sell_now_value": 3745.25,
-          "wait_value": 3887.25,
-          "potential_gain": 142.00,
-          "potential_gain_pct": 3.79
+        "financial_impact": {
+          "usd": {
+            "sell_now_value": 3745.25,
+            "wait_value": 3887.25,
+            "potential_gain": 142.00,
+            "potential_gain_pct": 3.79
+          },
+          "local_currency": {
+            "sell_now_value": {
+              "COP": 14516593.75,
+              "VND": 87825612.50
+            },
+            "wait_value": {
+              "COP": 15067043.75,
+              "VND": 91146062.50
+            },
+            "potential_gain": {
+              "COP": 550450.00,
+              "VND": 3320450.00
+            }
+          }
         }
       },
       "all_strategies": [...]
