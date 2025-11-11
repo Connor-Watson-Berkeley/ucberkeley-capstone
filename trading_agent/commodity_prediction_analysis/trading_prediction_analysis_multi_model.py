@@ -261,27 +261,148 @@ def create_harvest_schedule(date_range, harvest_windows, annual_volume):
 
 # COMMAND ----------
 
-def load_prediction_matrices(commodity_name, model_version=None, connection=None):
+def generate_synthetic_predictions(prices, accuracy, forecast_horizon=14, n_paths=2000):
     """
-    Load prediction matrices from Unity Catalog or local files (fallback).
+    Generate synthetic predictions at specified accuracy level.
+
+    Args:
+        prices: DataFrame with 'date' and 'price' columns
+        accuracy: float (0.0 to 1.0) - directional accuracy of predictions
+                 0.5 = random, 1.0 = perfect
+        forecast_horizon: int - number of days ahead to predict (default 14)
+        n_paths: int - number of Monte Carlo simulation paths (default 2000)
+
+    Returns:
+        dict: prediction_matrices {date: np.ndarray of shape (n_paths, horizon)}
+
+    How it works:
+        - For each forecast date, look ahead at actual future prices
+        - Generate predictions that are correct X% of the time (where X = accuracy)
+        - Add realistic noise around actual prices
+        - 1.0 (perfect) = oracle with actual future prices
+        - 0.5 (random) = no signal, just noise around current price
+    """
+    import numpy as np
+    import pandas as pd
+
+    print(f"  Generating {n_paths} paths for each forecast date...")
+
+    prediction_matrices = {}
+
+    # Get dates where we can make forecasts (need horizon days of future data)
+    forecast_dates = prices['date'][:-forecast_horizon].values
+
+    for forecast_date in forecast_dates:
+        forecast_date = pd.Timestamp(forecast_date)
+
+        # Get actual future prices for this forecast
+        future_prices = prices[
+            (prices['date'] > forecast_date) &
+            (prices['date'] <= forecast_date + pd.Timedelta(days=forecast_horizon))
+        ]['price'].values
+
+        if len(future_prices) < forecast_horizon:
+            continue
+
+        # Truncate to exact horizon
+        future_prices = future_prices[:forecast_horizon]
+
+        # Current price (last known price at forecast time)
+        current_price = prices[prices['date'] == forecast_date]['price'].values[0]
+
+        # Generate predictions for n_paths
+        paths = []
+        for _ in range(n_paths):
+            if accuracy >= 1.0:
+                # Perfect predictions = actual future prices with tiny noise
+                predicted_prices = future_prices + np.random.normal(0, 0.01, forecast_horizon)
+            else:
+                # Mix of correct signals and noise based on accuracy
+                predicted_prices = np.zeros(forecast_horizon)
+
+                for day in range(forecast_horizon):
+                    actual_price = future_prices[day]
+                    actual_change = actual_price - current_price
+
+                    # With probability = accuracy, predict correct direction
+                    if np.random.random() < accuracy:
+                        # Correct direction: use actual price with some noise
+                        predicted_prices[day] = actual_price + np.random.normal(0, abs(actual_change) * 0.1)
+                    else:
+                        # Wrong direction: random walk from current price
+                        predicted_prices[day] = current_price + np.random.normal(0, abs(actual_change) * 0.5)
+
+            paths.append(predicted_prices)
+
+        # Store as numpy array
+        prediction_matrices[forecast_date] = np.array(paths)
+
+    print(f"  ✓ Generated {len(prediction_matrices)} forecast dates")
+
+    return prediction_matrices
+
+
+def load_prediction_matrices(commodity_name, model_version=None, connection=None, prices=None):
+    """
+    Load prediction matrices from Unity Catalog, generate synthetic, or load from local files.
 
     Args:
         commodity_name: string, name of commodity (e.g., 'coffee', 'sugar')
-        model_version: string, optional - model identifier (e.g., 'sarimax_auto_weather_v1')
-                      If provided, loads from Unity Catalog using this model
-        connection: Databricks SQL connection, optional
-                   Required if model_version is provided
+        model_version: string, optional - model identifier
+                      - Real models: 'sarimax_auto_weather_v1', 'prophet_v1', etc.
+                      - Synthetic: 'synthetic_50pct', 'synthetic_70pct', 'synthetic_perfect'
+        connection: Databricks SQL connection, optional (required for real models)
+        prices: DataFrame, optional (required for synthetic predictions)
+               Must have 'date' and 'price' columns
 
     Returns:
         tuple: (prediction_matrices dict, source string)
-               Source string format: 'UNITY_CATALOG:<model>' or 'REAL' or 'SYNTHETIC'
+               Source string format:
+                 - 'UNITY_CATALOG:<model>'
+                 - 'SYNTHETIC:<model>:<accuracy>%'
+                 - 'REAL' or 'SYNTHETIC' (legacy)
 
     Raises:
         FileNotFoundError: If neither Unity Catalog nor local files have data
-        ValueError: If model_version provided without connection
+        ValueError: If required parameters are missing
     """
     # NEW: Unity Catalog path (requires both model_version and connection)
     if model_version is not None:
+        # =====================================================================
+        # SYNTHETIC PREDICTIONS: Generate at specified accuracy level
+        # =====================================================================
+        if model_version.startswith('synthetic_'):
+            if prices is None:
+                raise ValueError("prices DataFrame required for synthetic prediction generation")
+
+            print(f"✓ Generating synthetic predictions: {commodity_name.upper()} - {model_version}")
+
+            # Parse accuracy level from model name
+            if model_version == 'synthetic_perfect':
+                accuracy = 1.0
+                print(f"  Accuracy: PERFECT (oracle with actual future prices)")
+            else:
+                # Extract percentage (e.g., "synthetic_70pct" -> 0.70)
+                pct_str = model_version.replace('synthetic_', '').replace('pct', '')
+                accuracy = float(pct_str) / 100.0
+                print(f"  Accuracy: {accuracy*100:.0f}% (directional correctness)")
+
+            # Generate synthetic predictions
+            prediction_matrices = generate_synthetic_predictions(
+                prices=prices,
+                accuracy=accuracy,
+                forecast_horizon=14,
+                n_paths=2000
+            )
+
+            predictions_source = f'SYNTHETIC:{model_version}:{accuracy*100:.0f}%'
+            print(f"✓ Generated {len(prediction_matrices)} synthetic prediction matrices")
+
+            return prediction_matrices, predictions_source
+
+        # =====================================================================
+        # REAL PREDICTIONS: Load from Unity Catalog
+        # =====================================================================
         if connection is None:
             raise ValueError("connection parameter required when model_version is specified")
 
@@ -3120,8 +3241,28 @@ for CURRENT_COMMODITY in COMMODITY_CONFIGS.keys():
     # Query available models from Unity Catalog
     # --------------------------------------------------------------------------
     print(f"\nQuerying available models for {CURRENT_COMMODITY.upper()}...")
-    available_models = get_available_models(CURRENT_COMMODITY.capitalize(), db_connection)
-    print(f"✓ Found {len(available_models)} models: {', '.join(available_models)}")
+    real_models = get_available_models(CURRENT_COMMODITY.capitalize(), db_connection)
+    print(f"✓ Found {len(real_models)} real models from Unity Catalog: {', '.join(real_models)}")
+
+    # --------------------------------------------------------------------------
+    # Add synthetic models at various accuracy levels
+    # --------------------------------------------------------------------------
+    # These synthetic predictions test: "What accuracy is needed for statistical significance?"
+    synthetic_models = [
+        'synthetic_50pct',   # Random (50% directional accuracy)
+        'synthetic_60pct',   # Weak signal
+        'synthetic_70pct',   # Moderate signal
+        'synthetic_80pct',   # Strong signal
+        'synthetic_90pct',   # Very strong signal
+        'synthetic_perfect'  # Oracle (perfect foresight)
+    ]
+
+    print(f"✓ Adding {len(synthetic_models)} synthetic models at various accuracy levels")
+    print(f"  Purpose: Determine minimum accuracy threshold for statistical significance")
+
+    # Combine real and synthetic models
+    available_models = real_models + synthetic_models
+    print(f"\n✓ Total models to test: {len(available_models)} ({len(real_models)} real + {len(synthetic_models)} synthetic)")
 
     # Initialize results dictionary for this commodity
     all_results[CURRENT_COMMODITY] = {}
@@ -3134,11 +3275,12 @@ for CURRENT_COMMODITY in COMMODITY_CONFIGS.keys():
         print(f"# MODEL {model_idx}/{len(available_models)}: {CURRENT_COMMODITY.upper()} - {CURRENT_MODEL}")
         print("#" * 80)
 
-        # Load prediction matrices for this specific model from Unity Catalog
+        # Load prediction matrices (Unity Catalog for real models, generated for synthetic)
         prediction_matrices, predictions_source = load_prediction_matrices(
             CURRENT_COMMODITY,
             model_version=CURRENT_MODEL,
-            connection=db_connection
+            connection=db_connection,
+            prices=prices  # Required for synthetic prediction generation
         )
 
         print(f"✓ Loaded {len(prediction_matrices)} prediction matrices ({predictions_source})")
@@ -3881,6 +4023,110 @@ print(f"\n💡 Best commodity for prediction-based strategies:")
 print(f"   {best_commodity_for_predictions['Commodity']}")
 print(f"   Advantage: ${best_commodity_for_predictions['Prediction Advantage ($)']:,.2f}")
 print(f"   ({best_commodity_for_predictions['Prediction Advantage (%)']:.1f}% improvement)")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Accuracy Threshold Analysis
+
+# COMMAND ----------
+
+print("\n" + "=" * 80)
+print("ACCURACY THRESHOLD ANALYSIS")
+print("=" * 80)
+print("\nResearch Question: What forecast accuracy is needed for statistical significance?")
+print("=" * 80)
+
+# Analyze synthetic models to determine accuracy threshold
+for commodity in all_results.keys():
+    print(f"\n{'='*80}")
+    print(f"{commodity.upper()} - SYNTHETIC MODEL PERFORMANCE")
+    print(f"{'='*80}")
+
+    # Extract synthetic model results
+    synthetic_results = []
+    baseline_earnings = None
+
+    for model_version, results in all_results[commodity].items():
+        if model_version.startswith('synthetic_'):
+            # Parse accuracy from model name
+            if model_version == 'synthetic_perfect':
+                accuracy = 100
+            else:
+                accuracy = int(model_version.replace('synthetic_', '').replace('pct', ''))
+
+            synthetic_results.append({
+                'Accuracy (%)': accuracy,
+                'Model': model_version,
+                'Net Earnings': results['best_overall']['net_earnings'],
+                'Best Strategy': results['best_overall']['strategy'],
+                'Advantage over Baseline ($)': results['earnings_diff'],
+                'Advantage over Baseline (%)': results['pct_diff']
+            })
+
+            # Capture baseline earnings (should be same for all)
+            if baseline_earnings is None:
+                baseline_earnings = results['best_baseline']['net_earnings']
+
+    if synthetic_results:
+        synthetic_df = pd.DataFrame(synthetic_results)
+        synthetic_df = synthetic_df.sort_values('Accuracy (%)')
+
+        print("\nSynthetic Model Performance by Accuracy Level:")
+        print(synthetic_df.to_string(index=False))
+
+        print(f"\nBaseline (no predictions): ${baseline_earnings:,.2f}")
+
+        # Find threshold where predictions become beneficial
+        positive_results = synthetic_df[synthetic_df['Advantage over Baseline ($)'] > 0]
+
+        if len(positive_results) > 0:
+            threshold_accuracy = positive_results['Accuracy (%)'].min()
+            threshold_earnings = positive_results[positive_results['Accuracy (%)'] == threshold_accuracy]['Net Earnings'].values[0]
+            threshold_advantage = positive_results[positive_results['Accuracy (%)'] == threshold_accuracy]['Advantage over Baseline ($)'].values[0]
+
+            print(f"\n🎯 ACCURACY THRESHOLD: {threshold_accuracy}%")
+            print(f"   At {threshold_accuracy}% accuracy:")
+            print(f"     - Net Earnings: ${threshold_earnings:,.2f}")
+            print(f"     - Advantage over Baseline: ${threshold_advantage:,.2f}")
+            print(f"   Below {threshold_accuracy}% accuracy: Predictions hurt performance")
+            print(f"   Above {threshold_accuracy}% accuracy: Predictions improve performance")
+        else:
+            print(f"\n⚠️  No synthetic model outperformed baseline")
+            print(f"   Even 100% accuracy may not provide advantage for {commodity.upper()}")
+
+        # Compare real models to synthetic benchmarks
+        print(f"\n📊 How do REAL models compare to synthetic benchmarks?")
+        print(f"{'='*80}")
+
+        real_results = []
+        for model_version, results in all_results[commodity].items():
+            if not model_version.startswith('synthetic_'):
+                real_results.append({
+                    'Model': model_version,
+                    'Net Earnings': results['best_overall']['net_earnings'],
+                    'Advantage over Baseline ($)': results['earnings_diff']
+                })
+
+        if real_results:
+            real_df = pd.DataFrame(real_results)
+            real_df = real_df.sort_values('Net Earnings', ascending=False)
+
+            print("\nTop 3 Real Models:")
+            print(real_df.head(3).to_string(index=False))
+
+            # Find which synthetic accuracy level each real model matches
+            best_real = real_df.iloc[0]
+            best_real_earnings = best_real['Net Earnings']
+
+            # Find closest synthetic model
+            synthetic_df['Earnings Diff'] = abs(synthetic_df['Net Earnings'] - best_real_earnings)
+            closest_synthetic = synthetic_df.loc[synthetic_df['Earnings Diff'].idxmin()]
+
+            print(f"\n💡 Best real model ({best_real['Model']}) performs like:")
+            print(f"   ~{closest_synthetic['Accuracy (%)']}% accuracy synthetic model")
+            print(f"   ({best_real['Model']}: ${best_real_earnings:,.2f}")
+            print(f"    vs synthetic_{closest_synthetic['Accuracy (%)']:g}pct: ${closest_synthetic['Net Earnings']:,.2f})")
 
 # COMMAND ----------
 
