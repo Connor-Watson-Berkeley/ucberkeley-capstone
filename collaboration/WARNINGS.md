@@ -24,21 +24,44 @@ Last Updated: 2025-11-07
 
 ---
 
-### Weather v2 Migration in Progress (2025-11-07)
+### CRITICAL: Weather v2 Backfill Bug Found (2025-11-08)
 
-**Severity**: Info
+**Severity**: CRITICAL
 
-**Status**: Creating bronze table (in progress)
+**Status**: Bug fixed, re-backfill required
 
-**What's changing**: Migrating from weather (v1) to weather_v2 with corrected growing region coordinates.
+**Issue**: Discovered critical bug in weather v2 backfill script that caused data loss:
+- Script processed regions sequentially and wrote each region's data to the same S3 path
+- Each region OVERWROTE the previous region's data for the same date
+- Result: Only 1 region's data per date instead of all 67 regions
+- Current S3 data has only 3,775 records (1 per date) instead of 252,425 records (67 regions × 3,775 dates)
+
+**Root Cause**:
+- `backfill_region_date_range()` called `write_to_s3()` per region
+- All regions wrote to `s3://.../year=X/month=Y/day=Z/data.jsonl` (same key)
+- No append logic - each write overwrote previous data
+
+**Fix Applied**:
+- Modified script to collect ALL regions' data first
+- Group by date across ALL regions
+- Write once per date with all 67 regions included
+- File: `research_agent/infrastructure/backfill_historical_weather_v2.py`
+
+**Action Required**:
+1. Clear bad S3 data: `s3://groundtruth-capstone/landing/weather_v2/`
+2. Re-run backfill with fixed script (estimated 3-7 hours)
+3. Create weather_v2 bronze table
+4. Proceed with unified_data update
 
 **Timeline**:
-- Weather backfill: Completed (2025-11-07)
-- Bronze table creation: In progress
-- unified_data update: Pending
-- Model retraining: Pending
+- Bug discovered: 2025-11-08
+- Fix committed: 2025-11-08
+- Re-backfill: Pending (waiting for confirmation)
+- Bronze table creation: Blocked
+- unified_data update: Blocked
+- Model retraining: Blocked
 
-**Impact**: New models trained on weather_v2 will have better accuracy due to correct coordinates.
+**Impact**: All weather v2 work blocked until re-backfill completes. Bronze table created with bad data (only 3,775 rows with 4 regions).
 
 ---
 

@@ -227,6 +227,7 @@ def backfill_region_date_range(
     """
     Backfill weather data for a single region across a date range.
     Fetches in chunks to avoid API limits.
+    Returns all records without writing to S3 (caller will write grouped by date).
     """
     region_name = region['region']
     logger.info(f"\n{'='*80}")
@@ -256,27 +257,10 @@ def backfill_region_date_range(
 
         current = chunk_end + timedelta(days=1)
 
-    # Write all records for this region
-    if all_records:
-        # Group by date for partitioning
-        by_date = {}
-        for record in all_records:
-            record_date = datetime.strptime(record['date'], '%Y-%m-%d').date()
-            if record_date not in by_date:
-                by_date[record_date] = []
-            by_date[record_date].append(record)
-
-        # Write each date partition
-        writes_successful = 0
-        for batch_date, batch_records in by_date.items():
-            if write_to_s3(batch_records, batch_date, dry_run):
-                writes_successful += 1
-
-        logger.info(f"\n📊 {region_name} Summary:")
-        logger.info(f"  Total records: {len(all_records)}")
-        logger.info(f"  Successful chunks: {successful_chunks}")
-        logger.info(f"  Failed chunks: {failed_chunks}")
-        logger.info(f"  S3 writes: {writes_successful}/{len(by_date)}")
+    logger.info(f"\n📊 {region_name} Summary:")
+    logger.info(f"  Total records: {len(all_records)}")
+    logger.info(f"  Successful chunks: {successful_chunks}")
+    logger.info(f"  Failed chunks: {failed_chunks}")
 
     return {
         'region': region_name,
@@ -284,7 +268,8 @@ def backfill_region_date_range(
         'successful_chunks': successful_chunks,
         'failed_chunks': failed_chunks,
         'start_date': str(start_date),
-        'end_date': str(end_date)
+        'end_date': str(end_date),
+        'records': all_records  # Return records instead of writing
     }
 
 
@@ -421,11 +406,14 @@ def main():
     print(f"\n🚀 Starting backfill...\n")
     start_time = time.time()
 
+    # Fetch all regions' data first
     results = []
+    all_records = []
     for i, region in enumerate(regions, 1):
         print(f"\n[{i}/{len(regions)}] Processing {region['region']}...")
         result = backfill_region_date_range(region, start_date, end_date, args.dry_run)
         results.append(result)
+        all_records.extend(result['records'])
 
         # Progress update
         if i % 10 == 0:
@@ -434,6 +422,25 @@ def main():
             remaining = avg_time * (len(regions) - i)
             print(f"\n⏱️  Progress: {i}/{len(regions)} ({100*i/len(regions):.1f}%)")
             print(f"   Elapsed: {elapsed/3600:.1f}h, Remaining: ~{remaining/3600:.1f}h")
+
+    # Group all records by date (across all regions)
+    print(f"\n📦 Grouping {len(all_records):,} records by date...")
+    by_date = {}
+    for record in all_records:
+        record_date = datetime.strptime(record['date'], '%Y-%m-%d').date()
+        if record_date not in by_date:
+            by_date[record_date] = []
+        by_date[record_date].append(record)
+
+    # Write to S3 grouped by date
+    print(f"\n💾 Writing {len(by_date)} date partitions to S3...")
+    writes_successful = 0
+    for batch_date, batch_records in by_date.items():
+        if write_to_s3(batch_records, batch_date, args.dry_run):
+            writes_successful += 1
+        if writes_successful % 100 == 0:
+            print(f"   Written {writes_successful}/{len(by_date)} dates...")
+    print(f"   ✅ Wrote {writes_successful}/{len(by_date)} date partitions")
 
     # Final summary
     elapsed = time.time() - start_time
