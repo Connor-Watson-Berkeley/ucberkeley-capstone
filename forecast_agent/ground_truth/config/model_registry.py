@@ -13,6 +13,13 @@ except ImportError:
     panel_model = None
     statsforecast_models = None
 
+try:
+    from ground_truth.models import tft_model
+    TFT_AVAILABLE = True
+except ImportError:
+    TFT_AVAILABLE = False
+    tft_model = None
+
 
 # Model registry: List of all baseline models to train
 BASELINE_MODELS = {
@@ -421,6 +428,108 @@ if ADVANCED_MODELS_AVAILABLE and statsforecast_models is not None:
             'horizon': 14
         },
         'description': 'Theta method - M3 competition winner'
+    }
+
+# Add Temporal Fusion Transformer if available
+if TFT_AVAILABLE and tft_model is not None:
+    BASELINE_MODELS['tft'] = {
+        'name': 'TFT',
+        'function': tft_model.tft_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'horizon': 14,
+            'max_encoder_length': 60,
+            'hidden_size': 32,
+            'attention_head_size': 4,
+            'dropout': 0.1,
+            'learning_rate': 0.001,
+            'max_epochs': 30,
+            'batch_size': 32
+        },
+        'description': 'Temporal Fusion Transformer - state-of-the-art deep learning for time series'
+    }
+
+    BASELINE_MODELS['tft_weather'] = {
+        'name': 'TFT+Weather',
+        'function': tft_model.tft_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'horizon': 14,
+            'max_encoder_length': 60,
+            'hidden_size': 32,
+            'attention_head_size': 4,
+            'dropout': 0.1,
+            'learning_rate': 0.001,
+            'max_epochs': 30,
+            'batch_size': 32,
+            'exog_features': ['temp_max_c', 'temp_min_c', 'temp_mean_c',
+                            'precipitation_mm', 'humidity_mean_pct']
+        },
+        'description': 'TFT with weather covariates and attention mechanisms'
+    }
+
+    BASELINE_MODELS['tft_full'] = {
+        'name': 'TFT+Full',
+        'function': tft_model.tft_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'horizon': 14,
+            'max_encoder_length': 90,  # Longer lookback
+            'hidden_size': 64,  # Larger model
+            'attention_head_size': 8,  # More attention heads
+            'dropout': 0.1,
+            'learning_rate': 0.001,
+            'max_epochs': 50,
+            'batch_size': 16,  # Smaller batch for larger model
+            'exog_features': ['temp_max_c', 'temp_min_c', 'temp_mean_c',
+                            'precipitation_mm', 'humidity_mean_pct',
+                            'vix', 'sentiment_score', 'event_count',
+                            # Top coffee producer forex (7/8 available, BRL missing)
+                            'cop_usd', 'vnd_usd', 'idr_usd', 'etb_usd',
+                            'hnl_usd', 'ugx_usd', 'pen_usd']
+        },
+        'description': 'TFT with ALL features: weather, market, sentiment, forex (best performance)'
+    }
+
+    BASELINE_MODELS['tft_forex'] = {
+        'name': 'TFT+Forex',
+        'function': tft_model.tft_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'horizon': 14,
+            'max_encoder_length': 60,
+            'hidden_size': 32,
+            'attention_head_size': 4,
+            'dropout': 0.1,
+            'learning_rate': 0.001,
+            'max_epochs': 30,
+            'batch_size': 32,
+            # Focus on top producer currencies
+            'exog_features': ['cop_usd', 'vnd_usd', 'idr_usd']
+        },
+        'description': 'TFT with top 3 producer forex rates (Colombia, Vietnam, Indonesia)'
+    }
+
+    BASELINE_MODELS['tft_ensemble'] = {
+        'name': 'TFT Ensemble (5 models)',
+        'function': tft_model.tft_ensemble_forecast,
+        'params': {
+            'target': 'close',
+            'horizon': 14,
+            'max_encoder_length': 60,
+            'hidden_size': 32,
+            'attention_head_size': 4,
+            'dropout': 0.1,
+            'learning_rate': 0.001,
+            'max_epochs': 30,
+            'batch_size': 32,
+            'n_models': 5,
+            'exog_features': ['temp_max_c', 'temp_min_c', 'temp_mean_c',
+                            'precipitation_mm', 'humidity_mean_pct',
+                            # Add key forex rates
+                            'cop_usd', 'vnd_usd', 'idr_usd']
+        },
+        'description': 'Ensemble of 5 TFT models with weather + forex for robustness'
     }
 
 

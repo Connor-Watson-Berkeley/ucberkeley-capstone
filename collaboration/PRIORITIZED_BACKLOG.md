@@ -1,15 +1,12 @@
 # Prioritized Backlog
 
-Last Updated: 2025-11-07
+Last Updated: 2025-11-12
 
 ## Priority 0: Critical Path (Blocking)
 
 ### Research Agent
 
-- [ ] **Fix weather_v2 bronze table creation** (In Progress)
-  - Issue: S3 path pattern was incorrect
-  - Status: Path fixed, re-running now
-  - Blocks: Weather v2 migration, unified_data update
+- (None currently)
 
 ### Trading Agent
 
@@ -21,21 +18,13 @@ Last Updated: 2025-11-07
 
 ### Research Agent
 
-- [ ] **Validate July 2021 frost event capture**
-  - Why: Verify corrected coordinates work correctly
-  - Dependencies: weather_v2 bronze table
-  - Estimated time: 5 minutes
-
-- [ ] **Update unified_data to use weather_v2**
-  - Why: Enable models to use corrected weather data
-  - Dependencies: weather_v2 bronze table, frost validation
-  - Estimated time: 15 minutes
-  - Files: `research_agent/sql/create_unified_data.sql`
-
-- [ ] **Train new SARIMAX models with weather_v2**
-  - Why: Improved forecast accuracy with correct coordinates
-  - Dependencies: unified_data updated
-  - Estimated time: 2-4 hours
+- [ ] **Train Temporal Fusion Transformer (TFT) models**
+  - Why: State-of-the-art deep learning for multi-horizon forecasting
+  - Status: TFT implementation complete, ready to backfill
+  - Models: tft_weather, tft_forex, tft_full, tft_ensemble
+  - Estimated time: 4-8 hours (semiannual training = 16 trainings)
+  - Dependencies: unified_data with weather_v2 + forex
+  - Files: `forecast_agent/ground_truth/models/tft_model.py`
 
 ### Trading Agent
 
@@ -53,6 +42,21 @@ Last Updated: 2025-11-07
 ## Priority 2: Medium Priority (Infrastructure)
 
 ### Research Agent
+
+- [ ] **Add BRL/USD forex data via Lambda**
+  - Why: Brazil produces 40% of global coffee, BRL movements highly correlated with coffee prices
+  - Impact: HIGH - Expected MAE improvement of 5-15%
+  - Current gap: 7/8 top producer currencies available, BRL missing
+  - Effort: 2-3 hours
+  - Options:
+    1. Extend existing forex lambda (add 'BRL': 'USD' to pair list)
+    2. Quick fetch from free API (exchangerate-api.com, no key required)
+  - Backfill needed: 2015-2025 (~3,800 daily values)
+  - Files to modify:
+    - `research_agent/lambdas/*/forex_fetcher.py` (or similar)
+    - `research_agent/sql/create_unified_data.sql` (add brl_usd column)
+    - `forecast_agent/ground_truth/config/model_registry.py` (update TFT features)
+  - Cost: < $1 (free API or minimal lambda compute)
 
 - [ ] **Setup Databricks jobs for automated pipeline**
   - Manual via UI (Jobs API requires saved queries)
@@ -130,7 +134,14 @@ Last Updated: 2025-11-07
 
 ### Research Agent
 
-- [x] Weather backfill v2 - 10+ years historical data (2015-2025)
+- [x] Weather backfill v2 - 10+ years historical data (2015-2025, 175,770 records)
+- [x] Weather_v2 bronze table creation (with COPY INTO for S3 ingestion)
+- [x] Update unified_data to use weather_v2 (8 weather features per region)
+- [x] Validate July 2021 frost event (40.5% price spike confirmed, cold temps detected)
+- [x] Implement Temporal Fusion Transformer (TFT) models
+  - 5 model variants: tft, tft_weather, tft_forex, tft_full, tft_ensemble
+  - Integrated into model registry with forex rates (7/8 producer currencies)
+  - Production-ready, dependencies installed
 - [x] Full pipeline validation - 20/20 tests passed
 - [x] Forecast API Guide validation - 7/7 tests passed
 - [x] New Databricks workspace setup (Unity Catalog)

@@ -110,6 +110,7 @@ CREATE OR REPLACE TABLE commodity.landing.gdelt_sentiment_inc
 USING DELTA
 AS SELECT
   date,
+  TO_TIMESTAMP(date, 'yyyyMMddHHmmss') as event_timestamp,
   source_url,
   themes,
   locations,

@@ -154,7 +154,7 @@ macro_filled AS (
 ),
 
 -- =============================================================================
--- STEP 5: WEATHER DATA (REGIONAL) - ENHANCED 15 FIELDS
+-- STEP 5: WEATHER DATA (REGIONAL) - WEATHER V2 (8 FIELDS)
 -- =============================================================================
 
 weather_with_forward_fill AS (
@@ -166,22 +166,14 @@ weather_with_forward_fill AS (
     temp_max_c,
     temp_min_c,
     temp_mean_c,
-    -- Precipitation (4 fields)
+    -- Precipitation (3 fields)
     precipitation_mm,
     rain_mm,
     snowfall_cm,
-    precipitation_hours,
-    -- Humidity (3 fields)
+    -- Humidity (1 field)
     humidity_mean_pct,
-    humidity_max_pct,
-    humidity_min_pct,
-    -- Wind (3 fields)
+    -- Wind (1 field)
     wind_speed_max_kmh,
-    wind_gusts_max_kmh,
-    wind_direction_deg,
-    -- Solar/ET (2 fields)
-    solar_radiation_mj_m2,
-    evapotranspiration_mm,
     -- Forward fill all fields
     LAST_VALUE(temp_max_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_max_c_filled,
     LAST_VALUE(temp_min_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_min_c_filled,
@@ -189,16 +181,9 @@ weather_with_forward_fill AS (
     LAST_VALUE(precipitation_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as precipitation_mm_filled,
     LAST_VALUE(rain_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as rain_mm_filled,
     LAST_VALUE(snowfall_cm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as snowfall_cm_filled,
-    LAST_VALUE(precipitation_hours, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as precipitation_hours_filled,
     LAST_VALUE(humidity_mean_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_mean_pct_filled,
-    LAST_VALUE(humidity_max_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_max_pct_filled,
-    LAST_VALUE(humidity_min_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_min_pct_filled,
-    LAST_VALUE(wind_speed_max_kmh, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_speed_max_kmh_filled,
-    LAST_VALUE(wind_gusts_max_kmh, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_gusts_max_kmh_filled,
-    LAST_VALUE(wind_direction_deg, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_direction_deg_filled,
-    LAST_VALUE(solar_radiation_mj_m2, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as solar_radiation_mj_m2_filled,
-    LAST_VALUE(evapotranspiration_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as evapotranspiration_mm_filled
-  FROM commodity.bronze.weather
+    LAST_VALUE(wind_speed_max_kmh, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_speed_max_kmh_filled
+  FROM commodity.bronze.weather_v2
   WHERE date >= '2015-07-07'
 ),
 
@@ -211,22 +196,14 @@ weather_filled AS (
     temp_max_c_filled as temp_max_c,
     temp_min_c_filled as temp_min_c,
     temp_mean_c_filled as temp_mean_c,
-    -- Precipitation (4 fields)
+    -- Precipitation (3 fields)
     precipitation_mm_filled as precipitation_mm,
     rain_mm_filled as rain_mm,
     snowfall_cm_filled as snowfall_cm,
-    precipitation_hours_filled as precipitation_hours,
-    -- Humidity (3 fields)
+    -- Humidity (1 field)
     humidity_mean_pct_filled as humidity_mean_pct,
-    humidity_max_pct_filled as humidity_max_pct,
-    humidity_min_pct_filled as humidity_min_pct,
-    -- Wind (3 fields)
-    wind_speed_max_kmh_filled as wind_speed_max_kmh,
-    wind_gusts_max_kmh_filled as wind_gusts_max_kmh,
-    wind_direction_deg_filled as wind_direction_deg,
-    -- Solar/ET (2 fields)
-    solar_radiation_mj_m2_filled as solar_radiation_mj_m2,
-    evapotranspiration_mm_filled as evapotranspiration_mm
+    -- Wind (1 field)
+    wind_speed_max_kmh_filled as wind_speed_max_kmh
   FROM weather_with_forward_fill
 )
 
@@ -341,27 +318,19 @@ SELECT
   macf.tzs_usd, macf.kes_usd, macf.lak_usd, macf.pkr_usd, macf.php_usd, macf.egp_usd,
   macf.ars_usd, macf.rub_usd, macf.try_usd, macf.uah_usd, macf.irr_usd, macf.byn_usd,
   wf.region,
-  -- ENHANCED WEATHER FEATURES (15 fields)
+  -- WEATHER V2 FEATURES (8 fields)
   -- Temperature (3 fields)
   wf.temp_max_c,
   wf.temp_min_c,
   wf.temp_mean_c,
-  -- Precipitation (4 fields)
+  -- Precipitation (3 fields)
   wf.precipitation_mm,
   wf.rain_mm,
   wf.snowfall_cm,
-  wf.precipitation_hours,
-  -- Humidity (3 fields)
+  -- Humidity (1 field)
   wf.humidity_mean_pct,
-  wf.humidity_max_pct,
-  wf.humidity_min_pct,
-  -- Wind (3 fields)
-  wf.wind_speed_max_kmh,
-  wf.wind_gusts_max_kmh,
-  wf.wind_direction_deg,
-  -- Solar/ET (2 fields - critical for crop modeling)
-  wf.solar_radiation_mj_m2,
-  wf.evapotranspiration_mm
+  -- Wind (1 field)
+  wf.wind_speed_max_kmh
   -- FUTURE: Add GDELT sentiment columns (7 features)
   -- gdf.gdelt_tone,              -- Overall sentiment
   -- gdf.gdelt_positive,          -- Positive score

@@ -41,6 +41,7 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY date, market_name ORDER BY ingest_ts DES
 CREATE OR REPLACE TABLE commodity.bronze.gdelt AS
 SELECT
   date,
+  TO_TIMESTAMP(date, 'yyyyMMddHHmmss') as event_timestamp,
   source_url,
   themes,
   locations,
