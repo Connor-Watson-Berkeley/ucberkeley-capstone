@@ -65,6 +65,12 @@ Data pipeline (create_gdelt_unified_data.py) located in ../research_agent/
 ### Input
 `commodity.silver.unified_data` - Unified commodity data with weather, GDELT sentiment, VIX, exchange rates
 
+**⚠️ Important:** For details on unified_data architecture (forward-filling, date spine, data sources), see:
+- `../research_agent/UNIFIED_DATA_ARCHITECTURE.md` - Complete architecture doc
+- Why continuous daily data (including weekends)
+- How forward-fill prevents data leakage
+- Trading day indicators
+
 ### Output
 Three tables in `commodity.silver` schema:
 - `point_forecasts` - 14-day forecasts with prediction intervals and actuals
