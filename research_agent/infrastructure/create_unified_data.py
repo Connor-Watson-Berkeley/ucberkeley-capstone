@@ -20,9 +20,9 @@ import sys
 from pathlib import Path
 
 # Databricks configuration
-DATABRICKS_HOST = "https://dbc-fd7b00f3-7a6d.cloud.databricks.com"
+DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST", "https://dbc-5e4780f4-fcec.cloud.databricks.com")
 DATABRICKS_TOKEN = os.environ.get("DATABRICKS_TOKEN")
-WAREHOUSE_ID = "3cede8561503a13c"
+WAREHOUSE_ID = os.environ.get("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/d88ad009595327fd").split("/")[-1]
 
 # File paths
 SCRIPT_DIR = Path(__file__).parent
