@@ -90,6 +90,7 @@ def prepare_tft_data(
         add_relative_time_idx=True,
         add_target_scales=True,
         add_encoder_length=True,
+        allow_missing_timesteps=True,  # Handle weekends/holidays in financial data
     )
 
     return training
