@@ -22,10 +22,9 @@ df.select("model_version").distinct().show()
 
 # NOTEBOOK 00: SETUP AND CONFIGURATION (UPDATED)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Configuration and Setup
-# MAGIC Define all parameters for both commodities
+%md
+# Configuration and Setup
+Define all parameters for both commodities
 
 # COMMAND ----------
 
@@ -430,11 +429,10 @@ print("\n✓ Configuration complete")
 
 # NOTEBOOK 00A: GENERATE SYNTHETIC PREDICTIONS (MEMORY-EFFICIENT)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Generate Synthetic Predictions - All Commodities (Memory-Efficient)
-# MAGIC 
-# MAGIC Generates synthetic predictions using chunk-based processing for Unity Catalog Volumes.
+%md
+# Generate Synthetic Predictions - All Commodities (Memory-Efficient)
+
+Generates synthetic predictions using chunk-based processing for Unity Catalog Volumes.
 
 # COMMAND ----------
 
@@ -762,12 +760,11 @@ print("\n✓ Ready to run Notebook 01 - Data Preparation!")
 
 # NOTEBOOK 01A: DATA PREPARATION (Synthetic Predictions) - MEMORY-EFFICIENT VERSION
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Data Preparation - All Commodities
-# MAGIC 
-# MAGIC This notebook prepares data for all configured commodities sequentially.
-# MAGIC Uses memory-efficient Spark PIVOT to handle large synthetic prediction datasets.
+%md
+# Data Preparation - All Commodities
+
+This notebook prepares data for all configured commodities sequentially.
+Uses memory-efficient Spark PIVOT to handle large synthetic prediction datasets.
 
 # COMMAND ----------
 
@@ -1013,13 +1010,12 @@ print("\n✓ Data preparation complete for all commodities")
 
 # NOTEBOOK 01B: DATA PREPARATION (Real Predictions)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Real Prediction Data Preparation
-# MAGIC 
-# MAGIC Ingests real prediction data from SARIMAX model outputs.
-# MAGIC Processes wide format (day_1...day_14) into matrix format for backtesting.
-# MAGIC Handles multiple commodities, skipping gracefully if data not available.
+%md
+# Real Prediction Data Preparation
+
+Ingests real prediction data from SARIMAX model outputs.
+Processes wide format (day_1...day_14) into matrix format for backtesting.
+Handles multiple commodities, skipping gracefully if data not available.
 
 # COMMAND ----------
 
@@ -1209,18 +1205,17 @@ print("\n✓ Ready for backtesting with real prediction data")
 
 # NOTEBOOK 02: STRATEGY IMPLEMENTATIONS (UPDATED - MATCHED PAIRS + INDICATORS)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Strategy Implementations - Enhanced with Technical Indicators
-# MAGIC 
-# MAGIC **VERSION: 3.0 - Complete Restructure with Backward Compatibility**
-# MAGIC 
-# MAGIC **KEY CHANGES:**
-# MAGIC - Matched pairs: PriceThreshold and MovingAverage (baseline identical, predictions add overlay)
-# MAGIC - Daily evaluation for all signal-based strategies
-# MAGIC - Technical indicators: RSI, ADX, Std Dev (both historical and predicted)
-# MAGIC - Cost-benefit analysis for prediction strategies
-# MAGIC - ALL ORIGINAL CONSTRUCTOR SIGNATURES PRESERVED - No downstream changes required
+%md
+# Strategy Implementations - Enhanced with Technical Indicators
+
+**VERSION: 3.0 - Complete Restructure with Backward Compatibility**
+
+**KEY CHANGES:**
+- Matched pairs: PriceThreshold and MovingAverage (baseline identical, predictions add overlay)
+- Daily evaluation for all signal-based strategies
+- Technical indicators: RSI, ADX, Std Dev (both historical and predicted)
+- Cost-benefit analysis for prediction strategies
+- ALL ORIGINAL CONSTRUCTOR SIGNATURES PRESERVED - No downstream changes required
 
 # COMMAND ----------
 
@@ -2572,16 +2567,15 @@ print("=" * 80)
 
 # NOTEBOOK 03: BACKTESTING ENGINE (UPDATED)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Backtesting Engine - Updated for Harvest Cycles
-# MAGIC 
-# MAGIC Now handles:
-# MAGIC - Gradual inventory accumulation during harvest windows
-# MAGIC - Multiple harvest cycles across simulation period
-# MAGIC - 365-day max holding from harvest window start
-# MAGIC - Force liquidation before new harvest begins
-# MAGIC - Percentage-based costs (storage and transaction scale with price)
+%md
+# Backtesting Engine - Updated for Harvest Cycles
+
+Now handles:
+- Gradual inventory accumulation during harvest windows
+- Multiple harvest cycles across simulation period
+- 365-day max holding from harvest window start
+- Force liquidation before new harvest begins
+- Percentage-based costs (storage and transaction scale with price)
 
 # COMMAND ----------
 
@@ -3020,22 +3014,21 @@ print("NEW: Costs are percentage-based and scale automatically with commodity va
 
 # NOTEBOOK 04: RUN COMPARATIVE ANALYSIS (UPDATED)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Run Comparative Analysis - All Commodities
-# MAGIC 
-# MAGIC Runs backtest analysis for all configured commodities sequentially.
-# MAGIC Generates commodity-specific results and cross-commodity comparisons.
-# MAGIC 
-# MAGIC **Tests 9 Strategies:**
-# MAGIC - 4 Baselines: Immediate Sale, Equal Batch, Price Threshold, Moving Average
-# MAGIC - 5 Prediction-based: Consensus, Expected Value, Risk-Adjusted, Price Threshold Predictive, MA Predictive
-# MAGIC 
-# MAGIC **Updates:**
-# MAGIC - Added Total Revenue (Without Costs) visualization
-# MAGIC - Enhanced scenario tracking for Risk-Adjusted strategy
-# MAGIC - Includes 2 NEW A/B test strategies (predictive versions of baseline strategies)
-# MAGIC - All existing functionality preserved
+%md
+# Run Comparative Analysis - All Commodities
+
+Runs backtest analysis for all configured commodities sequentially.
+Generates commodity-specific results and cross-commodity comparisons.
+
+**Tests 9 Strategies:**
+- 4 Baselines: Immediate Sale, Equal Batch, Price Threshold, Moving Average
+- 5 Prediction-based: Consensus, Expected Value, Risk-Adjusted, Price Threshold Predictive, MA Predictive
+
+**Updates:**
+- Added Total Revenue (Without Costs) visualization
+- Enhanced scenario tracking for Risk-Adjusted strategy
+- Includes 2 NEW A/B test strategies (predictive versions of baseline strategies)
+- All existing functionality preserved
 
 # COMMAND ----------
 
@@ -3860,12 +3853,11 @@ print(f"% of total harvest: {(total/(50*8))*100:.1f}%")
 
 # NOTEBOOK 05: STATISTICAL VALIDATION (UPDATED)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Statistical Validation - All Commodities
-# MAGIC 
-# MAGIC Performs statistical tests comparing prediction vs baseline strategies.
-# MAGIC Runs sequentially for all configured commodities.
+%md
+# Statistical Validation - All Commodities
+
+Performs statistical tests comparing prediction vs baseline strategies.
+Runs sequentially for all configured commodities.
 
 # COMMAND ----------
 
@@ -4149,12 +4141,11 @@ print("\n✓ Statistical validation complete for all commodities")
 
 # NOTEBOOK 06: FEATURE IMPORTANCE ANALYSIS (UPDATED)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Feature Importance Analysis - All Commodities
-# MAGIC 
-# MAGIC Analyzes which prediction features are most important for forecasting returns.
-# MAGIC Runs sequentially for all configured commodities.
+%md
+# Feature Importance Analysis - All Commodities
+
+Analyzes which prediction features are most important for forecasting returns.
+Runs sequentially for all configured commodities.
 
 # COMMAND ----------
 
@@ -4406,11 +4397,10 @@ print("\n✓ Feature importance analysis complete for all commodities")
 
 # NOTEBOOK 07: SENSITIVITY ANALYSIS (FIXED)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Sensitivity Analysis - All Commodities (Fixed Visualizations)
-# MAGIC 
-# MAGIC Tests how robust strategies are to parameter and cost changes.
+%md
+# Sensitivity Analysis - All Commodities (Fixed Visualizations)
+
+Tests how robust strategies are to parameter and cost changes.
 
 # COMMAND ----------
 
@@ -4751,12 +4741,11 @@ print("\n✓ Sensitivity analysis complete for all commodities")
 
 # NOTEBOOK 08: VISUALIZATION AND REPORTING (COMPLETE FIXED VERSION)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Final Report and Dashboard - All Commodities
-# MAGIC 
-# MAGIC Creates comprehensive reports and visualizations for each commodity
-# MAGIC plus cross-commodity comparisons.
+%md
+# Final Report and Dashboard - All Commodities
+
+Creates comprehensive reports and visualizations for each commodity
+plus cross-commodity comparisons.
 
 # COMMAND ----------
 
@@ -5161,16 +5150,15 @@ else:
 
 # NOTEBOOK 09: THREE-SCENARIO FOCUSED ANALYSIS (MULTI-COMMODITY)
 # ============================================================================
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # Block 09: Moving Average vs Predictions vs Immediate Sale Analysis
-# MAGIC 
-# MAGIC This analysis focuses on three key scenarios for each commodity:
-# MAGIC 1. Moving Average Baseline (no predictions)
-# MAGIC 2. Moving Average with Predictions
-# MAGIC 3. Immediate Sale (simple equal batches)
-# MAGIC 
-# MAGIC Key Question: **Do predictions add value to the moving average strategy?**
+%md
+# Block 09: Moving Average vs Predictions vs Immediate Sale Analysis
+
+This analysis focuses on three key scenarios for each commodity:
+1. Moving Average Baseline (no predictions)
+2. Moving Average with Predictions
+3. Immediate Sale (simple equal batches)
+
+Key Question: **Do predictions add value to the moving average strategy?**
 
 # COMMAND ----------
 
