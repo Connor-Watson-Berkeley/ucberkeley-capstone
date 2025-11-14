@@ -387,6 +387,99 @@ None - All Phase 3.5 components complete!
 - Analysis: `trading_agent/DASHBOARD_DATA_ANALYSIS.md` (Section 4.2)
 - Notebook: Cell 7 queries commodity.forecast.distributions
 
+## 🔧 Execution Issues (Notebooks 06-10)
+
+**Discovered:** 2025-01-14 (after refactored notebook execution in Databricks)
+**Status:** Multiple notebooks have execution failures blocking downstream analysis
+
+### Issue Summary
+
+| Notebook | Status | Issue | Priority |
+|----------|--------|-------|----------|
+| 06_statistical_validation | ✅ Working | None | - |
+| 07_feature_importance | ❌ Failing | Date range mismatch - 0/25 models | HIGH |
+| 08_sensitivity_analysis | ⚠️ Unknown | Output truncated | LOW |
+| 09_strategy_results_summary | ❌ Failing | Missing input files | HIGH |
+| 10_paired_scenario_analysis | ❌ Failing | Wrong file paths | MEDIUM |
+
+### ❌ Issue 1: Notebook 07 - Feature Importance (CRITICAL)
+
+**Problem:** All 42 prediction dates fall outside price data range → 0 features extracted
+
+**Root Cause:**
+```
+Price data:       2022-01-03 to 2025-10-31 (965 days)
+Prediction data:  2018-07-06 to 2025-11-01 (42 dates)
+Overlap:          ZERO dates
+```
+
+**Why:** Feature extraction requires both current price and future price (14 days ahead). No predictions have matching price data.
+
+**Fix:** Extend price data loading back to 2018 (not just 2022)
+- Update notebook 01 or 02 to load from `commodity.bronze.market` starting 2018-01-01
+- This gives full coverage of all 42 prediction dates
+
+**Impact:** Blocking notebook 09 (missing `feature_analysis.pkl` files)
+
+### ❌ Issue 2: Notebook 09 - Results Summary
+
+**Problem:** Cannot load required input files from notebooks 06-08
+
+**Missing Files:**
+- ❌ `feature_analysis.pkl` (from notebook 07 - FAILED)
+- ⚠️ `sensitivity_results.pkl` (from notebook 08 - unknown if exists)
+- ✅ `statistical_results.pkl` (from notebook 06 - exists)
+
+**Fix:**
+1. Fix notebook 07 (see Issue 1)
+2. Add graceful error handling for missing files:
+```python
+try:
+    with open(MODEL_DATA_PATHS['feature_analysis'], 'rb') as f:
+        feature_results = pickle.load(f)
+except FileNotFoundError:
+    feature_results = {'feature_importance': pd.DataFrame()}  # Empty placeholder
+```
+
+### ❌ Issue 3: Notebook 10 - Paired Scenario Analysis
+
+**Problem:** Using wrong file path (old location)
+
+**Current (WRONG):**
+```python
+BASE_PATH = '/Volumes/commodity/silver/trading_agent_volume'
+```
+
+**Correct:**
+```python
+BASE_PATH = '/Volumes/commodity/trading_agent/files'
+```
+
+**Additional Issue:** File naming mismatch
+- Expects: `results_coffee.csv`
+- Actual: Results stored in Delta tables `commodity.trading_agent.results_coffee_<model>`
+
+**Fix:** Update paths and use Delta tables instead of CSV files
+
+### ⚠️ Issue 4: Notebook 08 - Sensitivity Analysis
+
+**Problem:** Output truncated due to size limit
+
+**Status:** Unknown if notebook actually completed successfully
+- Files may have been saved even though output was truncated
+- Need to verify `sensitivity_results.pkl` files exist in `/Volumes/commodity/trading_agent/files/`
+
+**Fix:** Reduce print verbosity or verify files exist
+
+### Priority Fix Order
+
+1. **HIGH:** Fix notebook 07 date range (extend price data to 2018) - 30 min
+2. **HIGH:** Make notebook 09 handle missing files gracefully - 30 min
+3. **MEDIUM:** Fix notebook 10 file paths - 45 min
+4. **LOW:** Verify notebook 08 output files exist - 15 min
+
+**Total Estimated Effort:** ~2 hours
+
 ## Notes
 
 ### Data Architecture
