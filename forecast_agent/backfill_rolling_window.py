@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from databricks import sql
 from databricks.sql.exc import RequestError
 from ground_truth.config.model_registry import BASELINE_MODELS
+from utils.model_persistence import load_model
 
 
 def get_training_dates(
@@ -167,15 +168,24 @@ def generate_forecast_for_date(
     model_config: Dict,
     commodity: str,
     n_paths: int = 2000,
-    forecast_horizon: int = 14
+    forecast_horizon: int = 14,
+    fitted_model: Optional[Dict] = None
 ) -> Dict:
-    """Generate forecast for a single date using trained model."""
+    """Generate forecast for a single date using trained model.
+
+    Args:
+        fitted_model: Optional pre-trained model from database. If provided, uses inference-only mode.
+    """
     model_fn = model_config['function']
     model_params = model_config['params'].copy()
     model_params['horizon'] = forecast_horizon
 
     try:
-        result = model_fn(df_pandas=training_df, commodity=commodity, **model_params)
+        # Pass fitted_model if available (inference-only mode)
+        if fitted_model is not None:
+            result = model_fn(df_pandas=training_df, commodity=commodity, fitted_model=fitted_model, **model_params)
+        else:
+            result = model_fn(df_pandas=training_df, commodity=commodity, **model_params)
         forecast_df = result['forecast_df']
 
         # Generate Monte Carlo paths
@@ -406,6 +416,8 @@ def backfill_rolling_window(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     min_training_days: int = 365 * 3,
+    use_pretrained: bool = False,
+    model_version_tag: str = 'v1.0',
     databricks_host: str = None,
     databricks_token: str = None,
     databricks_http_path: str = None
@@ -508,15 +520,42 @@ def backfill_rolling_window(
             training_df = load_training_data(connection, commodity, cutoff_date)
             print(f"     Training samples: {len(training_df)} days")
 
-            # Train model ONCE and save it (inference will reuse this model)
-            train_result = train_model(training_df, model_config, commodity)
-            if not train_result['success']:
-                print(f"     ❌ Training failed: {train_result['error']}")
-                error_count += 1
-                continue
+            # Try to load pretrained model if use_pretrained is True
+            fitted_model_dict = None
+            if use_pretrained:
+                model_name = model_config['name']
+                training_date_str = train_date.strftime('%Y-%m-%d')
 
-            print(f"     ✅ Model trained successfully")
-            # TODO: Save trained model weights to Databricks for reuse
+                print(f"     Loading pretrained model from database...")
+                try:
+                    loaded_model_data = load_model(
+                        connection=connection,
+                        commodity=commodity,
+                        model_name=model_name,
+                        training_date=training_date_str,
+                        model_version=model_version_tag
+                    )
+
+                    if loaded_model_data:
+                        fitted_model_dict = loaded_model_data['fitted_model']
+                        print(f"     ✅ Loaded pretrained model (trained on {training_date_str})")
+                    else:
+                        print(f"     ⚠️  Pretrained model not found, falling back to training")
+                        use_pretrained = False  # Fall back to training for this window
+                except Exception as e:
+                    print(f"     ⚠️  Error loading pretrained model: {e}")
+                    use_pretrained = False  # Fall back to training
+
+            # Train model if not using pretrained
+            if not use_pretrained:
+                train_result = train_model(training_df, model_config, commodity)
+                if not train_result['success']:
+                    print(f"     ❌ Training failed: {train_result['error']}")
+                    error_count += 1
+                    continue
+                print(f"     ✅ Model trained successfully")
+            else:
+                print(f"     ⏭️  Skipping training (using pretrained model)")
 
             # Generate forecasts for all days until next training
             forecast_dates = []
@@ -539,13 +578,13 @@ def backfill_rolling_window(
                         print(f"       Skipped: {skipped_count} (resume mode)")
                     continue
 
-                # TODO: Load saved model weights and use for inference
-                # For now, this still retrains (needs model refactoring)
+                # Use pretrained model if available, otherwise train+predict
                 result = generate_forecast_for_date(
                     forecast_date,
                     training_df,
                     model_config,
-                    commodity
+                    commodity,
+                    fitted_model=fitted_model_dict
                 )
 
                 if not result['success']:
@@ -614,6 +653,10 @@ def main():
                        help='First training date (YYYY-MM-DD)')
     parser.add_argument('--end-date', type=lambda s: datetime.strptime(s, '%Y-%m-%d').date(),
                        help='Last forecast date (YYYY-MM-DD)')
+    parser.add_argument('--use-pretrained', action='store_true',
+                       help='Load pretrained models from database instead of training (requires train_models.py to be run first)')
+    parser.add_argument('--model-version-tag', default='v1.0',
+                       help='Model version tag for pretrained models (default: v1.0)')
 
     args = parser.parse_args()
 
@@ -622,7 +665,9 @@ def main():
         model_versions=args.models,
         train_frequency=args.train_frequency,
         start_date=args.start_date,
-        end_date=args.end_date
+        end_date=args.end_date,
+        use_pretrained=args.use_pretrained,
+        model_version_tag=args.model_version_tag
     )
 
 
