@@ -87,36 +87,92 @@ Three tables in `commodity.silver` schema:
 
 Evaluated using 30-window walk-forward validation (420 days, non-overlapping).
 
-## Adding New Models
+## Model Training Architecture
 
-All models defined in single file: `ground_truth/config/model_registry.py`
+### Train-Once/Inference-Many Pattern
+
+All models support **two-phase workflow** for efficient backtesting:
+
+**Phase 1 - Training** (one-time setup):
+```bash
+python train_models.py --commodity Coffee --train-frequency semiannually --models naive xgboost
+```
+- Trains N models on fixed training windows
+- Persists fitted models to `commodity.forecast.trained_models` table
+- Model storage: JSON (small models) or S3 (large models)
+
+**Phase 2 - Inference** (fast backfill):
+```bash
+python backfill_rolling_window.py --commodity Coffee --models naive xgboost
+```
+- Loads pre-trained models from database
+- Generates ~2,875 forecasts using 16 models (180x faster)
+- No retraining required
+
+**Performance Impact**: Semiannual training = ~16 trainings instead of ~2,875 (one per forecast date)
+
+### Model Implementation Pattern
+
+All models implement train/inference separation:
+
+```python
+def my_model_train(df_pandas, target='close', **params) -> dict:
+    """Train model and return fitted state."""
+    # Training logic
+    model = fit_model(df_pandas, target, **params)
+
+    return {
+        'fitted_model': model,
+        'last_date': df_pandas.index[-1],
+        'target': target,
+        'model_type': 'my_model',
+        # ... other metadata
+    }
+
+def my_model_predict(fitted_model_dict, horizon=14, **params) -> pd.DataFrame:
+    """Generate forecast using fitted model (no training)."""
+    model = fitted_model_dict['fitted_model']
+    # Inference logic
+    return forecast_df
+
+def my_model_forecast_with_metadata(df_pandas, commodity, fitted_model=None, **params) -> dict:
+    """Unified interface supporting both train+predict and inference-only."""
+    if fitted_model is None:
+        # Train mode
+        fitted_model = my_model_train(df_pandas, **params)
+
+    # Inference mode (always)
+    forecast_df = my_model_predict(fitted_model, **params)
+
+    return {
+        'forecast_df': forecast_df,
+        'fitted_model': fitted_model,  # Return for persistence
+        # ... metadata
+    }
+```
+
+**Updated Models**: naive, random_walk, arima, sarimax, xgboost, prophet
+
+### Adding New Models
+
+Register in `ground_truth/config/model_registry.py`:
 
 ```python
 BASELINE_MODELS = {
     'my_new_model': {
         'name': 'My Model',
-        'model_type': 'sarimax',  # or 'xgboost', 'prophet'
-        'exog_features': ['temp_c', 'vix', 'cop_usd'],
-        'model_params': {'order': (1, 1, 1)},
+        'function': my_model.my_model_forecast_with_metadata,
+        'params': {
+            'target': 'close',
+            'exog_features': ['temp_c', 'vix'],
+            'horizon': 14
+        },
         'description': 'My custom model'
     }
 }
 ```
 
-Model implementation should inherit from `BaseForecaster`:
-
-```python
-from ground_truth.core.base_forecaster import StatisticalForecaster
-
-class MyForecaster(StatisticalForecaster):
-    def fit(self, df, target_col='close', exog_features=None, **kwargs):
-        # Training logic
-        pass
-
-    def forecast(self, horizon=14, exog_future=None, **kwargs):
-        # Return dict with 'forecast_df', 'prediction_intervals', 'model_success'
-        pass
-```
+Implement following the train/predict pattern above.
 
 ## Key Features
 
