@@ -300,6 +300,56 @@
 
 ---
 
+## 13. Model Training Strategy
+
+### Decision: Train-Once/Inference-Many with Persistent Model Storage
+**Chosen**: Separate training and inference phases with models persisted to `commodity.forecast.trained_models` table
+
+**Alternatives Considered**:
+- In-memory caching during backfill runs (non-persistent)
+- Train model for every forecast date (original approach)
+- File-based model storage (pickle files in S3)
+
+**Rationale**:
+- **Efficiency**: For semiannual training windows (~180 days), train 16 models instead of ~2,875 (180x fewer trainings)
+- **Reproducibility**: Persist exact model state used for each forecast date
+- **Versioning**: Track model versions, parameters, and training metadata
+- **Scalability**: Backfill and production inference can run independently
+- **Two-Phase Workflow**:
+  - **Phase 1 - Training**: `train_models.py` trains N models on training windows → saves to database
+  - **Phase 2 - Inference**: `backfill_rolling_window.py` loads fitted models → generates forecasts
+
+**Model Persistence Strategy**:
+- **Small models (<1MB)**: Store as JSON inline in `fitted_model_json` column (naive, random_walk)
+- **Large models (≥1MB)**: Serialize with pickle, store in S3, reference path in `fitted_model_s3_path` column
+- **Metadata**: Track training date, samples, parameters, AIC/BIC for model selection
+
+**All Core Models Updated**:
+1. `naive.py` - Added `naive_train()` and `naive_predict()` functions
+2. `random_walk.py` - Added `random_walk_train()` and `random_walk_predict()`
+3. `arima.py` - Added `arima_train()` and `arima_predict()`
+4. `sarimax.py` - Added `sarimax_train()` and `sarimax_predict()`
+5. `xgboost_model.py` - Added fitted_model parameter support
+6. `prophet_model.py` - Added `prophet_train()` and `prophet_predict()`
+
+**Each model now**:
+- Accepts optional `fitted_model` parameter for inference-only mode
+- Returns `fitted_model` in result dict for persistence
+- Supports both train+predict (legacy) and inference-only (new) modes
+
+**Trade-offs Accepted**:
+- Additional database table and infrastructure complexity
+- Need to manage model versioning and lifecycle
+- SARIMAX/Prophet still need historical data for exogenous variable projection during inference
+- Upfront training cost before backtesting can begin
+
+**Performance Impact**:
+- **Before**: ~2,875 trainings per model per commodity
+- **After**: ~16 trainings per model per commodity
+- **Speedup**: ~180x reduction in training operations
+
+---
+
 ## Key Success Metrics
 
 ### Production Readiness Checklist

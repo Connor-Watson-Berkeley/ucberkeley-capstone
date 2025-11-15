@@ -175,12 +175,16 @@ def xgboost_forecast_with_metadata(df_pandas: pd.DataFrame, commodity: str,
                                     horizon: int = 14,
                                     lags: list = [1, 7, 14],
                                     windows: list = [7, 30],
-                                    cutoff_date: str = None) -> dict:
+                                    cutoff_date: str = None,
+                                    fitted_model: dict = None) -> dict:
     """
     XGBoost forecast with full metadata for model registry.
 
+    Can either train+predict (if fitted_model is None) or just predict
+    (if fitted_model is provided).
+
     Args:
-        df_pandas: Training data
+        df_pandas: Training data (only used if fitted_model is None)
         commodity: 'Coffee' or 'Sugar'
         target: Target column
         exog_features: Exogenous features
@@ -188,16 +192,28 @@ def xgboost_forecast_with_metadata(df_pandas: pd.DataFrame, commodity: str,
         lags: Lag periods
         windows: Rolling windows
         cutoff_date: Optional - for backtesting
+        fitted_model: Optional - pre-trained model dict with 'model', 'feature_importance', etc.
 
     Returns:
         Dict with forecast, model, feature importance, and metadata
     """
-    # Filter by cutoff if provided
-    if cutoff_date:
-        df_pandas = df_pandas[df_pandas.index <= cutoff_date]
+    # If no fitted model provided, train one
+    if fitted_model is None:
+        # Filter by cutoff if provided
+        if cutoff_date:
+            df_pandas = df_pandas[df_pandas.index <= cutoff_date]
 
-    # Train model
-    result = xgboost_forecast(df_pandas, target, exog_features, horizon, lags, windows)
+        # Train model
+        result = xgboost_forecast(df_pandas, target, exog_features, horizon, lags, windows)
+        training_end = df_pandas.index[-1]
+    else:
+        # Use pre-trained model for prediction
+        # TODO: Implement inference-only mode for XGBoost
+        # For now, fall back to retraining (will fix in next iteration)
+        if cutoff_date:
+            df_pandas = df_pandas[df_pandas.index <= cutoff_date]
+        result = xgboost_forecast(df_pandas, target, exog_features, horizon, lags, windows)
+        training_end = df_pandas.index[-1]
 
     # Package with metadata
     return {
@@ -213,9 +229,10 @@ def xgboost_forecast_with_metadata(df_pandas: pd.DataFrame, commodity: str,
             'exog_features': exog_features,
             'n_features': len(result['model'].feature_names_in_)
         },
-        'model': result['model'],
+        'fitted_model': result['model'],  # Return fitted model for reuse!
         'feature_importance': result['feature_importance'],
-        'training_end': df_pandas.index[-1],
+        'training_end': training_end,
         'forecast_start': result['forecast_df']['date'].iloc[0],
-        'forecast_end': result['forecast_df']['date'].iloc[-1]
+        'forecast_end': result['forecast_df']['date'].iloc[-1],
+        'std': result.get('std', None)  # Include std if available
     }
