@@ -43,6 +43,7 @@ dashboards/
 deprecated/
 project_overview/
 *.log
+quick_eval.py  # Local sanity check script (not for production)
 
 # Generated outputs
 production_forecasts/

@@ -1,12 +1,22 @@
 # Prioritized Backlog
 
-Last Updated: 2025-11-12
+Last Updated: 2025-11-18
 
 ## Priority 0: Critical Path (Blocking)
 
 ### Research Agent
 
-- (None currently)
+- [ ] **Complete Sugar weather data backfill (PARTIALLY FIXED)**
+  - **Status (2025-01-11 22:45)**:
+    - Market Data: ✅ Sugar has 5,470 rows (2015-2025) in landing table
+    - Weather Data: ❌ Sugar has only 380 rows (10 days) in landing table
+    - Unified Data: ❌ Sugar has 380 rows (blocked by missing weather)
+  - **Root Cause**: Weather Lambda never ran historical backfill for Sugar regions
+  - **Next Steps**:
+    1. Check weather Lambda logs / S3 for Sugar data
+    2. If failed: Try chunked yearly backfill (2015, 2016, ..., 2025)
+    3. Once weather data exists: Run `rebuild_all_layers.py`
+    4. Expected final result: ~140,000 Sugar rows in unified_data
 
 ### Trading Agent
 
@@ -16,7 +26,18 @@ Last Updated: 2025-11-12
 
 ## Priority 1: High Priority (Core Features)
 
-### Research Agent
+### Forecast Agent
+
+- [ ] **Build Databricks evaluation dashboard for model performance**
+  - Visualize forecast accuracy across 40 historical windows
+  - Compare models (SARIMAX, Prophet, XGBoost, ARIMA, Random Walk, TFT)
+  - Show MAE/RMSE/MAPE at 1-day, 7-day, 14-day horizons
+  - Display prediction interval calibration (95% coverage)
+
+- [ ] **Backfill forecast_metadata with performance metrics from 40 windows**
+  - Calculate MAE/RMSE/MAPE for each model × window
+  - Track training/inference timing data
+  - Store hardware info for reproducibility
 
 - [ ] **Train Temporal Fusion Transformer (TFT) models**
   - Why: State-of-the-art deep learning for multi-horizon forecasting
@@ -40,6 +61,24 @@ Last Updated: 2025-11-12
 ---
 
 ## Priority 2: Medium Priority (Infrastructure)
+
+### Forecast Agent
+
+- [ ] **Upload point_forecasts for 40 historical windows to Databricks**
+  - Currently only distributions table is populated
+  - Point forecasts needed for time-series charting
+  - ~2,100 rows (42 dates × 5 models × 14 days × 1 mean forecast)
+
+- [ ] **Extend pipeline to Sugar commodity (after data validation)**
+  - Validate Sugar data availability in commodity.silver tables
+  - Run backfill for Sugar: 40 windows × 5 models × 2,000 paths
+  - Update FORECAST_API_GUIDE.md with Sugar examples
+
+- [ ] **Design experiment tracking database**
+  - Track model experiments: config, performance, artifacts
+  - Enable pruning of poor-performing models from registry
+  - Maintain experiment history for presentation/thesis
+  - Goal: Show platform's experimentation & scale capabilities
 
 ### Research Agent
 
@@ -71,7 +110,10 @@ Last Updated: 2025-11-12
 
 ### Trading Agent
 
-- (Add medium priority tasks here)
+- [ ] **Build monitoring dashboard for pipeline data freshness**
+  - Track: latest forecast_start_date per model
+  - Alert if forecast > 24 hours old
+  - Show data quality metrics (null rates, coverage)
 
 ---
 
