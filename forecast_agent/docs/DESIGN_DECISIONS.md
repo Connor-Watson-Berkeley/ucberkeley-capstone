@@ -134,26 +134,49 @@
 
 ## 6. Probabilistic Forecasting Approach
 
-### Decision: Monte Carlo Simulation with Geometric Brownian Motion
-**Chosen**: 2,000 paths per model using GBM with model-specific volatility adjustments
+### Decision: Model-Based Monte Carlo Simulation (Updated Nov 2025)
+**Chosen**: 2,000 paths per model using model-specific stochastic simulation
 
 **Alternatives Considered**:
+- Simple Gaussian noise around point forecasts (original approach)
+- Geometric Brownian Motion (GBM) for all models
 - Analytical prediction intervals (e.g., from SARIMAX)
 - Quantile regression
 - Bootstrapped residuals
 - Larger path counts (5,000+)
 
 **Rationale**:
-- **Monte Carlo**: Generates full distribution for VaR/CVaR risk analysis
+- **Model-Based Simulation**: Each model uses its own stochastic process
+  - **SARIMA**: Uses `statsmodels.simulate()` to generate paths from the actual ARIMA process (respects autocorrelation, MA terms, seasonality)
+  - **XGBoost**: Uses Geometric Brownian Motion (GBM) with residual-based volatility estimation
+  - **Prophet**: Leverages built-in uncertainty intervals when available
+  - **Random Walk**: Proper random walk simulation with step-based noise
+  - **Naive**: Fallback to simple Gaussian noise
 - **2,000 Paths**: Balances statistical stability with storage/compute costs
-- **GBM**: Standard approach for financial price paths
-- **Model-Specific Volatility**: Prophet gets 1.0x, SARIMAX 0.9x, Random Walk 1.3x (reflects model confidence)
-- **Unified Format**: All models produce comparable distributions
+- **Centralized Module**: `utils/monte_carlo_simulation.py` provides consistent interface across all backfill scripts
+- **Spark-Optimized**: Broadcast variables + RDD.map() for parallel path generation in Databricks
+
+**Implementation Details**:
+```python
+# Example: SARIMA uses actual model simulation
+fitted_sarimax.simulate(
+    nsimulations=14,
+    repetitions=1,
+    initial_state=None  # Continues from training data
+)
+```
 
 **Trade-offs Accepted**:
-- GBM assumes log-normal returns (may not capture fat tails)
-- Residual-based volatility estimation vs analytical intervals
+- SARIMA simulation more computationally expensive than simple noise (but more accurate)
+- Fallback to Gaussian noise for unknown model types
 - 2,000 paths → storage cost: 2,000 × 14 days × 5 models × 40 windows = 5.6M values per commodity
+
+**Updated Files** (Nov 2025):
+- `utils/monte_carlo_simulation.py` - New centralized simulation module
+- `backfill_rolling_window.py` - Updated to use model-based simulation
+- `backfill_spark.py` - Spark-parallelized with broadcast variables + RDD.map()
+- `backfill_optimized.py` - In-memory optimization with model-based paths
+- `backfill_daily_forecasts.py` - Graceful fallback for models without fitted objects
 
 ---
 
@@ -365,6 +388,79 @@
 - **7-Day Ahead**: MAE < 15 cents/lb
 - **14-Day Ahead**: MAE < 20 cents/lb
 - **Stability**: <30% variance in MAE across 40 backtest windows
+
+---
+
+## 14. Model Evaluation Pipeline
+
+### Decision: Post-Processing Evaluation with Comprehensive Metrics
+**Chosen**: Separate `evaluate_historical_forecasts.py` script that calculates both point and probabilistic metrics
+
+**Alternatives Considered**:
+- Inline evaluation during backfill (calculate metrics while generating forecasts)
+- Manual evaluation via Jupyter notebooks
+- Real-time evaluation dashboard without persistent metrics
+
+**Rationale**:
+- **Separation of Concerns**: Forecast generation and evaluation are independent processes
+- **Flexibility**: Can re-evaluate with new metrics without regenerating forecasts
+- **Performance**: Backfill scripts focus on forecast generation; evaluation runs separately
+- **Metrics Storage**: Extends existing `commodity.forecast.forecast_metadata` table with:
+  - **Point Metrics** (existing): MAE, RMSE, MAPE at 1d/7d/14d horizons
+  - **Probabilistic Metrics** (new): CRPS, calibration, coverage (80%/95%), sharpness at 1d/7d/14d horizons
+
+**Implementation**:
+```python
+# evaluate_historical_forecasts.py usage:
+python evaluate_historical_forecasts.py --commodity Coffee
+
+# Calculates metrics for all historical forecasts in commodity.forecast.distributions
+# Updates commodity.forecast.forecast_metadata with performance metrics
+```
+
+**Probabilistic Metrics Explained**:
+1. **CRPS (Continuous Ranked Probability Score)**: Measures quality of full forecast distribution (lower is better)
+2. **Calibration Score**: Deviation from ideal calibration (0 = perfect, measures reliability)
+3. **Coverage Rate**: Fraction of actuals within prediction interval (target: 0.80 for 80% interval)
+4. **Sharpness**: Average width of prediction interval (lower = more confident, but must maintain coverage)
+
+**Schema Extension**:
+```sql
+-- sql/add_probabilistic_metrics_to_metadata.sql
+ALTER TABLE commodity.forecast.forecast_metadata
+ADD COLUMNS (
+    crps_1d, crps_7d, crps_14d,
+    calibration_score_1d, calibration_score_7d, calibration_score_14d,
+    coverage_80_1d, coverage_80_7d, coverage_80_14d,
+    coverage_95_1d, coverage_95_7d, coverage_95_14d,
+    sharpness_80_1d, sharpness_80_7d, sharpness_80_14d,
+    sharpness_95_1d, sharpness_95_7d, sharpness_95_14d
+);
+```
+
+**Dashboard Integration**:
+- **14 SQL Queries** in `sql/dashboard_queries.sql` for Databricks SQL dashboards
+- Visualizations: Model comparison, performance over time, calibration monitoring, CRPS vs MAE tradeoffs
+- Recommended layout: 4-row dashboard with model ranking, metrics trends, and quality checks
+
+**Trade-offs Accepted**:
+- Additional step in workflow (backfill → evaluate → dashboard)
+- Metrics recalculation required if evaluation logic changes
+- Extended `forecast_metadata` schema (18 new columns)
+
+**Actuals Storage Convention**:
+- Ground truth actuals stored using **hybrid approach**: `model_version='actuals'` (primary) + `is_actuals=TRUE` (legacy)
+- Backfilled from `commodity.silver.unified_data` using `backfill_actuals.py`
+- Handles multiple regions per date (uses `FIRST(close)` to deduplicate)
+- See README.md "Actuals Storage Convention" section for detailed usage
+
+**Updated Files** (Nov 2025):
+- `backfill_actuals.py` - Backfill ground truth from unified_data with hybrid convention
+- `evaluate_historical_forecasts.py` - Main evaluation script with probabilistic metrics (uses `model_version='actuals'`)
+- `quick_eval.py` - Development evaluation script (gitignored, uses `model_version='actuals'`)
+- `sql/add_probabilistic_metrics_to_metadata.sql` - Schema migration
+- `sql/dashboard_queries.sql` - 14 dashboard queries for model comparison
+- `ground_truth/core/evaluator.py` - Existing point metrics (MAE, RMSE, MAPE, directional accuracy)
 
 ---
 

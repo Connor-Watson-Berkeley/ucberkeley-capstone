@@ -22,6 +22,39 @@
 # MAGIC - Autoscaling: Enabled
 # MAGIC
 # MAGIC **⚠️ Important**: Uses pretrained models from `commodity.forecast.trained_models` table. Ensure models are trained first using `train_models.py`.
+# MAGIC
+# MAGIC ## Managing via Databricks REST API
+# MAGIC
+# MAGIC You can manage repos and jobs programmatically using the Databricks REST API:
+# MAGIC
+# MAGIC **Update Repository**:
+# MAGIC ```bash
+# MAGIC # Set environment variables
+# MAGIC export DATABRICKS_HOST="https://<workspace>.cloud.databricks.com"
+# MAGIC export DATABRICKS_TOKEN="<your-token>"
+# MAGIC
+# MAGIC # Update repo to latest main branch
+# MAGIC curl -X PATCH "${DATABRICKS_HOST}/api/2.0/repos/<repo-id>" \
+# MAGIC   -H "Authorization: Bearer ${DATABRICKS_TOKEN}" \
+# MAGIC   -H "Content-Type: application/json" \
+# MAGIC   -d '{"branch": "main"}'
+# MAGIC ```
+# MAGIC
+# MAGIC **Check Job Status**:
+# MAGIC ```bash
+# MAGIC curl "${DATABRICKS_HOST}/api/2.0/jobs/runs/get?run_id=<run-id>" \
+# MAGIC   -H "Authorization: Bearer ${DATABRICKS_TOKEN}"
+# MAGIC ```
+# MAGIC
+# MAGIC **Run Job**:
+# MAGIC ```bash
+# MAGIC curl -X POST "${DATABRICKS_HOST}/api/2.0/jobs/run-now" \
+# MAGIC   -H "Authorization: Bearer ${DATABRICKS_TOKEN}" \
+# MAGIC   -H "Content-Type: application/json" \
+# MAGIC   -d '{"job_id": <job-id>}'
+# MAGIC ```
+# MAGIC
+# MAGIC For authentication, generate a personal access token in Databricks Settings → User Settings → Access Tokens.
 
 # COMMAND ----------
 

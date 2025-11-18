@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from databricks import sql
 from ground_truth.config.model_registry import BASELINE_MODELS
 from ground_truth.storage.production_writer import ProductionForecastWriter
+from utils.monte_carlo_simulation import generate_monte_carlo_paths
 
 
 def get_existing_forecast_dates(connection, commodity: str, model_version: str) -> List[date]:
@@ -90,7 +91,7 @@ def get_date_range_to_backfill(
     # Get earliest available data date
     cursor.execute(f"""
         SELECT MIN(date) as earliest_date
-        FROM commodity.bronze.market
+        FROM commodity.silver.unified_data
         WHERE commodity = '{commodity}'
     """)
     earliest_data_date = cursor.fetchall()[0][0]
@@ -148,7 +149,6 @@ def load_training_data(
     cursor = connection.cursor()
 
     # Load market data with unified_data features
-    # TODO: Update this query to use commodity.silver.unified_data once weather_v2 is integrated
     query = f"""
         SELECT
             date,
@@ -156,8 +156,13 @@ def load_training_data(
             open,
             high,
             low,
-            volume
-        FROM commodity.bronze.market
+            volume,
+            temp_mean_c,
+            humidity_mean_pct,
+            precipitation_mm,
+            vix,
+            cop_usd
+        FROM commodity.silver.unified_data
         WHERE commodity = '{commodity}'
           AND date <= '{cutoff_date}'
         ORDER BY date
@@ -210,26 +215,39 @@ def generate_forecast_for_date(
 
         forecast_df = result['forecast_df']
 
-        # Generate Monte Carlo paths for uncertainty quantification
-        # Use forecast std if available, otherwise estimate from historical volatility
-        if 'std' in result:
-            forecast_std = result['std']
-        else:
-            # Estimate std from recent price changes
-            returns = training_df['close'].pct_change().dropna()
-            daily_std = returns.std()
-            forecast_std = training_df['close'].iloc[-1] * daily_std
+        # Generate Monte Carlo paths using model-based simulation
+        # If the result contains a fitted model, use it for proper stochastic simulation
+        # Otherwise fall back to simple Gaussian noise
 
-        # Generate paths
-        paths = []
-        for path_id in range(1, n_paths + 1):
-            # Add random noise to point forecast
-            noise = np.random.normal(0, forecast_std, len(forecast_df))
-            path_forecast = forecast_df['forecast'].values + noise
-            paths.append({
-                'path_id': path_id,
-                'values': path_forecast.tolist()
-            })
+        if 'fitted_model' in result and result['fitted_model'] is not None:
+            # Use model-based simulation (e.g., SARIMA's simulate() method)
+            paths = generate_monte_carlo_paths(
+                fitted_model=result['fitted_model'],
+                forecast_df=forecast_df,
+                n_paths=n_paths,
+                horizon=forecast_horizon,
+                training_df=training_df
+            )
+        else:
+            # Fallback: Simple Gaussian noise for models without fitted_model
+            if 'std' in result:
+                forecast_std = result['std']
+            else:
+                # Estimate std from recent price changes
+                returns = training_df['close'].pct_change().dropna()
+                daily_std = returns.std()
+                forecast_std = training_df['close'].iloc[-1] * daily_std
+
+            # Generate paths with Gaussian noise
+            paths = []
+            for path_id in range(1, n_paths + 1):
+                # Add random noise to point forecast
+                noise = np.random.normal(0, forecast_std, len(forecast_df))
+                path_forecast = forecast_df['forecast'].values + noise
+                paths.append({
+                    'path_id': path_id,
+                    'values': path_forecast.tolist()
+                })
 
         return {
             'success': True,
