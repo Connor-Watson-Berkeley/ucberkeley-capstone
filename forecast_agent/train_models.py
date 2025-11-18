@@ -41,7 +41,7 @@ MODEL_TRAIN_FUNCTIONS = {
     'sarimax_auto': sarimax.sarimax_train,
     'sarimax_auto_weather': sarimax.sarimax_train,
     'sarimax_auto_weather_seasonal': sarimax.sarimax_train,
-    'xgboost': None,  # TODO: xgboost doesn't have train/predict separation yet
+    'xgboost': xgboost_model.xgboost_train,
     'prophet': prophet_model.prophet_train,
     # Add more models as they are refactored
 }
@@ -96,7 +96,7 @@ def load_training_data(connection, commodity: str, cutoff_date: date) -> pd.Data
     """Load all data up to cutoff_date for training from unified_data table."""
     cursor = connection.cursor()
 
-    # Load from commodity.silver.unified_data (includes weather, sentiment, etc.)
+    # Load from commodity.silver.unified_data (includes weather, fx rates, etc.)
     query = f"""
         SELECT
             date,
@@ -105,13 +105,11 @@ def load_training_data(connection, commodity: str, cutoff_date: date) -> pd.Data
             high,
             low,
             volume,
-            temp_c,
-            humidity_pct,
+            temp_mean_c,
+            humidity_mean_pct,
             precipitation_mm,
-            vix_close,
-            cop_usd,
-            gdelt_sentiment_avg,
-            gdelt_volume_millions
+            vix,
+            cop_usd
         FROM commodity.silver.unified_data
         WHERE commodity = '{commodity}'
           AND date <= '{cutoff_date}'
@@ -211,6 +209,17 @@ def train_and_save_model(
                 exog_features=exog_features,
                 weekly_seasonality=weekly_seasonality,
                 yearly_seasonality=yearly_seasonality
+            )
+        elif model_key == 'xgboost':
+            exog_features = model_params.get('exog_features', None)
+            lags = model_params.get('lags', [1, 7, 14])
+            windows = model_params.get('windows', [7, 30])
+            fitted_model_dict = train_fn(
+                training_df,
+                target=target,
+                exog_features=exog_features,
+                lags=lags,
+                windows=windows
             )
         else:
             print(f"     ❌ Unknown model type: {model_key}")

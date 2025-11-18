@@ -72,7 +72,7 @@ BASELINE_MODELS = {
         'function': sarimax.sarimax_forecast_with_metadata,
         'params': {
             'target': 'close',
-            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'exog_features': ['temp_mean_c', 'humidity_mean_pct', 'precipitation_mm'],
             'covariate_projection_method': 'persist',  # Roll forward last values
             'order': None,  # Auto-fit
             'horizon': 14
@@ -85,7 +85,7 @@ BASELINE_MODELS = {
         'function': sarimax.sarimax_forecast_with_metadata,
         'params': {
             'target': 'close',
-            'exog_features': ['temp_c', 'humidity_pct', 'precipitation_mm'],
+            'exog_features': ['temp_mean_c', 'humidity_mean_pct', 'precipitation_mm'],
             'covariate_projection_method': 'seasonal',  # Historical averages
             'order': None,  # Auto-fit
             'horizon': 14
