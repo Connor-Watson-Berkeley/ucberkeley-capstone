@@ -72,10 +72,62 @@ Data pipeline (create_gdelt_unified_data.py) located in ../research_agent/
 - Trading day indicators
 
 ### Output
-Three tables in `commodity.silver` schema:
+Three tables in `commodity.forecast` schema:
 - `point_forecasts` - 14-day forecasts with prediction intervals and actuals
-- `distributions` - 2,000 Monte Carlo paths for risk analysis (path_id=0 is actuals)
-- `forecast_actuals` - Realized prices for backtesting
+- `distributions` - 2,000 Monte Carlo paths for risk analysis (actuals stored as `model_version='actuals'`)
+- `forecast_metadata` - Performance metrics for model comparison and backtesting
+
+### Actuals Storage Convention (Hybrid Approach)
+
+**Ground truth actuals** are stored in the `distributions` table using a **hybrid convention** for backwards compatibility:
+
+**Primary Convention** (use this for new code):
+- `model_version = 'actuals'` - Actuals are a special "model" representing perfect hindsight
+- Query pattern: `WHERE model_version = 'actuals'`
+
+**Legacy Convention** (kept for compatibility):
+- `is_actuals = TRUE` - Boolean flag marking actuals rows
+- `path_id = 1` - Single ground truth path (not path_id=0)
+
+**Why Hybrid?**
+- **Cleaner Semantics**: "actuals" is just another model (the perfect one) rather than a special flag
+- **Backwards Compatibility**: Existing queries using `is_actuals=TRUE` continue to work
+- **Migration Path**: New code uses `model_version='actuals'`, old code gradually transitions
+
+**Example: Loading Actuals for Evaluation**
+```python
+# New convention (recommended)
+query = """
+SELECT day_1, day_2, ..., day_14
+FROM commodity.forecast.distributions
+WHERE commodity = 'Coffee'
+  AND model_version = 'actuals'
+  AND forecast_start_date = '2024-01-15'
+"""
+
+# Legacy convention (still works)
+query = """
+SELECT day_1, day_2, ..., day_14
+FROM commodity.forecast.distributions
+WHERE commodity = 'Coffee'
+  AND is_actuals = TRUE
+  AND forecast_start_date = '2024-01-15'
+"""
+```
+
+**Backfilling Actuals**:
+```bash
+# Populate actuals from unified_data (handles multiple regions per date)
+python backfill_actuals.py --commodity Coffee --start-date 2018-01-01 --end-date 2025-11-17
+python backfill_actuals.py --commodity Sugar --start-date 2018-01-01 --end-date 2025-11-17
+
+# Output:
+# - Inserts rows with model_version='actuals' and is_actuals=TRUE
+# - Sources data from commodity.silver.unified_data (first close price per date)
+# - Skips existing actuals (idempotent)
+```
+
+**Evaluation Scripts**: All evaluation scripts (`evaluate_historical_forecasts.py`, `quick_eval.py`) use the `model_version='actuals'` convention.
 
 ## Production Model
 
@@ -184,9 +236,10 @@ All models inherit from `BaseForecaster` providing:
 
 ### Schema Enhancements
 - `actual_close` column in point_forecasts (NULL for future dates)
-- `is_actuals` flag in distributions (True for path_id=0)
+- **Actuals Storage**: Hybrid convention with `model_version='actuals'` (primary) and `is_actuals=TRUE` (legacy)
 - `has_data_leakage` flag for data quality validation
-- Actuals stored alongside forecasts for backtesting
+- Ground truth stored in distributions table for consistent backtesting
+- See "Actuals Storage Convention" section above for usage details
 
 ### Data Validators
 - `UnifiedDataValidator` - Checks input data for duplicates, nulls, data quality

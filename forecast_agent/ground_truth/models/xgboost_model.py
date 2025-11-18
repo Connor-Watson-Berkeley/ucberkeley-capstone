@@ -51,6 +51,151 @@ def create_features(df: pd.DataFrame, target: str = 'close',
     return df_feat
 
 
+def xgboost_train(df_pandas: pd.DataFrame, target: str = 'close',
+                  exog_features: list = None, lags: list = [1, 7, 14],
+                  windows: list = [7, 30], params: dict = None) -> dict:
+    """
+    Train XGBoost model and return fitted state (Phase 1: Training).
+
+    Args:
+        df_pandas: Training data with DatetimeIndex
+        target: Target column
+        exog_features: Exogenous features
+        lags: Lag periods for feature engineering
+        windows: Rolling window sizes
+        params: XGBoost parameters
+
+    Returns:
+        Dict with fitted model, feature columns, training metadata
+    """
+    # Default XGBoost params
+    if params is None:
+        params = {
+            'objective': 'reg:squarederror',
+            'max_depth': 5,
+            'learning_rate': 0.1,
+            'n_estimators': 100,
+            'subsample': 0.8,
+            'colsample_bytree': 0.8
+        }
+
+    # Create features
+    df_feat = create_features(df_pandas, target, lags, windows)
+
+    # Prepare features
+    feature_cols = [col for col in df_feat.columns if col != target and col != 'commodity']
+
+    # Add exogenous features if provided
+    if exog_features:
+        feature_cols = [col for col in feature_cols if col in df_feat.columns or col in exog_features]
+
+    X = df_feat[feature_cols]
+    y = df_feat[target]
+
+    # Train model
+    model = xgb.XGBRegressor(**params)
+    model.fit(X, y)
+
+    # Calculate residuals for confidence intervals
+    predictions = model.predict(X)
+    residuals = y - predictions
+    std_residual = residuals.std()
+
+    return {
+        'model': model,
+        'feature_cols': feature_cols,
+        'std_residual': std_residual,
+        'last_value': df_pandas[target].iloc[-1],
+        'last_date': df_pandas.index[-1],
+        'target': target,
+        'lags': lags,
+        'windows': windows,
+        'exog_features': exog_features,
+        'model_type': 'xgboost',
+        'training_samples': len(df_pandas)
+    }
+
+
+def xgboost_predict(fitted_model_dict: dict, df_pandas: pd.DataFrame,
+                    horizon: int = 14) -> pd.DataFrame:
+    """
+    Generate forecast using fitted model (Phase 2: Inference only, no training).
+
+    Args:
+        fitted_model_dict: Fitted model from xgboost_train()
+        df_pandas: Recent data for feature creation
+        horizon: Forecast days
+
+    Returns:
+        DataFrame with forecast, confidence intervals
+    """
+    model = fitted_model_dict['model']
+    feature_cols = fitted_model_dict['feature_cols']
+    std_residual = fitted_model_dict['std_residual']
+    target = fitted_model_dict['target']
+    lags = fitted_model_dict['lags']
+    windows = fitted_model_dict['windows']
+    exog_features = fitted_model_dict.get('exog_features', None)
+
+    # Multi-step forecasting with recursive strategy
+    last_date = df_pandas.index[-1]
+    future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=horizon, freq='D')
+
+    forecasts = []
+    lower_95_list = []
+    upper_95_list = []
+    lower_80_list = []
+    upper_80_list = []
+
+    forecast_df_temp = df_pandas.copy()
+
+    for i, future_date in enumerate(future_dates):
+        # Create features for this forecast step
+        df_temp = create_features(forecast_df_temp, target, lags, windows)
+
+        if len(df_temp) == 0:
+            break
+
+        # Get last row features
+        X_forecast = df_temp[feature_cols].iloc[-1:].copy()
+
+        # Add date features for future date
+        X_forecast['day_of_week'] = future_date.dayofweek
+        X_forecast['month'] = future_date.month
+        X_forecast['day_of_year'] = future_date.dayofyear
+
+        # Predict
+        pred = model.predict(X_forecast)[0]
+        forecasts.append(pred)
+
+        # Confidence intervals (widen over horizon)
+        horizon_factor = np.sqrt(i + 1)
+        lower_95_list.append(pred - 1.96 * std_residual * horizon_factor)
+        upper_95_list.append(pred + 1.96 * std_residual * horizon_factor)
+        lower_80_list.append(pred - 1.28 * std_residual * horizon_factor)
+        upper_80_list.append(pred + 1.28 * std_residual * horizon_factor)
+
+        # Update temp df with prediction for next iteration
+        new_row = pd.DataFrame({target: [pred]}, index=[future_date])
+        if exog_features:
+            # Use last known exog values (simplified)
+            for feat in exog_features:
+                if feat in df_pandas.columns:
+                    new_row[feat] = df_pandas[feat].iloc[-1]
+
+        forecast_df_temp = pd.concat([forecast_df_temp, new_row])
+
+    # Build forecast DataFrame
+    return pd.DataFrame({
+        'date': future_dates[:len(forecasts)],
+        'forecast': forecasts,
+        'lower_80': lower_80_list,
+        'upper_80': upper_80_list,
+        'lower_95': lower_95_list,
+        'upper_95': upper_95_list
+    })
+
+
 def xgboost_forecast(df_pandas: pd.DataFrame, target: str = 'close',
                      exog_features: list = None, horizon: int = 14,
                      lags: list = [1, 7, 14], windows: list = [7, 30],
@@ -204,20 +349,28 @@ def xgboost_forecast_with_metadata(df_pandas: pd.DataFrame, commodity: str,
             df_pandas = df_pandas[df_pandas.index <= cutoff_date]
 
         # Train model
-        result = xgboost_forecast(df_pandas, target, exog_features, horizon, lags, windows)
+        fitted_model_dict = xgboost_train(df_pandas, target, exog_features, lags, windows)
         training_end = df_pandas.index[-1]
     else:
-        # Use pre-trained model for prediction
-        # TODO: Implement inference-only mode for XGBoost
-        # For now, fall back to retraining (will fix in next iteration)
+        # Use pre-trained model for prediction (inference only)
+        fitted_model_dict = fitted_model
         if cutoff_date:
             df_pandas = df_pandas[df_pandas.index <= cutoff_date]
-        result = xgboost_forecast(df_pandas, target, exog_features, horizon, lags, windows)
-        training_end = df_pandas.index[-1]
+        training_end = fitted_model_dict['last_date']
+
+    # Generate forecast using fitted model
+    forecast_df = xgboost_predict(fitted_model_dict, df_pandas, horizon)
+
+    # Get feature importance from model
+    model = fitted_model_dict['model']
+    feature_importance = pd.DataFrame({
+        'feature': model.feature_names_in_,
+        'importance': model.feature_importances_
+    }).sort_values('importance', ascending=False)
 
     # Package with metadata
     return {
-        'forecast_df': result['forecast_df'],
+        'forecast_df': forecast_df,
         'model_name': 'XGBoost',
         'commodity': commodity,
         'parameters': {
@@ -227,12 +380,12 @@ def xgboost_forecast_with_metadata(df_pandas: pd.DataFrame, commodity: str,
             'lags': lags,
             'windows': windows,
             'exog_features': exog_features,
-            'n_features': len(result['model'].feature_names_in_)
+            'n_features': len(model.feature_names_in_)
         },
-        'fitted_model': result['model'],  # Return fitted model for reuse!
-        'feature_importance': result['feature_importance'],
+        'fitted_model': fitted_model_dict,  # Return fitted model dict for persistence!
+        'feature_importance': feature_importance,
         'training_end': training_end,
-        'forecast_start': result['forecast_df']['date'].iloc[0],
-        'forecast_end': result['forecast_df']['date'].iloc[-1],
-        'std': result.get('std', None)  # Include std if available
+        'forecast_start': forecast_df['date'].iloc[0],
+        'forecast_end': forecast_df['date'].iloc[-1],
+        'std': fitted_model_dict.get('std_residual', None)
     }

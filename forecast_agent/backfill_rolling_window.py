@@ -33,6 +33,7 @@ from databricks import sql
 from databricks.sql.exc import RequestError
 from ground_truth.config.model_registry import BASELINE_MODELS
 from utils.model_persistence import load_model
+from utils.monte_carlo_simulation import generate_monte_carlo_paths
 
 
 def get_training_dates(
@@ -109,9 +110,28 @@ def reconnect_if_needed(connection, databricks_host, databricks_token, databrick
         return new_connection
 
 
-def load_training_data(connection, commodity: str, cutoff_date: date) -> pd.DataFrame:
-    """Load all data up to cutoff_date for training."""
+def load_training_data(connection, commodity: str, cutoff_date: date, lookback_days: Optional[int] = None) -> pd.DataFrame:
+    """
+    Load data up to cutoff_date for training or inference.
+
+    Args:
+        connection: Databricks SQL connection
+        commodity: 'Coffee' or 'Sugar'
+        cutoff_date: Latest date to include
+        lookback_days: If specified, only load last N days (for inference with pretrained models).
+                       If None, load all historical data (for training).
+
+    Returns:
+        DataFrame with market data
+    """
     cursor = connection.cursor()
+
+    # For inference with pretrained models, only load recent data
+    if lookback_days is not None:
+        start_date = cutoff_date - timedelta(days=lookback_days)
+        date_filter = f"AND date > '{start_date}' AND date <= '{cutoff_date}'"
+    else:
+        date_filter = f"AND date <= '{cutoff_date}'"
 
     query = f"""
         SELECT
@@ -120,10 +140,15 @@ def load_training_data(connection, commodity: str, cutoff_date: date) -> pd.Data
             open,
             high,
             low,
-            volume
-        FROM commodity.bronze.market
+            volume,
+            temp_mean_c,
+            humidity_mean_pct,
+            precipitation_mm,
+            vix,
+            cop_usd
+        FROM commodity.silver.unified_data
         WHERE commodity = '{commodity}'
-          AND date <= '{cutoff_date}'
+          {date_filter}
         ORDER BY date
     """
 
@@ -188,22 +213,35 @@ def generate_forecast_for_date(
             result = model_fn(df_pandas=training_df, commodity=commodity, **model_params)
         forecast_df = result['forecast_df']
 
-        # Generate Monte Carlo paths
-        if 'std' in result:
-            forecast_std = result['std']
+        # Generate Monte Carlo paths using model-based simulation
+        # For SARIMA: Simulates from actual ARIMA process
+        # For other models: Uses appropriate stochastic process (GBM, random walk, etc.)
+        if fitted_model is not None:
+            # Use fitted model for model-based simulation
+            paths = generate_monte_carlo_paths(
+                fitted_model=fitted_model,
+                forecast_df=forecast_df,
+                n_paths=n_paths,
+                horizon=forecast_horizon,
+                training_df=training_df
+            )
         else:
-            returns = training_df['close'].pct_change().dropna()
-            daily_std = returns.std()
-            forecast_std = training_df['close'].iloc[-1] * daily_std
+            # Fallback to simple Gaussian noise if no fitted model
+            if 'std' in result:
+                forecast_std = result['std']
+            else:
+                returns = training_df['close'].pct_change().dropna()
+                daily_std = returns.std()
+                forecast_std = training_df['close'].iloc[-1] * daily_std
 
-        paths = []
-        for path_id in range(1, n_paths + 1):
-            noise = np.random.normal(0, forecast_std, len(forecast_df))
-            path_forecast = forecast_df['forecast'].values + noise
-            paths.append({
-                'path_id': path_id,
-                'values': path_forecast.tolist()
-            })
+            paths = []
+            for path_id in range(1, n_paths + 1):
+                noise = np.random.normal(0, forecast_std, len(forecast_df))
+                path_forecast = forecast_df['forecast'].values + noise
+                paths.append({
+                    'path_id': path_id,
+                    'values': path_forecast.tolist()
+                })
 
         return {
             'success': True,
@@ -516,10 +554,6 @@ def backfill_rolling_window(
             # Check connection and reconnect if needed
             connection = reconnect_if_needed(connection, databricks_host, databricks_token, databricks_http_path)
 
-            # Load training data ONCE per window
-            training_df = load_training_data(connection, commodity, cutoff_date)
-            print(f"     Training samples: {len(training_df)} days")
-
             # Try to load pretrained model if use_pretrained is True
             fitted_model_dict = None
             if use_pretrained:
@@ -545,6 +579,13 @@ def backfill_rolling_window(
                 except Exception as e:
                     print(f"     ⚠️  Error loading pretrained model: {e}")
                     use_pretrained = False  # Fall back to training
+
+            # Load training data
+            # - For inference with pretrained models: only load last 90 days (fast)
+            # - For training: load all historical data (slow but necessary)
+            lookback_days = 90 if use_pretrained else None
+            training_df = load_training_data(connection, commodity, cutoff_date, lookback_days=lookback_days)
+            print(f"     Training samples: {len(training_df)} days")
 
             # Train model if not using pretrained
             if not use_pretrained:
@@ -653,8 +694,8 @@ def main():
                        help='First training date (YYYY-MM-DD)')
     parser.add_argument('--end-date', type=lambda s: datetime.strptime(s, '%Y-%m-%d').date(),
                        help='Last forecast date (YYYY-MM-DD)')
-    parser.add_argument('--use-pretrained', action='store_true',
-                       help='Load pretrained models from database instead of training (requires train_models.py to be run first)')
+    parser.add_argument('--train-all-forecasts', action='store_true',
+                       help='Train a new model for each forecast date (slow, ~180x slower than default). Default behavior uses pretrained models.')
     parser.add_argument('--model-version-tag', default='v1.0',
                        help='Model version tag for pretrained models (default: v1.0)')
 
@@ -666,7 +707,7 @@ def main():
         train_frequency=args.train_frequency,
         start_date=args.start_date,
         end_date=args.end_date,
-        use_pretrained=args.use_pretrained,
+        use_pretrained=not args.train_all_forecasts,
         model_version_tag=args.model_version_tag
     )
 
