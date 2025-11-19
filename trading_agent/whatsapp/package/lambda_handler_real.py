@@ -13,6 +13,38 @@ from typing import Dict, Optional, Tuple, List, Any
 import numpy as np
 import requests
 
+# Import trading strategies
+from trading_strategies import (
+    ExpectedValueStrategy,
+    analyze_forecast as analyze_forecast_distribution,
+    calculate_7day_trend as calc_trend
+)
+
+# Allowed commodities for SQL injection protection
+ALLOWED_COMMODITIES = {'Coffee', 'Sugar', 'Cocoa', 'Wheat'}
+
+# Price conversion factor (market data is in cents)
+PRICE_CENTS_TO_DOLLARS = 0.01
+
+# Trading strategy parameters from backtesting notebook 03_strategy_implementations.ipynb
+# NOTE: These are PERCENTAGES (not decimals). The strategy divides by 100 when calculating costs.
+COMMODITY_CONFIGS = {
+    'Coffee': {
+        'storage_cost_pct_per_day': 0.025,  # 0.025% per day (notebook value)
+        'transaction_cost_pct': 0.25,        # 0.25% per transaction (notebook value)
+        'min_ev_improvement': 50.0,          # $50/ton minimum gain
+        'baseline_batch': 0.15,              # 15% baseline batch size
+        'inventory_default': 50.0            # Default inventory (tons)
+    },
+    'Sugar': {
+        'storage_cost_pct_per_day': 0.025,  # 0.025% per day (same as Coffee in notebook)
+        'transaction_cost_pct': 0.25,        # 0.25% per transaction
+        'min_ev_improvement': 50.0,          # $50/ton minimum gain
+        'baseline_batch': 0.15,              # 15% baseline batch size
+        'inventory_default': 50.0            # Default inventory (tons)
+    }
+}
+
 
 def execute_databricks_query(sql_query: str, timeout: int = 60) -> List[List[Any]]:
     """
@@ -33,8 +65,9 @@ def execute_databricks_query(sql_query: str, timeout: int = 60) -> List[List[Any
     token = os.environ['DATABRICKS_TOKEN']
     warehouse_id = os.environ['DATABRICKS_HTTP_PATH'].split('/')[-1]
 
-    # Prepare request
-    url = f"https://{host}/api/2.0/sql/statements/"
+    # Prepare request URL (remove https:// if already present in host)
+    clean_host = host.replace('https://', '').replace('http://', '')
+    url = f"https://{clean_host}/api/2.0/sql/statements/"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -58,7 +91,7 @@ def execute_databricks_query(sql_query: str, timeout: int = 60) -> List[List[Any
         raise Exception(f"No statement_id in response: {result}")
 
     # Poll for completion
-    status_url = f"https://{host}/api/2.0/sql/statements/{statement_id}"
+    status_url = f"https://{clean_host}/api/2.0/sql/statements/{statement_id}"
     start_time = time.time()
 
     while time.time() - start_time < timeout:
@@ -81,7 +114,7 @@ def execute_databricks_query(sql_query: str, timeout: int = 60) -> List[List[Any
 
             # Get first chunk (for most queries, there's only one chunk)
             chunk_index = chunks[0].get("chunk_index", 0)
-            result_url = f"https://{host}/api/2.0/sql/statements/{statement_id}/result/chunks/{chunk_index}"
+            result_url = f"https://{clean_host}/api/2.0/sql/statements/{statement_id}/result/chunks/{chunk_index}"
 
             result_response = requests.get(result_url, headers=headers)
             result_response.raise_for_status()
@@ -106,7 +139,17 @@ def execute_databricks_query(sql_query: str, timeout: int = 60) -> List[List[Any
 
 
 def get_latest_market_price(commodity: str) -> Tuple[float, date]:
-    """Get the most recent closing price for a commodity."""
+    """
+    Get the most recent closing price for a commodity.
+
+    Returns:
+        (price_in_dollars, date) tuple
+    Note: Market data is stored in cents, so we convert to dollars
+    """
+    # Validate commodity to prevent SQL injection
+    if commodity not in ALLOWED_COMMODITIES:
+        raise ValueError(f"Invalid commodity: {commodity}. Allowed: {ALLOWED_COMMODITIES}")
+
     query = f"""
         SELECT close, date
         FROM commodity.bronze.market
@@ -115,16 +158,30 @@ def get_latest_market_price(commodity: str) -> Tuple[float, date]:
         LIMIT 1
     """
 
-    rows = execute_databricks_query(query)
+    try:
+        rows = execute_databricks_query(query)
 
-    if rows:
-        return float(rows[0][0]), rows[0][1]
-    else:
-        raise ValueError(f"No market data found for {commodity}")
+        if rows:
+            # Convert from cents to dollars
+            price_cents = float(rows[0][0])
+            price_dollars = price_cents * PRICE_CENTS_TO_DOLLARS
+            date_value = rows[0][1]
+
+            print(f"Market price: {price_cents} cents = ${price_dollars:.2f} (date: {date_value})")
+            return price_dollars, date_value
+        else:
+            raise ValueError(f"No market data found for {commodity}")
+    except Exception as e:
+        print(f"Error fetching market price for {commodity}: {str(e)}")
+        raise
 
 
 def calculate_7day_trend(commodity: str, current_date: date) -> float:
     """Calculate 7-day price trend percentage."""
+    # Validate commodity
+    if commodity not in ALLOWED_COMMODITIES:
+        raise ValueError(f"Invalid commodity: {commodity}")
+
     query = f"""
         SELECT close
         FROM commodity.bronze.market
@@ -134,94 +191,133 @@ def calculate_7day_trend(commodity: str, current_date: date) -> float:
         LIMIT 8
     """
 
-    rows = execute_databricks_query(query)
+    try:
+        rows = execute_databricks_query(query)
 
-    if len(rows) >= 2:
-        current_price = float(rows[0][0])
-        week_ago_price = float(rows[-1][0])
-        trend_pct = ((current_price - week_ago_price) / week_ago_price) * 100
-        return trend_pct
-    else:
+        if len(rows) >= 2:
+            current_price = float(rows[0][0])
+            week_ago_price = float(rows[-1][0])
+            trend_pct = ((current_price - week_ago_price) / week_ago_price) * 100
+            print(f"7-day trend for {commodity}: {trend_pct:+.1f}% ({len(rows)} data points)")
+            return trend_pct
+        else:
+            print(f"Insufficient data for 7-day trend (only {len(rows)} data points)")
+            return 0.0
+    except Exception as e:
+        print(f"Error calculating 7-day trend for {commodity}: {str(e)}")
         return 0.0
 
 
 def get_best_available_model(
     commodity: str,
-    max_age_days: int = 30,
+    max_age_days: int = 10,
     metric: str = 'mae_14d'
 ) -> Optional[str]:
     """
     Get best performing model that has recent forecasts available.
 
+    For 14-day forecasts, max_age_days should be small enough that the forecasts
+    are still valid. A forecast from 14+ days ago has completely expired.
+    Default is 10 days to capture forecasts that still have future coverage.
+
     Steps:
-    1. Find models with forecasts within max_age_days
-    2. Of those, select the best by performance metric
+    1. Find all models with forecasts within max_age_days
+    2. Among those, pick the one with best performance metrics
+    3. If no metrics available, pick the one with most recent forecast date
 
     Args:
         commodity: 'Coffee' or 'Sugar'
-        max_age_days: Maximum age of forecasts to consider
+        max_age_days: Maximum age of forecasts to consider (default 10 for 14-day forecasts)
         metric: Performance metric to optimize (mae_14d, rmse_14d, crps_14d)
 
     Returns:
         model_version string, or None if no forecasts available
     """
+    # Validate commodity
+    if commodity not in ALLOWED_COMMODITIES:
+        raise ValueError(f"Invalid commodity: {commodity}")
+
     cutoff_date = date.today() - timedelta(days=max_age_days)
 
-    # Step 1: Find available models with recent forecasts
-    # Use subquery to find models with recent data, then select best by metric
-    query = f"""
-        SELECT
-            m.model_version,
-            AVG(m.{metric}) as avg_metric
-        FROM commodity.forecast.forecast_metadata m
-        WHERE m.commodity = '{commodity}'
-          AND m.{metric} IS NOT NULL
-          AND m.model_success = TRUE
-          AND m.model_version IN (
-              SELECT DISTINCT model_version
-              FROM commodity.forecast.distributions
-              WHERE commodity = '{commodity}'
-                AND is_actuals = FALSE
-                AND forecast_start_date >= '{cutoff_date}'
-          )
-        GROUP BY m.model_version
-        ORDER BY avg_metric ASC
-        LIMIT 1
+    # Step 1: Find all models with recent forecasts
+    available_models_query = f"""
+        SELECT DISTINCT model_version
+        FROM commodity.forecast.distributions
+        WHERE commodity = '{commodity}'
+          AND is_actuals = FALSE
+          AND forecast_start_date >= '{cutoff_date}'
     """
 
     try:
-        rows = execute_databricks_query(query)
-        if rows and len(rows) > 0:
-            best_model = rows[0][0]
-            metric_value = rows[0][1]
-            print(f"Best available model: {best_model} ({metric}={metric_value:.4f})")
-            return best_model
-        else:
-            print(f"No models with both forecasts and metadata available for {commodity}")
-            # Fallback: just get any available model
-            fallback_query = f"""
-                SELECT DISTINCT model_version
-                FROM commodity.forecast.distributions
-                WHERE commodity = '{commodity}'
-                  AND is_actuals = FALSE
-                  AND forecast_start_date >= '{cutoff_date}'
-                ORDER BY forecast_start_date DESC
-                LIMIT 1
-            """
-            fallback_rows = execute_databricks_query(fallback_query)
-            if fallback_rows and len(fallback_rows) > 0:
-                fallback_model = fallback_rows[0][0]
-                print(f"Using fallback model (no metadata): {fallback_model}")
-                return fallback_model
+        available_models = execute_databricks_query(available_models_query)
+
+        if not available_models or len(available_models) == 0:
+            print(f"No models with recent forecasts for {commodity}")
             return None
+
+        model_list = [row[0] for row in available_models]
+        print(f"Found {len(model_list)} models with recent forecasts: {model_list}")
+
+        # Step 2: Among available models, find the one with best metrics
+        models_str = "', '".join(model_list)
+        metrics_query = f"""
+            SELECT
+                m.model_version,
+                AVG(m.{metric}) as avg_metric
+            FROM commodity.forecast.forecast_metadata m
+            WHERE m.commodity = '{commodity}'
+              AND m.model_version IN ('{models_str}')
+              AND m.{metric} IS NOT NULL
+              AND m.model_success = TRUE
+            GROUP BY m.model_version
+            ORDER BY avg_metric ASC
+            LIMIT 1
+        """
+
+        metric_rows = execute_databricks_query(metrics_query)
+
+        if metric_rows and len(metric_rows) > 0:
+            best_model = metric_rows[0][0]
+            metric_value = float(metric_rows[0][1]) if metric_rows[0][1] is not None else None
+            if metric_value is not None:
+                print(f"Best model by {metric}: {best_model} (avg={metric_value:.4f})")
+            else:
+                print(f"Best model by {metric}: {best_model} (no metric value)")
+            return best_model
+
+        # Step 3: No metrics available, pick model with most recent forecast
+        print(f"No performance metrics available, selecting by most recent forecast date")
+        recent_query = f"""
+            SELECT model_version, MAX(forecast_start_date) as latest_date
+            FROM commodity.forecast.distributions
+            WHERE commodity = '{commodity}'
+              AND model_version IN ('{models_str}')
+              AND is_actuals = FALSE
+              AND forecast_start_date >= '{cutoff_date}'
+            GROUP BY model_version
+            ORDER BY latest_date DESC
+            LIMIT 1
+        """
+
+        recent_rows = execute_databricks_query(recent_query)
+        if recent_rows and len(recent_rows) > 0:
+            recent_model = recent_rows[0][0]
+            recent_date = recent_rows[0][1]
+            print(f"Using most recent model: {recent_model} (latest forecast: {recent_date})")
+            return recent_model
+
+        return None
+
     except Exception as e:
         print(f"Error selecting best model: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
 def get_available_forecast(
     commodity: str,
-    max_age_days: int = 30,
+    max_age_days: int = 10,
     preferred_model: Optional[str] = None
 ) -> Optional[Dict]:
     """
@@ -231,8 +327,12 @@ def get_available_forecast(
         Dict with:
             - model_version: str
             - forecast_date: date
-            - prediction_matrix: np.ndarray (2000, 14)
+            - prediction_matrix: np.ndarray (N, 14) where N is number of paths
     """
+    # Validate commodity
+    if commodity not in ALLOWED_COMMODITIES:
+        raise ValueError(f"Invalid commodity: {commodity}")
+
     cutoff_date = date.today() - timedelta(days=max_age_days)
 
     # If no preferred model specified, find the best available one
@@ -267,110 +367,100 @@ def get_available_forecast(
     model_version = rows[0][0]
     forecast_date = rows[0][1]
 
-    # Build prediction matrix (2000 paths × 14 days)
+    # Build prediction matrix (N paths × 14 days)
     prediction_matrix = []
     for row in rows:
         if row[0] != model_version or row[1] != forecast_date:
             break  # Different model/date
 
         # Extract day_1 through day_14
-        path = [float(row[i]) for i in range(2, 16)]
+        # Note: Prices in forecast are in CENTS (same as market data), convert to dollars
+        path = [float(row[i]) * PRICE_CENTS_TO_DOLLARS for i in range(2, 16)]
         prediction_matrix.append(path)
 
-    print(f"Loaded {len(prediction_matrix)} paths for {model_version} (forecast date: {forecast_date})")
+    num_paths = len(prediction_matrix)
+    print(f"Loaded {num_paths} paths for {model_version} (forecast date: {forecast_date})")
+
+    if num_paths == 0:
+        print(f"ERROR: No forecast paths loaded for {commodity}/{model_version}")
+        return None
+
+    prediction_array = np.array(prediction_matrix)
+    print(f"Prediction matrix shape: {prediction_array.shape}")
 
     return {
         'model_version': model_version,
         'forecast_date': forecast_date,
-        'prediction_matrix': np.array(prediction_matrix)
+        'prediction_matrix': prediction_array
     }
 
 
-def calculate_expected_value_recommendation(
+def get_trading_recommendation(
+    commodity: str,
     current_price: float,
     prediction_matrix: np.ndarray,
     inventory_tons: float = 50.0,
-    storage_cost_pct_per_day: float = 0.00025,
-    transaction_cost_pct: float = 0.0025
+    days_held: int = 0
 ) -> Dict:
     """
-    Calculate Expected Value strategy recommendation.
+    Get trading recommendation using proven strategies from backtesting.
 
-    This is the strategy that won in backtesting (+3.4% for Coffee).
+    Uses ExpectedValueStrategy which achieved +3.4% returns for Coffee in backtesting.
+    Integrates with full trading algorithm infrastructure from daily_recommendations.py.
 
     Args:
-        current_price: Current market price
-        prediction_matrix: (2000, 14) array of Monte Carlo paths
-        inventory_tons: Inventory size
-        storage_cost_pct_per_day: Storage cost as % of value per day (0.025%)
-        transaction_cost_pct: Transaction cost as % of sale value (0.25%)
+        commodity: 'Coffee' or 'Sugar'
+        current_price: Current market price ($/kg)
+        prediction_matrix: Monte Carlo predictions (N paths × 14 days)
+        inventory_tons: Current inventory size
+        days_held: Days since harvest/purchase
 
     Returns:
-        Dict with:
+        Dict with complete recommendation including:
             - action: 'HOLD' or 'SELL'
-            - expected_gain_per_ton: float
-            - total_expected_gain: float
-            - optimal_sale_day: int (1-14) if action is HOLD
-            - reasoning: str
+            - optimal_sale_day: Best day to sell
+            - expected_gain_per_ton: Expected gain per ton
+            - total_expected_gain: Total expected gain for inventory
+            - sell_now_value: Value if sell today
+            - wait_value: Value if wait for optimal day
+            - forecast_range: (min, max) price range
+            - best_sale_window: (start_day, end_day) for best 3-day window
     """
-    # Calculate median forecasts for each day
-    median_forecasts = np.median(prediction_matrix, axis=0)
+    # Get commodity-specific parameters (from backtesting results)
+    config = COMMODITY_CONFIGS.get(commodity, COMMODITY_CONFIGS['Coffee'])
 
-    # Calculate expected value of selling on each future day
-    best_ev = -np.inf
-    best_day = 0
-
-    for day in range(14):
-        expected_price = median_forecasts[day]
-        cumulative_storage_cost = current_price * storage_cost_pct_per_day * (day + 1)
-        transaction_cost = expected_price * transaction_cost_pct
-        ev = expected_price - cumulative_storage_cost - transaction_cost
-
-        if ev > best_ev:
-            best_ev = ev
-            best_day = day + 1
-
-    # Compare with selling immediately
-    immediate_sale_value = current_price - (current_price * transaction_cost_pct)
-    expected_gain_per_ton = best_ev - immediate_sale_value
-
-    # Decision threshold: $50/ton minimum gain
-    min_gain_threshold = 50.0
-
-    if expected_gain_per_ton > min_gain_threshold:
-        action = 'HOLD'
-        reasoning = f"Expected to gain ${expected_gain_per_ton:.0f}/ton by selling on day {best_day}"
-        total_expected_gain = expected_gain_per_ton * inventory_tons
-    else:
-        action = 'SELL'
-        reasoning = "Immediate sale recommended (expected gain too small)"
-        best_day = 0
-        total_expected_gain = 0.0
-
-    # Calculate forecast range (10th-90th percentile)
-    forecast_range = (
-        float(np.percentile(prediction_matrix, 10)),
-        float(np.percentile(prediction_matrix, 90))
+    # Initialize strategy with commodity-specific parameters (from backtesting)
+    strategy = ExpectedValueStrategy(
+        storage_cost_pct_per_day=config['storage_cost_pct_per_day'],
+        transaction_cost_pct=config['transaction_cost_pct'],
+        min_ev_improvement=config['min_ev_improvement'],
+        baseline_batch=config['baseline_batch']
     )
 
-    # Find best 3-day window (highest median prices)
-    window_size = 3
-    best_window_start = 0
-    best_window_median = 0
-    for i in range(14 - window_size + 1):
-        window_median = np.median(median_forecasts[i:i+window_size])
-        if window_median > best_window_median:
-            best_window_median = window_median
-            best_window_start = i + 1
+    # Get strategy decision
+    decision = strategy.decide(
+        current_price=current_price,
+        prediction_matrix=prediction_matrix,
+        inventory=inventory_tons,
+        days_held=days_held
+    )
 
+    # Analyze forecast distribution
+    forecast_analysis = analyze_forecast_distribution(prediction_matrix, current_price)
+
+    # Combine strategy decision with forecast analysis
     return {
-        'action': action,
-        'expected_gain_per_ton': round(expected_gain_per_ton, 2),
-        'total_expected_gain': round(total_expected_gain, 2),
-        'optimal_sale_day': best_day,
-        'reasoning': reasoning,
-        'forecast_range': forecast_range,
-        'best_sale_window': (best_window_start, best_window_start + window_size - 1)
+        'action': decision['action'],
+        'amount_to_sell': decision['amount'],
+        'optimal_sale_day': decision['optimal_day'],
+        'expected_gain_per_ton': decision['expected_gain_per_ton'],
+        'total_expected_gain': decision['total_expected_gain'],
+        'reasoning': decision['reasoning'],
+        'sell_now_value': decision['sell_now_value'],
+        'wait_value': decision['wait_value'],
+        'forecast_range': forecast_analysis['price_range'],
+        'best_sale_window': forecast_analysis['best_window'],
+        'best_window_price': forecast_analysis['best_window_price']
     }
 
 
@@ -383,27 +473,35 @@ def format_whatsapp_message(
     strategy_decision: Dict,
     inventory_tons: float = 50.0
 ) -> str:
-    """Format trading recommendation as WhatsApp message."""
+    """
+    Format trading recommendation as WhatsApp message.
 
-    # Trend emoji
+    Format matches specification from Whatsapp demo.pdf
+    """
+    from datetime import datetime, timedelta
+
+    # Commodity emoji
+    commodity_emoji = "☕" if commodity == "Coffee" else "🍬"
+
+    # Format date
+    today = datetime.now()
+    date_str = today.strftime("%b %d, %Y")
+
+    # Trend arrow and sign
     if trend_7d > 0:
-        trend_emoji = "📈"
+        trend_arrow = "↑"
         trend_sign = "+"
     else:
-        trend_emoji = "📉"
+        trend_arrow = "↓"
         trend_sign = ""
 
-    # Action emoji and formatting
-    if strategy_decision['action'] == 'HOLD':
-        action_emoji = "✋"
-        action_text = f"*{action_emoji} HOLD*"
-    else:
-        action_emoji = "💰"
-        action_text = f"*{action_emoji} SELL NOW*"
+    # Convert price to $/ton (current price is $/kg, multiply by 1000)
+    price_per_ton = current_price * 1000
 
-    # Forecast range
+    # Forecast range in $/ton
     forecast_range = strategy_decision['forecast_range']
-    forecast_range_str = f"${forecast_range[0]:.2f} - ${forecast_range[1]:.2f}"
+    forecast_min_ton = forecast_range[0] * 1000
+    forecast_max_ton = forecast_range[1] * 1000
 
     # Best sale window
     window = strategy_decision['best_sale_window']
@@ -414,36 +512,56 @@ def format_whatsapp_message(
 
     # Expected gain
     total_gain = strategy_decision['total_expected_gain']
+    expected_gain_per_ton = strategy_decision['expected_gain_per_ton']
 
-    # Build message
-    message = f"""────────────────────────────────────────
-📊 *Current Market*
-Price: ${current_price:.2f}/kg
-7-Day Trend: {trend_emoji} {trend_sign}{trend_7d:.1f}%
+    # Calculate sell today value (per ton)
+    immediate_sale_per_ton = price_per_ton * inventory_tons
 
-🔮 *14-Day Forecast*
-Range: {forecast_range_str}
-Best Sale Window: {window_str}
+    # Calculate wait for window value (per ton)
+    if strategy_decision['action'] == 'HOLD':
+        best_price_estimate = (forecast_min_ton + forecast_max_ton) / 2
+        wait_value = best_price_estimate * inventory_tons
+    else:
+        wait_value = immediate_sale_per_ton
 
-📦 *Inventory*
-Stock: {int(inventory_tons)} tons
-Hold Duration: {hold_duration} days
+    # Build message header
+    message = f"""{commodity_emoji} *{commodity.upper()} MARKET UPDATE*
 
-💡 *Recommendation*
-{action_text}
-Expected Gain: ${total_gain:,.0f}
+_{date_str}_
+
+*CURRENT MARKET*
+📊 Today: ${price_per_ton:,.0f}/ton
+{trend_arrow} 7-day trend: {trend_sign}{trend_7d:.1f}%
+
+*FORECAST (14 days)*
+🔮 Expected: ${forecast_min_ton:,.0f}-${forecast_max_ton:,.0f}/ton
+📍 Best sale window: {window_str}
+
+*YOUR INVENTORY*
+📦 Stock: {int(inventory_tons)} tons
+⏱ Held: {hold_duration} days
+
 """
 
+    # Recommendation section
     if strategy_decision['action'] == 'HOLD':
-        message += f"Sell on: Day {hold_duration}\n"
-    else:
-        message += f"Rationale: {strategy_decision['reasoning']}\n"
+        message += f"""✅ *RECOMMENDATION*
 
-    message += f"""
-_Model: {forecast['model_version']}_
-_Strategy: Expected Value (+3.4% proven)_
-_Forecast Date: {forecast['forecast_date']}_
-────────────────────────────────────────"""
+✅ *HOLD - Wait for better prices*
+Expected gain: ${total_gain:,.0f}
+Wait for forecast window: ${wait_value:,.0f}
+Sell today: ${immediate_sale_per_ton:,.0f}"""
+    else:
+        message += f"""✅ *RECOMMENDATION*
+
+✅ *SELL NOW*
+Current market favorable
+Sell today: ${immediate_sale_per_ton:,.0f}
+Expected gain if wait: ${expected_gain_per_ton * inventory_tons:,.0f}"""
+
+    # Next update time (6 AM tomorrow)
+    tomorrow = today + timedelta(days=1)
+    message += f"\n\n_Next update: Tomorrow 6 AM_"
 
     return message
 
@@ -457,22 +575,42 @@ def generate_recommendation_from_databricks(commodity: str) -> Dict:
             - whatsapp_message: str
             - metadata: dict
     """
+    print(f"\n{'='*60}")
+    print(f"Generating recommendation for {commodity} from Databricks")
+    print(f"{'='*60}")
+
     # Get current market data
+    print("\n[1/4] Fetching current market data...")
     current_price, price_date = get_latest_market_price(commodity)
+    print(f"✓ Current price: ${current_price:.2f} (as of {price_date})")
+
+    print("\n[2/4] Calculating 7-day trend...")
     trend_7d = calculate_7day_trend(commodity, price_date)
+    print(f"✓ 7-day trend: {trend_7d:+.1f}%")
 
     # Get forecast
-    forecast = get_available_forecast(commodity, max_age_days=7)
+    print("\n[3/4] Fetching forecast data...")
+    forecast = get_available_forecast(commodity)  # Uses default max_age_days=10
 
     if not forecast:
         raise ValueError(f"No recent forecast available for {commodity}")
 
-    # Calculate recommendation using Expected Value strategy
-    strategy_decision = calculate_expected_value_recommendation(
+    print(f"✓ Using model: {forecast['model_version']}")
+    print(f"✓ Forecast date: {forecast['forecast_date']}")
+    print(f"✓ Paths loaded: {forecast['prediction_matrix'].shape[0]}")
+
+    # Calculate recommendation using trading algorithm (Expected Value strategy)
+    print("\n[4/4] Calculating trading recommendation...")
+    strategy_decision = get_trading_recommendation(
+        commodity=commodity,
         current_price=current_price,
         prediction_matrix=forecast['prediction_matrix'],
-        inventory_tons=50.0
+        inventory_tons=50.0,
+        days_held=0  # TODO: Track actual hold duration per user
     )
+    print(f"✓ Decision: {strategy_decision['action']}")
+    print(f"✓ Expected gain: ${strategy_decision['total_expected_gain']:,.2f}")
+    print(f"✓ Strategy: ExpectedValue (proven +3.4% for Coffee in backtesting)")
 
     # Format message
     whatsapp_message = format_whatsapp_message(
@@ -484,6 +622,10 @@ def generate_recommendation_from_databricks(commodity: str) -> Dict:
         strategy_decision=strategy_decision,
         inventory_tons=50.0
     )
+
+    print(f"\n{'='*60}")
+    print("✓ Recommendation generated successfully")
+    print(f"{'='*60}\n")
 
     return {
         'whatsapp_message': whatsapp_message,
@@ -501,63 +643,74 @@ def generate_recommendation_from_databricks(commodity: str) -> Dict:
 def get_mock_recommendation(commodity='Coffee'):
     """
     Fallback mock recommendation if Databricks unavailable.
+
+    Format matches specification from Whatsapp demo.pdf
     """
+    from datetime import datetime
+
+    today = datetime.now()
+    date_str = today.strftime("%b %d, %Y")
+
     if commodity == 'Coffee':
         return {
-            'whatsapp_message': """────────────────────────────────────────
-📊 *Current Market*
-Price: $2.15/kg
-7-Day Trend: 📈 +2.3%
+            'whatsapp_message': f"""☕ *COFFEE MARKET UPDATE*
 
-🔮 *14-Day Forecast*
-Range: $2.08 - $2.28
-Best Sale Window: Days 9-11
+_{date_str}_
 
-📦 *Inventory*
-Stock: 50 tons
-Hold Duration: 10 days
+*CURRENT MARKET*
+📊 Today: $7,780/ton
+↑ 7-day trend: +3.2%
 
-💡 *Recommendation*
-*✋ HOLD*
-Expected Gain: $6,250
-Sell on: Day 10
+*FORECAST (14 days)*
+🔮 Expected: $8,400-$9,000/ton
+📍 Best sale window: Days 8-10
 
-_Model: sarimax_auto_weather_v1_
-_Strategy: Expected Value (+3.4% proven)_
-_Forecast Date: 2025-01-18_
-────────────────────────────────────────""",
+*YOUR INVENTORY*
+📦 Stock: 50 tons
+⏱ Held: 45 days
+
+✅ *RECOMMENDATION*
+
+✅ *HOLD - Wait for better prices*
+Expected gain: $5,000
+Wait for forecast window: $425,000
+Sell today: $389,000
+
+_Next update: Tomorrow 6 AM_""",
             'metadata': {
                 'commodity': 'Coffee',
                 'model': 'sarimax_auto_weather_v1',
                 'strategy': 'ExpectedValue',
                 'action': 'HOLD',
-                'expected_gain': 6250
+                'expected_gain': 5000
             }
         }
     elif commodity == 'Sugar':
         return {
-            'whatsapp_message': """────────────────────────────────────────
-📊 *Current Market*
-Price: $0.18/kg
-7-Day Trend: 📉 -0.8%
+            'whatsapp_message': f"""🍬 *SUGAR MARKET UPDATE*
 
-🔮 *14-Day Forecast*
-Range: $0.17 - $0.19
-Best Sale Window: Days 3-5
+_{date_str}_
 
-📦 *Inventory*
-Stock: 50 tons
-Hold Duration: 0 days
+*CURRENT MARKET*
+📊 Today: $180/ton
+↓ 7-day trend: -0.8%
 
-💡 *Recommendation*
-*💰 SELL NOW*
-Expected Gain: $0
-Rationale: Low volatility commodity
+*FORECAST (14 days)*
+🔮 Expected: $170-$190/ton
+📍 Best sale window: Days 3-5
 
-_Model: prophet_v1_
-_Strategy: Consensus (prediction-based)_
-_Forecast Date: 2025-01-18_
-────────────────────────────────────────""",
+*YOUR INVENTORY*
+📦 Stock: 50 tons
+⏱ Held: 0 days
+
+✅ *RECOMMENDATION*
+
+✅ *SELL NOW*
+Current market favorable
+Sell today: $9,000
+Expected gain if wait: $0
+
+_Next update: Tomorrow 6 AM_""",
             'metadata': {
                 'commodity': 'Sugar',
                 'model': 'prophet_v1',
