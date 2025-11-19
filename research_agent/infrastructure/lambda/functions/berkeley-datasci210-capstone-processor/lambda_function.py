@@ -26,7 +26,7 @@ dynamodb = boto3.resource('dynamodb')
 S3_BUCKET = 'groundtruth-capstone'
 S3_RAW_PREFIX = 'landing/gdelt/raw/'
 S3_FILTERED_PREFIX = 'landing/gdelt/filtered/'
-TRACKING_TABLE = 'gdelt-file-tracking'
+TRACKING_TABLE = 'groundtruth-capstone-file-tracking'
 
 # Commodity-specific filters
 CORE_THEMES = {
@@ -78,7 +78,8 @@ def lambda_handler(event, context):
         if mode == 'backfill':
             start_date = datetime.strptime(event['start_date'], '%Y-%m-%d')
             end_date = datetime.strptime(event['end_date'], '%Y-%m-%d')
-            result = process_historical_backfill(start_date, end_date)
+            offset = event.get('offset', 0)  # Support resuming from specific offset
+            result = process_historical_backfill(start_date, end_date, offset)
         else:
             result = process_incremental_update()
         
@@ -96,28 +97,28 @@ def lambda_handler(event, context):
 
 def process_incremental_update() -> Dict:
     """
-    Process the latest GDELT files (last 15 minutes or last day)
-    Uses lastupdate.txt to find new files
+    Process all GDELT files from the previous day (96 files)
+    Runs daily at 2 AM UTC to collect all 15-minute batches from yesterday
     """
     logger.info("Starting incremental update")
-    
-    # Get list of recent files from GDELT
-    lastupdate_url = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
-    response = requests.get(lastupdate_url, timeout=30)
-    response.raise_for_status()
-    
+
+    # Calculate yesterday's date (since Lambda runs at 2 AM UTC)
+    yesterday = datetime.utcnow() - timedelta(days=1)
+    logger.info(f"Processing all files for date: {yesterday.strftime('%Y-%m-%d')}")
+
+    # Generate all 96 file URLs for yesterday (15-minute intervals)
+    file_urls = generate_file_urls(yesterday, yesterday)
+    logger.info(f"Generated {len(file_urls)} file URLs for yesterday")
+
     files_to_process = []
-    for line in response.text.strip().split('\n'):
-        parts = line.split()
-        if len(parts) >= 3 and 'gkg.csv' in parts[2]:
-            file_url = parts[2]
-            file_size = int(parts[0])
-            files_to_process.append({
-                'url': file_url,
-                'size': file_size,
-                'name': file_url.split('/')[-1]
-            })
-    
+    for url in file_urls:
+        file_name = url.split('/')[-1]
+        files_to_process.append({
+            'url': url,
+            'size': 0,  # Size unknown, will be fetched
+            'name': file_name
+        })
+
     logger.info(f"Found {len(files_to_process)} GKG files to process")
     
     # Process each file
@@ -147,56 +148,66 @@ def process_incremental_update() -> Dict:
     return result
 
 
-def process_historical_backfill(start_date: datetime, end_date: datetime) -> Dict:
+def process_historical_backfill(start_date: datetime, end_date: datetime, offset: int = 0) -> Dict:
     """
     Process historical GDELT files for a date range
     Generates 15-minute interval URLs for the date range
+    Supports resuming from a specific offset for large date ranges
     """
-    logger.info(f"Starting historical backfill from {start_date} to {end_date}")
-    
+    logger.info(f"Starting historical backfill from {start_date} to {end_date}, offset={offset}")
+
     file_urls = generate_file_urls(start_date, end_date)
-    logger.info(f"Generated {len(file_urls)} file URLs to process")
-    
+    logger.info(f"Generated {len(file_urls)} file URLs total, processing from offset {offset}")
+
     processed_count = 0
     filtered_records = 0
     total_records = 0
     skipped_count = 0
-    
+
     # Process files (Lambda has 15min timeout, so limit batch size)
     max_files_per_invocation = 50
-    for i, url in enumerate(file_urls[:max_files_per_invocation]):
+    end_index = min(offset + max_files_per_invocation, len(file_urls))
+    batch_urls = file_urls[offset:end_index]
+
+    logger.info(f"Processing batch: files {offset} to {end_index-1} ({len(batch_urls)} files)")
+
+    for i, url in enumerate(batch_urls):
         file_name = url.split('/')[-1]
-        
+
         if is_file_processed(file_name):
             skipped_count += 1
             continue
-        
+
         try:
             stats = download_and_filter_file(url, file_name)
             processed_count += 1
             filtered_records += stats['filtered']
             total_records += stats['total']
             mark_file_processed(file_name)
-            
-            if i % 10 == 0:
-                logger.info(f"Progress: {i}/{len(file_urls)} files")
-                
+
+            if (i + 1) % 10 == 0:
+                logger.info(f"Progress: {offset + i + 1}/{len(file_urls)} files")
+
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 logger.warning(f"File not found: {file_name}")
                 mark_file_processed(file_name)  # Mark as processed to skip in future
             else:
                 raise
-    
+
+    next_offset = end_index
+    remaining_files = len(file_urls) - next_offset
+
     result = {
         'processed_files': processed_count,
         'skipped_files': skipped_count,
         'total_records': total_records,
         'filtered_records': filtered_records,
         'filter_rate': f"{(filtered_records/total_records*100):.2f}%" if total_records > 0 else "0%",
-        'remaining_files': len(file_urls) - max_files_per_invocation
+        'next_offset': next_offset,
+        'remaining_files': remaining_files
     }
-    
+
     logger.info(f"Backfill batch complete: {result}")
     return result
 
@@ -235,7 +246,7 @@ def download_and_filter_file(url: str, file_name: str) -> Dict:
     
     with zipfile.ZipFile(zip_data, 'r') as zip_ref:
         csv_filename = zip_ref.namelist()[0]
-        csv_data = zip_ref.read(csv_filename).decode('utf-8')
+        csv_data = zip_ref.read(csv_filename).decode('utf-8', errors='replace')
     
     # Parse CSV and filter
     csv_reader = csv.reader(StringIO(csv_data), delimiter='\t')
@@ -256,12 +267,13 @@ def download_and_filter_file(url: str, file_name: str) -> Dict:
         if should_include_record(gkg_record):
             filtered_rows.append(gkg_record)
     
-    # Save raw file to S3 for custom processing
-    s3.put_object(
-        Bucket=S3_BUCKET,
-        Key=f"{S3_RAW_PREFIX}{file_name}",
-        Body=response.content
-    )
+    # Save raw file to S3 (optional, for audit trail)
+    # Disabled to save storage costs - raw files are ~5MB vs filtered ~70KB
+    # s3.put_object(
+    #     Bucket=S3_BUCKET,
+    #     Key=f"{S3_RAW_PREFIX}{file_name}",
+    #     Body=response.content
+    # )
     
     # Save filtered data as JSON Lines (easier for Databricks)
     if filtered_rows:
