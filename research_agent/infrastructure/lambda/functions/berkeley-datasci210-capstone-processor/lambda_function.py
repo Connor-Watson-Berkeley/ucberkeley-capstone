@@ -13,20 +13,32 @@ import csv
 from datetime import datetime, timedelta
 from typing import List, Dict, Set
 import logging
+import sys
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# Increase CSV field size limit to handle large GDELT fields (default is 131072 bytes)
+# Some GDELT fields can exceed 1MB, so set to max allowed value
+csv.field_size_limit(sys.maxsize)
+
 # Initialize AWS clients
 s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
+sqs = boto3.client('sqs')
 
 # Configuration
 S3_BUCKET = 'groundtruth-capstone'
 S3_RAW_PREFIX = 'landing/gdelt/raw/'
 S3_FILTERED_PREFIX = 'landing/gdelt/filtered/'
 TRACKING_TABLE = 'groundtruth-capstone-file-tracking'
+SQS_QUEUE_URL = 'https://sqs.us-west-2.amazonaws.com/534150427458/groundtruth-gdelt-backfill-queue'
+
+# Incremental mode: Check for missing files from this many days back
+# This makes the system self-healing - automatically catches any gaps
+# Use a reasonable lookback window to avoid DynamoDB rate limits
+INCREMENTAL_LOOKBACK_DAYS = 90  # Check last 90 days for gaps
 
 # Commodity-specific filters
 CORE_THEMES = {
@@ -63,30 +75,36 @@ ALL_KEYWORDS = COMMODITY_KEYWORDS | DRIVER_KEYWORDS
 
 def lambda_handler(event, context):
     """
-    Main Lambda handler - routes to historical backfill or incremental update
-    
+    Main Lambda handler - routes to initialization, backfill, or incremental update
+
     Event structure:
     {
-        "mode": "incremental" | "backfill",
-        "start_date": "2023-09-30",  # For backfill only
-        "end_date": "2023-10-01"      # For backfill only
+        "mode": "incremental" | "initialize_backfill" | "backfill",
+        "lookback_start_date": "2021-01-01",  # Optional for incremental (defaults to 90 days)
+        "start_date": "2023-09-30",           # For initialize_backfill only
+        "end_date": "2023-10-01"              # For initialize_backfill only
     }
     """
     mode = event.get('mode', 'incremental')
-    
+
     try:
-        if mode == 'backfill':
+        if mode == 'initialize_backfill':
             start_date = datetime.strptime(event['start_date'], '%Y-%m-%d')
             end_date = datetime.strptime(event['end_date'], '%Y-%m-%d')
-            offset = event.get('offset', 0)  # Support resuming from specific offset
-            result = process_historical_backfill(start_date, end_date, offset)
+            return initialize_backfill(start_date, end_date)
+        elif mode == 'backfill':
+            result = process_historical_backfill()
+            return {
+                'statusCode': 200,
+                'body': json.dumps(result)
+            }
         else:
-            result = process_incremental_update()
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps(result)
-        }
+            lookback_start_date = event.get('lookback_start_date')
+            result = process_incremental_update(lookback_start_date)
+            return {
+                'statusCode': 200,
+                'body': json.dumps(result)
+            }
     except Exception as e:
         logger.error(f"Error in lambda_handler: {str(e)}", exc_info=True)
         return {
@@ -95,88 +113,256 @@ def lambda_handler(event, context):
         }
 
 
-def process_incremental_update() -> Dict:
+def process_incremental_update(lookback_start_date: str = None) -> Dict:
     """
-    Process all GDELT files from the previous day (96 files)
-    Runs daily at 2 AM UTC to collect all 15-minute batches from yesterday
-    """
-    logger.info("Starting incremental update")
+    Self-healing incremental update: Check for missing files from start_date to yesterday
+    This automatically catches any gaps from failures, missed runs, or other issues
+    Processes up to 50 files per run (due to Lambda timeout), prioritizing recent files
 
-    # Calculate yesterday's date (since Lambda runs at 2 AM UTC)
+    Args:
+        lookback_start_date: Optional start date (YYYY-MM-DD). If not provided, uses INCREMENTAL_LOOKBACK_DAYS
+    """
+    logger.info("Starting incremental update (self-healing mode)")
+
+    # Check from lookback window to yesterday
     yesterday = datetime.utcnow() - timedelta(days=1)
-    logger.info(f"Processing all files for date: {yesterday.strftime('%Y-%m-%d')}")
 
-    # Generate all 96 file URLs for yesterday (15-minute intervals)
-    file_urls = generate_file_urls(yesterday, yesterday)
-    logger.info(f"Generated {len(file_urls)} file URLs for yesterday")
+    if lookback_start_date:
+        start_date = datetime.strptime(lookback_start_date, '%Y-%m-%d')
+        logger.info(f"Using custom lookback start date: {lookback_start_date}")
+    else:
+        start_date = yesterday - timedelta(days=INCREMENTAL_LOOKBACK_DAYS)
+        logger.info(f"Using default {INCREMENTAL_LOOKBACK_DAYS} day lookback")
 
+    logger.info(f"Checking for missing files from {start_date.strftime('%Y-%m-%d')} to {yesterday.strftime('%Y-%m-%d')}")
+
+    # Generate all file URLs in the date range
+    file_urls = generate_file_urls(start_date, yesterday)
+    logger.info(f"Generated {len(file_urls)} total file URLs to check")
+
+    # Filter to only unprocessed files (self-healing logic)
     files_to_process = []
     for url in file_urls:
         file_name = url.split('/')[-1]
-        files_to_process.append({
-            'url': url,
-            'size': 0,  # Size unknown, will be fetched
-            'name': file_name
-        })
+        if not is_file_processed(file_name):
+            files_to_process.append({
+                'url': url,
+                'name': file_name
+            })
 
-    logger.info(f"Found {len(files_to_process)} GKG files to process")
-    
+    logger.info(f"Found {len(files_to_process)} unprocessed files out of {len(file_urls)} total")
+
+    # Prioritize recent files (reverse order, so newest first)
+    # This ensures we catch yesterday's data before filling historical gaps
+    files_to_process.reverse()
+
+    # Batch processing: limit to 50 files per run (Lambda timeout constraint)
+    max_files_per_run = 50
+    total_unprocessed = len(files_to_process)
+    if total_unprocessed > max_files_per_run:
+        logger.info(f"Limiting to {max_files_per_run} most recent files this run ({total_unprocessed - max_files_per_run} will remain for next run)")
+        files_to_process = files_to_process[:max_files_per_run]
+
     # Process each file
     processed_count = 0
     filtered_records = 0
     total_records = 0
-    
+
     for file_info in files_to_process:
-        if not is_file_processed(file_info['name']):
+        try:
             stats = download_and_filter_file(
-                file_info['url'], 
+                file_info['url'],
                 file_info['name']
             )
             processed_count += 1
             filtered_records += stats['filtered']
             total_records += stats['total']
+            # Only mark as processed if download and filtering succeeded
             mark_file_processed(file_info['name'])
-    
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"File not found: {file_info['name']}")
+                # Mark 404s as processed to skip in future
+                mark_file_processed(file_info['name'])
+            else:
+                logger.error(f"HTTP error processing {file_info['name']}: {e}")
+                # Don't mark as processed - will retry next run
+        except Exception as e:
+            logger.error(f"Error processing {file_info['name']}: {e}", exc_info=True)
+            # Don't mark as processed - will retry next run
+
+    # Calculate remaining unprocessed files for next run
+    remaining_unprocessed = total_unprocessed - processed_count
+
     result = {
         'processed_files': processed_count,
         'total_records': total_records,
         'filtered_records': filtered_records,
-        'filter_rate': f"{(filtered_records/total_records*100):.2f}%" if total_records > 0 else "0%"
+        'filter_rate': f"{(filtered_records/total_records*100):.2f}%" if total_records > 0 else "0%",
+        'remaining_unprocessed': remaining_unprocessed,
+        'mode': 'self-healing incremental',
+        'date_range': {
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': yesterday.strftime('%Y-%m-%d')
+        }
     }
-    
+
     logger.info(f"Incremental update complete: {result}")
     return result
 
 
-def process_historical_backfill(start_date: datetime, end_date: datetime, offset: int = 0) -> Dict:
+def get_all_processed_files() -> Set[str]:
     """
-    Process historical GDELT files for a date range
-    Generates 15-minute interval URLs for the date range
-    Supports resuming from a specific offset for large date ranges
+    Query DynamoDB once to get all processed file names
+    Returns a set of file names for efficient lookups
     """
-    logger.info(f"Starting historical backfill from {start_date} to {end_date}, offset={offset}")
+    logger.info("Querying DynamoDB for all processed files...")
+    try:
+        table = dynamodb.Table(TRACKING_TABLE)
+        processed_files = set()
 
-    file_urls = generate_file_urls(start_date, end_date)
-    logger.info(f"Generated {len(file_urls)} file URLs total, processing from offset {offset}")
+        # Scan the table to get all items
+        response = table.scan(ProjectionExpression='file_name')
+        processed_files.update(item['file_name'] for item in response.get('Items', []))
+
+        # Handle pagination if table has more items
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(
+                ProjectionExpression='file_name',
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            processed_files.update(item['file_name'] for item in response.get('Items', []))
+
+        logger.info(f"Found {len(processed_files)} already-processed files in DynamoDB")
+        return processed_files
+    except Exception as e:
+        logger.error(f"Error querying processed files: {e}")
+        return set()
+
+
+def initialize_backfill(start_date: datetime, end_date: datetime) -> Dict:
+    """
+    INITIALIZATION PHASE (called once):
+    1. Query DynamoDB once to get all processed files
+    2. Generate all URLs for date range
+    3. Calculate missing files
+    4. Send missing files to SQS queue
+    5. Return count
+    """
+    # Cap end_date at today
+    today = datetime.utcnow().date()
+    if end_date.date() > today:
+        logger.info(f"Capping end_date from {end_date.date()} to {today}")
+        end_date = datetime.combine(today, datetime.min.time())
+
+    logger.info(f"Initializing backfill from {start_date} to {end_date}")
+
+    # Query DynamoDB ONCE
+    processed_files = get_all_processed_files()
+
+    # Generate all file URLs
+    all_file_urls = generate_file_urls(start_date, end_date)
+    logger.info(f"Generated {len(all_file_urls)} file URLs total for date range")
+
+    # Calculate missing files
+    missing_urls = [url for url in all_file_urls if url.split('/')[-1] not in processed_files]
+    logger.info(f"Found {len(missing_urls)} files to download (already have {len(all_file_urls) - len(missing_urls)})")
+
+    # Send missing URLs to SQS (batch of 10 at a time)
+    batch_size = 10
+    sent_count = 0
+
+    for i in range(0, len(missing_urls), batch_size):
+        batch = missing_urls[i:i + batch_size]
+        entries = [
+            {
+                'Id': str(j),
+                'MessageBody': url
+            }
+            for j, url in enumerate(batch)
+        ]
+
+        try:
+            response = sqs.send_message_batch(
+                QueueUrl=SQS_QUEUE_URL,
+                Entries=entries
+            )
+            sent_count += len(batch)
+
+            if (i + batch_size) % 1000 == 0:
+                logger.info(f"Sent {sent_count}/{len(missing_urls)} messages to SQS")
+        except Exception as e:
+            logger.error(f"Error sending batch to SQS: {e}")
+            raise
+
+    logger.info(f"Sent {sent_count} missing file URLs to SQS queue")
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps({
+            'total_missing_files': len(missing_urls),
+            'queue_url': SQS_QUEUE_URL,
+            'date_range': {
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d')
+            }
+        })
+    }
+
+
+def process_historical_backfill() -> Dict:
+    """
+    PROCESSING PHASE (called per batch):
+    1. Receive messages from SQS (up to 50 at a time)
+    2. Process URLs from messages
+    3. Delete processed messages
+    4. Return progress
+    """
+    logger.info(f"Processing backfill batch from SQS queue")
 
     processed_count = 0
     filtered_records = 0
     total_records = 0
     skipped_count = 0
+    messages_received = 0
 
-    # Process files (Lambda has 15min timeout, so limit batch size)
-    max_files_per_invocation = 50
-    end_index = min(offset + max_files_per_invocation, len(file_urls))
-    batch_urls = file_urls[offset:end_index]
+    # Receive up to 50 messages (5 batches of 10)
+    max_messages = 50
+    all_messages = []
 
-    logger.info(f"Processing batch: files {offset} to {end_index-1} ({len(batch_urls)} files)")
+    for _ in range(5):  # 5 batches of 10 = 50 messages max
+        try:
+            response = sqs.receive_message(
+                QueueUrl=SQS_QUEUE_URL,
+                MaxNumberOfMessages=10,  # Max allowed by SQS
+                WaitTimeSeconds=1  # Short polling to get messages quickly
+            )
+            messages = response.get('Messages', [])
+            all_messages.extend(messages)
+            messages_received += len(messages)
 
-    for i, url in enumerate(batch_urls):
+            if len(messages) < 10:  # Queue is empty or has fewer than 10 messages
+                break
+        except Exception as e:
+            logger.error(f"Error receiving messages from SQS: {e}")
+            raise
+
+    logger.info(f"Received {messages_received} messages from SQS")
+
+    if messages_received == 0:
+        return {
+            'processed_files': 0,
+            'skipped_files': 0,
+            'total_records': 0,
+            'filtered_records': 0,
+            'filter_rate': "0%",
+            'messages_processed': 0
+        }
+
+    # Process each message
+    for i, message in enumerate(all_messages):
+        url = message['Body']
         file_name = url.split('/')[-1]
-
-        if is_file_processed(file_name):
-            skipped_count += 1
-            continue
 
         try:
             stats = download_and_filter_file(url, file_name)
@@ -185,18 +371,31 @@ def process_historical_backfill(start_date: datetime, end_date: datetime, offset
             total_records += stats['total']
             mark_file_processed(file_name)
 
+            # Delete message after successful processing
+            sqs.delete_message(
+                QueueUrl=SQS_QUEUE_URL,
+                ReceiptHandle=message['ReceiptHandle']
+            )
+
             if (i + 1) % 10 == 0:
-                logger.info(f"Progress: {offset + i + 1}/{len(file_urls)} files")
+                logger.info(f"Progress: {i + 1}/{messages_received} files processed")
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 logger.warning(f"File not found: {file_name}")
-                mark_file_processed(file_name)  # Mark as processed to skip in future
+                mark_file_processed(file_name)
+                skipped_count += 1
+                # Delete message even if file not found
+                sqs.delete_message(
+                    QueueUrl=SQS_QUEUE_URL,
+                    ReceiptHandle=message['ReceiptHandle']
+                )
             else:
-                raise
-
-    next_offset = end_index
-    remaining_files = len(file_urls) - next_offset
+                logger.error(f"HTTP error processing {file_name}: {e}")
+                # Leave message in queue for retry
+        except Exception as e:
+            logger.error(f"Error processing {file_name}: {e}", exc_info=True)
+            # Leave message in queue for retry
 
     result = {
         'processed_files': processed_count,
@@ -204,8 +403,7 @@ def process_historical_backfill(start_date: datetime, end_date: datetime, offset
         'total_records': total_records,
         'filtered_records': filtered_records,
         'filter_rate': f"{(filtered_records/total_records*100):.2f}%" if total_records > 0 else "0%",
-        'next_offset': next_offset,
-        'remaining_files': remaining_files
+        'messages_processed': messages_received
     }
 
     logger.info(f"Backfill batch complete: {result}")
