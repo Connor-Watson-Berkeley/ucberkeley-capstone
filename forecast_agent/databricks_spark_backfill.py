@@ -72,7 +72,7 @@ import sys
 from pathlib import Path
 
 # Update this path to your Databricks Repos location
-REPO_PATH = "/Workspace/Repos/<YOUR_USERNAME>/ucberkeley-capstone/forecast_agent"
+REPO_PATH = "/Workspace/Repos/Project_Git/ucberkeley-capstone/forecast_agent"
 
 # Add to Python path
 sys.path.insert(0, REPO_PATH)
