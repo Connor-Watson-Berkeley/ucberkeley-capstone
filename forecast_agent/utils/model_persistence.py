@@ -14,7 +14,16 @@ import pickle
 import hashlib
 from datetime import datetime
 from typing import Dict, Optional
-from databricks import sql
+
+# Conditional import: databricks.sql only works for remote connections
+# In Databricks notebooks, we use Spark SQL instead
+try:
+    from databricks import sql
+    HAS_DATABRICKS_SQL = True
+except ImportError:
+    HAS_DATABRICKS_SQL = False
+    # Running in Databricks notebook - will use Spark SQL
+
 import boto3
 
 
