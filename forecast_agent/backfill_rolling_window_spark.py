@@ -54,7 +54,6 @@ from pyspark.sql import functions as F
 sys.path.insert(0, str(Path(__file__).parent))
 
 from ground_truth.config.model_registry import BASELINE_MODELS
-from utils.model_persistence import load_model_from_json
 from utils.monte_carlo_simulation import generate_monte_carlo_paths
 
 
