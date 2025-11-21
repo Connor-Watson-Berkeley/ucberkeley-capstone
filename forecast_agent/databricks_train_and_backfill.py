@@ -8,7 +8,17 @@ This notebook wraps the backfill_rolling_window_spark.py script to run it as a D
 
 # COMMAND ----------
 
-# MAGIC %run ./backfill_rolling_window_spark
+# Import the Spark backfill function
+import sys
+import os
+
+# Add forecast_agent directory to path
+forecast_agent_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+if forecast_agent_dir not in sys.path:
+    sys.path.insert(0, forecast_agent_dir)
+
+# Import the backfill function
+from backfill_rolling_window_spark import backfill_all_models_spark
 
 # COMMAND ----------
 
