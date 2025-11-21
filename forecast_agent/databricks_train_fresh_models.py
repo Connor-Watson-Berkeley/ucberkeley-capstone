@@ -113,7 +113,7 @@ def model_exists_spark(commodity: str, model_name: str, training_cutoff: str, mo
         FROM commodity.forecast.trained_models
         WHERE commodity = '{commodity}'
         AND model_name = '{model_name}'
-        AND training_date = '{training_cutoff}'
+        AND training_cutoff_date = '{training_cutoff}'
         AND model_version = '{model_version}'
     """
     result = spark.sql(query).collect()[0]
@@ -124,32 +124,36 @@ def save_model_spark(fitted_model_dict: dict, commodity: str, model_name: str, m
     import json
     from datetime import datetime
 
-    training_cutoff = fitted_model_dict['last_date'].strftime('%Y-%m-%d')
+    # Extract training date range
+    training_start_date = fitted_model_dict['first_date'].strftime('%Y-%m-%d')
+    training_cutoff_date = fitted_model_dict['last_date'].strftime('%Y-%m-%d')
 
     # Serialize model to JSON
     model_json = json.dumps(fitted_model_dict, default=str)
     model_size_mb = len(model_json) / (1024 * 1024)
 
     print(f"      💾 Model size: {model_size_mb:.2f} MB")
+    print(f"      📅 Training range: {training_start_date} to {training_cutoff_date}")
 
     if model_size_mb >= 1.0:
         print(f"      ⚠️  Model too large for JSON ({model_size_mb:.2f} MB ≥ 1 MB) - skipping S3 upload for now")
         return None
 
-    # Create record
-    year = int(training_cutoff[:4])
-    month = int(training_cutoff[5:7])
+    # Create record - partition by cutoff date
+    year = int(training_cutoff_date[:4])
+    month = int(training_cutoff_date[5:7])
 
     # Use Spark SQL to insert
     insert_query = f"""
         INSERT INTO commodity.forecast.trained_models
-        (commodity, model_name, model_version, training_date, fitted_model_json,
+        (commodity, model_name, model_version, training_start_date, training_cutoff_date, fitted_model_json,
          created_at, created_by, year, month)
         VALUES (
             '{commodity}',
             '{model_name}',
             '{model_version}',
-            '{training_cutoff}',
+            '{training_start_date}',
+            '{training_cutoff_date}',
             '{model_json.replace("'", "''")}',
             '{datetime.utcnow().isoformat()}',
             '{created_by}',
@@ -160,7 +164,7 @@ def save_model_spark(fitted_model_dict: dict, commodity: str, model_name: str, m
 
     spark.sql(insert_query)
     print(f"      ✅ Model saved to trained_models table")
-    return f"{commodity}_{model_name}_{training_cutoff}_{model_version}"
+    return f"{commodity}_{model_name}_{training_cutoff_date}_{model_version}"
 
 print("✓ Spark helper functions defined")
 
@@ -236,6 +240,10 @@ for commodity in commodities:
 
                 # Train model
                 fitted_model_dict = train_func(training_df, **params)
+
+                # Ensure first_date is tracked (for training range visibility)
+                if 'first_date' not in fitted_model_dict:
+                    fitted_model_dict['first_date'] = training_df.index[0]
 
                 # Save model
                 model_id = save_model_spark(
