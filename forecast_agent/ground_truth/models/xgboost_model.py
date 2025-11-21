@@ -82,8 +82,8 @@ def xgboost_train(df_pandas: pd.DataFrame, target: str = 'close',
     # Create features
     df_feat = create_features(df_pandas, target, lags, windows)
 
-    # Prepare features
-    feature_cols = [col for col in df_feat.columns if col != target and col != 'commodity']
+    # Prepare features (exclude target, commodity, and region columns)
+    feature_cols = [col for col in df_feat.columns if col != target and col not in ['commodity', 'region']]
 
     # Add exogenous features if provided
     if exog_features:
@@ -229,8 +229,8 @@ def xgboost_forecast(df_pandas: pd.DataFrame, target: str = 'close',
     # Create features
     df_feat = create_features(df_pandas, target, lags, windows)
 
-    # Prepare features for training
-    feature_cols = [col for col in df_feat.columns if col != target and col != 'commodity']
+    # Prepare features for training (exclude target, commodity, and region columns)
+    feature_cols = [col for col in df_feat.columns if col != target and col not in ['commodity', 'region']]
 
     # Add exogenous features if provided
     if exog_features:
