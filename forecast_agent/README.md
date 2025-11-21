@@ -1,338 +1,284 @@
 # Forecast Agent
 
-**Owner**: Connor Watson
-**Status**: Production Ready
-
-Time series forecasting system for commodity price prediction with walk-forward evaluation, multiple model comparison, and production-ready deployment.
+Machine learning system for coffee price forecasting with 14-day horizon. Generates probabilistic forecasts (2,000 Monte Carlo paths) and point predictions with uncertainty quantification.
 
 ## Quick Start
 
-### Databricks
-1. Clone repo in Databricks Repos
-2. Open `databricks_quickstart.py` notebook
-3. Update path in cell 4: `/Workspace/Repos/<YOUR_USERNAME>/ucberkeley-capstone/forecast_agent`
-4. Run all cells
+**Before running any commands, review relevant documentation in [docs/](docs/):**
+- New to the system? Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for train-once/inference-many pattern
+- Running backfills at scale? See [docs/SPARK_BACKFILL_GUIDE.md](docs/SPARK_BACKFILL_GUIDE.md)
+- Looking for general workflow guidelines? See root [../CLAUDE.md](../CLAUDE.md) for AI agent guidance
 
-The notebook will install dependencies, load data, run forecasts, and write to production tables.
+### Setup
 
-### Local Development
 ```bash
-# Production deployment
-python run_production_deployment.py
+# Load Databricks credentials from ../infra/.env
+cd forecast_agent
+set -a && source ../infra/.env && set +a
 
-# Outputs:
-# - production_forecasts/point_forecasts.parquet
-# - production_forecasts/distributions.parquet
-# - trading_agent_forecast.json
+# Install dependencies
+pip install databricks-sql-connector scikit-learn xgboost statsmodels pmdarima prophet pandas numpy
 ```
 
-## Architecture
+### Train Models (Phase 1)
 
-```
-forecast_agent/
-├── .gitignore
-├── README.md
-├── databricks_quickstart.py      # Databricks notebook (start here!)
-├── run_production_deployment.py  # Local production script
-│
-├── ground_truth/                 # Production package
-│   ├── config/
-│   │   └── model_registry.py    # 25 models (single source of truth)
-│   ├── core/
-│   │   ├── base_forecaster.py   # Base class for all models
-│   │   ├── backtester.py
-│   │   ├── data_loader.py
-│   │   ├── evaluator.py
-│   │   └── walk_forward_evaluator.py
-│   ├── features/                # Feature engineering
-│   ├── models/                  # ARIMA, SARIMAX, XGBoost, Prophet
-│   ├── storage/
-│   │   └── production_writer.py # Writes to commodity.silver schema
-│   └── testing/
-│       └── data_validation.py   # Schema validators
-│
-└── Local folders (not in git):
-    ├── experiments/              # 13 scripts + dashboard code
-    ├── dashboards/               # HTML visualizations
-    ├── deprecated/               # Historical docs
-    └── production_forecasts/     # Generated outputs
+Train models periodically and persist them for reuse:
 
-Data pipeline (create_gdelt_unified_data.py) located in ../research_agent/
-```
-
-## Data Contract
-
-### Input
-`commodity.silver.unified_data` - Unified commodity data with weather, GDELT sentiment, VIX, exchange rates
-
-**⚠️ Important:** For details on unified_data architecture (forward-filling, date spine, data sources), see:
-- `../research_agent/UNIFIED_DATA_ARCHITECTURE.md` - Complete architecture doc
-- Why continuous daily data (including weekends)
-- How forward-fill prevents data leakage
-- Trading day indicators
-
-### Output
-Three tables in `commodity.forecast` schema:
-- `point_forecasts` - 14-day forecasts with prediction intervals and actuals
-- `distributions` - 2,000 Monte Carlo paths for risk analysis (actuals stored as `model_version='actuals'`)
-- `forecast_metadata` - Performance metrics for model comparison and backtesting
-
-### Actuals Storage Convention (Hybrid Approach)
-
-**Ground truth actuals** are stored in the `distributions` table using a **hybrid convention** for backwards compatibility:
-
-**Primary Convention** (use this for new code):
-- `model_version = 'actuals'` - Actuals are a special "model" representing perfect hindsight
-- Query pattern: `WHERE model_version = 'actuals'`
-
-**Legacy Convention** (kept for compatibility):
-- `is_actuals = TRUE` - Boolean flag marking actuals rows
-- `path_id = 1` - Single ground truth path (not path_id=0)
-
-**Why Hybrid?**
-- **Cleaner Semantics**: "actuals" is just another model (the perfect one) rather than a special flag
-- **Backwards Compatibility**: Existing queries using `is_actuals=TRUE` continue to work
-- **Migration Path**: New code uses `model_version='actuals'`, old code gradually transitions
-
-**Example: Loading Actuals for Evaluation**
-```python
-# New convention (recommended)
-query = """
-SELECT day_1, day_2, ..., day_14
-FROM commodity.forecast.distributions
-WHERE commodity = 'Coffee'
-  AND model_version = 'actuals'
-  AND forecast_start_date = '2024-01-15'
-"""
-
-# Legacy convention (still works)
-query = """
-SELECT day_1, day_2, ..., day_14
-FROM commodity.forecast.distributions
-WHERE commodity = 'Coffee'
-  AND is_actuals = TRUE
-  AND forecast_start_date = '2024-01-15'
-"""
-```
-
-**Backfilling Actuals**:
 ```bash
-# Populate actuals from unified_data (handles multiple regions per date)
-python backfill_actuals.py --commodity Coffee --start-date 2018-01-01 --end-date 2025-11-17
-python backfill_actuals.py --commodity Sugar --start-date 2018-01-01 --end-date 2025-11-17
-
-# Output:
-# - Inserts rows with model_version='actuals' and is_actuals=TRUE
-# - Sources data from commodity.silver.unified_data (first close price per date)
-# - Skips existing actuals (idempotent)
+python train_models.py \
+  --commodity Coffee \
+  --models naive xgboost sarimax_auto_weather \
+  --train-frequency semiannually
 ```
 
-**Evaluation Scripts**: All evaluation scripts (`evaluate_historical_forecasts.py`, `quick_eval.py`) use the `model_version='actuals'` convention.
+Trains models every 6 months and saves to `commodity.forecast.trained_models` table.
 
-## Production Model
+### Generate Forecasts (Phase 2)
 
-**SARIMAX+Weather** (`sarimax_weather_v1`)
-- MAE: $3.10
-- Directional Accuracy from Day 0: 69.5% ± 27.7%
-- Features: temp_c, humidity_pct, precipitation_mm
-- Horizon: 14 days
+Load pretrained models and generate forecasts (180x faster):
 
-Evaluated using 30-window walk-forward validation (420 days, non-overlapping).
+```bash
+python backfill_rolling_window.py \
+  --commodity Coffee \
+  --models naive xgboost \
+  --train-frequency semiannually
+```
 
-## Model Training Architecture
+Auto-resumes from last completed date. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for performance metrics.
+
+### Check Status
+
+```bash
+# Coverage across models
+python check_backfill_coverage.py --commodity Coffee --models naive xgboost
+
+# Verify specific model
+python verify_backfill.py --commodity Coffee --model naive
+
+# Quick evaluation
+python quick_eval.py --commodity Coffee --model naive
+```
+
+## Architecture Overview
 
 ### Train-Once/Inference-Many Pattern
 
-All models support **two-phase workflow** for efficient backtesting:
+**Problem**: Traditional systems retrain models for every forecast (2,875 trainings for 2018-2024 backfill).
 
-**Phase 1 - Training** (one-time setup):
+**Solution**: Two-phase architecture:
+- **Phase 1**: Train models semiannually (~16 trainings)
+- **Phase 2**: Load pretrained models for fast inference (~880x faster data loading)
+- **Result**: 24-48 hours → 1-2 hours for full backfill
+
+**Read more**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed implementation patterns and performance metrics.
+
+### Production Model
+
+**SARIMAX+Weather** (`sarimax_auto_weather`)
+- MAE: $3.10
+- Directional Accuracy from Day 0: 69.5% ± 27.7%
+- Features: temp_mean_c, humidity_mean_pct, precipitation_mm
+- Horizon: 14 days
+- Training: Semiannual
+
+## Data Flow
+
+```
+commodity.silver.unified_data (input)
+  ↓
+Train models → commodity.forecast.trained_models (model storage)
+  ↓
+Load models → Generate forecasts
+  ↓
+commodity.forecast.distributions (2,000 Monte Carlo paths)
+commodity.forecast.point_forecasts (14-day predictions)
+commodity.forecast.forecast_metadata (performance metrics)
+```
+
+**Input data**: See `../research_agent/UNIFIED_DATA_ARCHITECTURE.md` for unified_data schema details.
+
+## Model Registry
+
+25+ models in `ground_truth/config/model_registry.py`:
+- Baseline: Naive, Random Walk
+- Statistical: ARIMA, SARIMAX (with/without weather)
+- Machine Learning: XGBoost, Prophet
+
+All models implement train/predict separation for efficient reuse. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for implementation pattern.
+
+## Execution Environments
+
+### Local Development
+
+Good for testing small date ranges:
 ```bash
-python train_models.py --commodity Coffee --train-frequency semiannually --models naive xgboost
-```
-- Trains N models on fixed training windows
-- Persists fitted models to `commodity.forecast.trained_models` table
-- Model storage: JSON (small models) or S3 (large models)
-
-**Phase 2 - Inference** (fast backfill):
-```bash
-python backfill_rolling_window.py --commodity Coffee --models naive xgboost
-```
-- Loads pre-trained models from database
-- Generates ~2,875 forecasts using 16 models (180x faster)
-- No retraining required
-
-**Performance Impact**: Semiannual training = ~16 trainings instead of ~2,875 (one per forecast date)
-
-### Model Implementation Pattern
-
-All models implement train/inference separation:
-
-```python
-def my_model_train(df_pandas, target='close', **params) -> dict:
-    """Train model and return fitted state."""
-    # Training logic
-    model = fit_model(df_pandas, target, **params)
-
-    return {
-        'fitted_model': model,
-        'last_date': df_pandas.index[-1],
-        'target': target,
-        'model_type': 'my_model',
-        # ... other metadata
-    }
-
-def my_model_predict(fitted_model_dict, horizon=14, **params) -> pd.DataFrame:
-    """Generate forecast using fitted model (no training)."""
-    model = fitted_model_dict['fitted_model']
-    # Inference logic
-    return forecast_df
-
-def my_model_forecast_with_metadata(df_pandas, commodity, fitted_model=None, **params) -> dict:
-    """Unified interface supporting both train+predict and inference-only."""
-    if fitted_model is None:
-        # Train mode
-        fitted_model = my_model_train(df_pandas, **params)
-
-    # Inference mode (always)
-    forecast_df = my_model_predict(fitted_model, **params)
-
-    return {
-        'forecast_df': forecast_df,
-        'fitted_model': fitted_model,  # Return for persistence
-        # ... metadata
-    }
+python backfill_rolling_window.py --commodity Coffee --models naive \
+  --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
-**Updated Models**: naive, random_walk, arima, sarimax, xgboost, prophet
+### Databricks (Recommended for Production)
 
-### Adding New Models
+**CRITICAL**: Always use All-Purpose Clusters for long-running jobs, NOT SQL Warehouses.
+- SQL Warehouses: $417 for 20-hour backfill
+- All-Purpose Cluster: ~$10-20 for same workload
 
-Register in `ground_truth/config/model_registry.py`:
+See "Environment Setup" section below for cluster setup instructions and cost optimization.
 
-```python
-BASELINE_MODELS = {
-    'my_new_model': {
-        'name': 'My Model',
-        'function': my_model.my_model_forecast_with_metadata,
-        'params': {
-            'target': 'close',
-            'exog_features': ['temp_c', 'vix'],
-            'horizon': 14
-        },
-        'description': 'My custom model'
-    }
-}
+### Spark Parallelization (Large Scale)
+
+For 1000+ date backfills: 20-60 minutes vs 10-20 hours local execution.
+
+**Read more**: [docs/SPARK_BACKFILL_GUIDE.md](docs/SPARK_BACKFILL_GUIDE.md)
+
+## Project Structure
+
+```
+forecast_agent/
+├── README.md                    # This file
+├── CLAUDE.md                    # AI assistant guide
+├── docs/                        # Detailed documentation
+│   ├── ARCHITECTURE.md          # Train-once pattern, performance
+│   └── SPARK_BACKFILL_GUIDE.md  # Parallel processing at scale
+│
+├── ground_truth/                # Production package
+│   ├── config/
+│   │   └── model_registry.py   # 25 models (single source of truth)
+│   ├── core/
+│   │   ├── base_forecaster.py
+│   │   ├── backtester.py
+│   │   ├── data_loader.py
+│   │   └── walk_forward_evaluator.py
+│   ├── features/               # Feature engineering
+│   ├── models/                 # Model implementations
+│   └── storage/
+│       └── production_writer.py
+│
+├── utils/
+│   ├── model_persistence.py    # save_model(), load_model()
+│   └── monte_carlo_simulation.py
+│
+├── train_models.py             # Phase 1: Train and persist
+├── backfill_rolling_window.py  # Phase 2: Fast inference
+├── backfill_rolling_window_spark.py  # Spark parallel backfill
+├── backfill_actuals.py         # Populate actuals table
+├── evaluate_historical_forecasts.py
+├── check_backfill_coverage.py
+└── databricks_quickstart.py    # Databricks entry point
 ```
 
-Implement following the train/predict pattern above.
+## Common Commands
 
-## Key Features
-
-### Base Forecaster Class
-All models inherit from `BaseForecaster` providing:
-- Standardized API: `fit()`, `forecast()`, `forecast_with_intervals()`
-- Automatic sample path generation for distributions table
-- Consistent metadata handling
-
-### Schema Enhancements
-- `actual_close` column in point_forecasts (NULL for future dates)
-- **Actuals Storage**: Hybrid convention with `model_version='actuals'` (primary) and `is_actuals=TRUE` (legacy)
-- `has_data_leakage` flag for data quality validation
-- Ground truth stored in distributions table for consistent backtesting
-- See "Actuals Storage Convention" section above for usage details
-
-### Data Validators
-- `UnifiedDataValidator` - Checks input data for duplicates, nulls, data quality
-- `ForecastOutputValidator` - Validates output schema, data leakage, flag consistency
-
-## Critical Findings
-
-### 1. ARIMA(auto) = Naive
-auto_arima without exogenous variables selects order (0,1,0), which is mathematically equivalent to naive forecast. Always use exogenous features with SARIMAX.
-
-### 2. VIX and cop_usd Were Unused
-- VIX: 75,354 values available but not used initially
-- cop_usd: Critical for Colombian trader use case
-- Added 6 new models incorporating these features
-
-### 3. Directional Accuracy from Day 0 is Key Metric
-Traditional day-to-day directional accuracy is misleading for trading. Use Dir Day0 which measures whether day i > day 0 (trading signal quality).
-
-## Development vs Production
-
-**Production files (in git)**:
-- `ground_truth/` package
-- `run_production_deployment.py`
-- `README.md`
-
-**Development files (not in git)**:
-- `experiments/` - 13 experimental scripts + dashboard code
-- `dashboards/` - HTML visualizations from walk-forward evaluation
-- `deprecated/` - Historical documentation
-- `project_overview/` - Project documentation and specifications
-- `production_forecasts/` - Generated output tables
-- `*.log`, `*.parquet`, `*.json`, `*.html` - Generated files
-
-See `.gitignore` for complete exclusion list.
-
-## Walk-Forward Evaluation
-
-Method: Expanding window
-- Initial training: 3 years (1095 days)
-- Forecast horizon: 14 days
-- Step size: 14 days (non-overlapping)
-- Windows: 30 (420 days evaluation period)
-
-Metrics:
-- MAE (Mean Absolute Error)
-- RMSE (Root Mean Squared Error)
-- Dir Day0 (Directional Accuracy from Day 0) - Primary metric for trading
-- Dir (Day-to-Day Directional Accuracy)
-
-## Deployment Workflow
-
-```python
-# 1. Load data
-df = spark.table("commodity.silver.unified_data")
-
-# 2. Train on full history
-from ground_truth.storage.production_writer import ProductionForecastWriter
-from ground_truth.models.sarimax import sarimax_forecast
-
-writer = ProductionForecastWriter("production_forecasts")
-result = sarimax_forecast(df_coffee, commodity='Coffee', horizon=14)
-
-# 3. Write to production tables
-writer.write_point_forecasts(
-    forecast_df=result['forecast_df'],
-    model_version='sarimax_weather_v1',
-    commodity='Coffee',
-    data_cutoff_date=df.index[-1]
-)
-
-# 4. Export for trading agent
-writer.export_for_trading_agent(
-    commodity='Coffee',
-    model_version='sarimax_weather_v1',
-    output_path='trading_agent_forecast.json'
-)
-```
-
-Weekly retraining schedule recommended.
-
-## Testing
+### Training
 
 ```bash
-# Validate schema
-python experiments/test_schema_updates.py
+# Semiannual training (recommended for expensive models)
+python train_models.py --commodity Coffee --models xgboost sarimax_auto_weather \
+  --train-frequency semiannually
 
-# Run walk-forward evaluation
-python experiments/run_walkforward_comprehensive.py
+# Monthly training (for fast models)
+python train_models.py --commodity Coffee --models naive arima_111 \
+  --train-frequency monthly
+```
+
+### Backfilling
+
+```bash
+# Full historical backfill (auto-resumes)
+python backfill_rolling_window.py --commodity Coffee --models naive xgboost \
+  --train-frequency semiannually
+
+# Date-range backfill
+python backfill_rolling_window.py --commodity Coffee --models naive \
+  --start-date 2023-01-01 --end-date 2024-01-01 --train-frequency semiannually
+
+# Backfill actuals
+python backfill_actuals.py --commodity Coffee --start-date 2018-01-01 --end-date 2025-11-17
+```
+
+### Evaluation
+
+```bash
+# Historical forecast evaluation
+python evaluate_historical_forecasts.py --commodity Coffee --models naive xgboost
+
+# Generate evaluation dashboard
+python dashboard_forecast_evaluation.py
+```
+
+## Key Metrics
+
+- **MAE** (Mean Absolute Error): Average prediction error in dollars
+- **RMSE** (Root Mean Squared Error): Penalizes large errors
+- **Dir Day0**: Directional accuracy from day 0 (primary trading metric)
+  - Measures: Is day i > day 0? (trading signal quality)
+- **Dir**: Day-to-day directional accuracy (less useful for trading)
+
+## Critical Notes
+
+### Database Sessions
+
+Databricks SQL Warehouses have 15-minute session timeouts. Scripts handle this automatically:
+- Reconnect every 50 forecasts (before batch write)
+- Resume mode skips existing forecasts
+- Just rerun the same command to continue
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for database reconnection strategy details.
+
+### Column Name Conventions
+
+Weather and feature columns in unified_data:
+- `temp_mean_c` (NOT temp_c)
+- `humidity_mean_pct` (NOT humidity_pct)
+- `vix` (NOT vix_close)
+
+### ARIMA Auto-Tuning
+
+`auto_arima` without exogenous variables selects order (0,1,0) = naive forecast. **Always use exogenous features with SARIMAX models.**
+
+## Output Tables
+
+All tables in `commodity.forecast` schema:
+
+**`distributions`**
+- 2,000 Monte Carlo paths per forecast
+- Columns: day_1 through day_14, path_id (0-1999)
+- Actuals: `model_version='actuals'` and `is_actuals=TRUE` (hybrid convention)
+
+**`point_forecasts`**
+- 14-day forecasts with prediction intervals
+- Columns: day_1 through day_14, actual_close
+
+**`forecast_metadata`**
+- Model performance metrics (MAE, RMSE, Dir Day0)
+
+**`trained_models`**
+- Persistent model storage
+- Partitioned by (year, month)
+- Storage: JSON (<1MB) or S3 (≥1MB)
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for data contracts and actuals storage conventions.
+
+## Environment Setup
+
+### Databricks Credentials
+Load credentials from `../infra/.env`:
+```bash
+set -a && source ../infra/.env && set +a
+```
+
+Required environment variables:
+- `DATABRICKS_HOST` - Databricks workspace URL
+- `DATABRICKS_TOKEN` - Personal access token
+- `DATABRICKS_HTTP_PATH` - SQL warehouse path (**Use clusters for long-running jobs!**)
+
+### Python Dependencies
+```bash
+pip install databricks-sql-connector scikit-learn xgboost statsmodels pmdarima prophet pandas numpy
 ```
 
 ## Documentation
 
-All essential information is in this README. Additional technical details:
-- `../project_overview/DATA_CONTRACTS.md` - Schema specifications
-- `deprecated/` - Historical development documentation (local only)
-- Code comments and docstrings
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Train-once/inference-many pattern, model persistence, performance metrics
+- **[docs/SPARK_BACKFILL_GUIDE.md](docs/SPARK_BACKFILL_GUIDE.md)** - Parallel processing guide for large-scale backfills
+- **`../research_agent/UNIFIED_DATA_ARCHITECTURE.md`** - Input data schema and architecture
+- **[../CLAUDE.md](../CLAUDE.md)** - Root AI agent workflow guidelines

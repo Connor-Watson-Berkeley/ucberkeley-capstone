@@ -10,7 +10,7 @@ AI-driven forecasting for coffee & sugar futures to help Colombian traders optim
 
 ## For AI Assistants
 
-**🤖 START HERE**: [CLAUDE_GUIDE.md](CLAUDE_GUIDE.md)
+**🤖 START HERE**: [CLAUDE.md](CLAUDE.md)
 
 This is your primary entry point containing:
 - Credential setup (AWS & Databricks)
@@ -19,6 +19,8 @@ This is your primary entry point containing:
 - Current project state
 - Quick reference for common tasks
 
+**Documentation Strategy**: See [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) for our hierarchical documentation organization
+
 ---
 
 ## Quick Start
@@ -26,8 +28,10 @@ This is your primary entry point containing:
 ```bash
 # Project structure
 ucberkeley-capstone/
-├── CLAUDE_GUIDE.md        # 🤖 AI agent entry point
+├── README.md              # Human entry point
+├── CLAUDE.md              # 🤖 AI agent entry point
 ├── docs/                  # Core reference documentation
+│   ├── DOCUMENTATION_STRATEGY.md  # How we organize docs
 │   ├── DATA_CONTRACTS.md  # Database schemas (single source of truth)
 │   ├── ARCHITECTURE.md    # System architecture
 │   ├── SECURITY.md        # Credential management
@@ -109,7 +113,8 @@ See [docs/DATA_CONTRACTS.md](docs/DATA_CONTRACTS.md) for complete schemas.
 ## Documentation
 
 **Core Reference**:
-- [CLAUDE_GUIDE.md](CLAUDE_GUIDE.md) - AI agent entry point
+- [CLAUDE.md](CLAUDE.md) - AI agent entry point
+- [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) - How we organize docs
 - [docs/DATA_CONTRACTS.md](docs/DATA_CONTRACTS.md) - Database schemas
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
 - [docs/SECURITY.md](docs/SECURITY.md) - Credential management
@@ -118,6 +123,8 @@ See [docs/DATA_CONTRACTS.md](docs/DATA_CONTRACTS.md) for complete schemas.
 - [research_agent/README.md](research_agent/README.md)
 - [forecast_agent/README.md](forecast_agent/README.md)
 - [trading_agent/README.md](trading_agent/README.md)
+
+**Note**: All documentation follows a hierarchical web-graph structure. See [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) for details.
 
 ---
 

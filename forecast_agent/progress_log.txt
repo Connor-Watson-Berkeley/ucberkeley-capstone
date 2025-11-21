@@ -1,0 +1,1626 @@
+
+========== Wed Nov 19 00:16:02 PST 2025 ==========
+
+Latest autonomous monitor activity:
+Wed Nov 19 00:16:02 PST 2025: ========================================
+Wed Nov 19 00:16:02 PST 2025: Autonomous Monitor Started
+Wed Nov 19 00:16:02 PST 2025: ========================================
+Wed Nov 19 00:16:02 PST 2025: Checking backfill status...
+
+Active backfill processes:
+connorwatson     83378 567.2  2.9 414313040 731824   ??  R    Mon10PM 2338:36.00 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17
+connorwatson     83370   0.0  0.0 410743552    992   ??  Ss   Mon10PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && echo '🚀 SARIMAX backfill (using stored semiannual models - default behavior)...' && python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17 2>&1 < /dev/null | tee /tmp/sarimax_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-ff91-cwd
+connorwatson     67555   0.0  0.5 414110688 123008   ??  S    Mon07PM   3:25.47 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16
+connorwatson     67547   0.0  0.0 410744576    992   ??  Ss   Mon07PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16 2>&1 < /dev/null | tee /tmp/xgboost_full_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-8e49-cwd
+connorwatson     61873   0.0  0.5 414137184 123472   ??  SN   Mon04PM  10:24.26 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually
+connorwatson     10653   0.0  0.7 414053056 167360   ??  S    12:06AM   0:08.22 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10641   0.0  0.0 410761984   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-3eb3-cwd
+connorwatson     10634   0.0  0.8 414061312 208208   ??  S    12:06AM   0:08.41 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10626   0.0  0.0 410771200   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-c845-cwd
+
+========== Wed Nov 19 01:51:06 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     10653   0.0  0.6 414053120 150640   ??  S    12:06AM   0:09.30 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10641   0.0  0.0 410761984   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-3eb3-cwd
+connorwatson     10634   0.0  0.6 414061312 154896   ??  S    12:06AM   0:09.37 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10626   0.0  0.0 410771200   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-c845-cwd
+connorwatson     83378   0.0  0.9 414338640 216656   ??  S    Mon10PM 2406:54.54 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17
+connorwatson     83370   0.0  0.0 410743552    992   ??  Ss   Mon10PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && echo '🚀 SARIMAX backfill (using stored semiannual models - default behavior)...' && python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17 2>&1 < /dev/null | tee /tmp/sarimax_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-ff91-cwd
+connorwatson     67555   0.0  0.9 414129120 234944   ??  S    Mon07PM   3:31.14 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16
+connorwatson     67547   0.0  0.0 410744576    992   ??  Ss   Mon07PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16 2>&1 < /dev/null | tee /tmp/xgboost_full_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-8e49-cwd
+connorwatson     61873   0.0  0.5 414125920 125712   ??  SN   Mon04PM  10:33.42 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually
+
+========== Wed Nov 19 05:16:01 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     83378 776.9  3.6 414315088 915744   ??  R    Mon10PM 2442:22.37 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17
+connorwatson     10653   0.0  0.6 414053120 162432   ??  S    12:06AM   0:09.35 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10641   0.0  0.0 410761984   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-3eb3-cwd
+connorwatson     10634   0.0  0.6 414061312 157600   ??  S    12:06AM   0:09.42 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10626   0.0  0.0 410771200   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-c845-cwd
+connorwatson     83370   0.0  0.0 410743552    992   ??  Ss   Mon10PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && echo '🚀 SARIMAX backfill (using stored semiannual models - default behavior)...' && python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17 2>&1 < /dev/null | tee /tmp/sarimax_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-ff91-cwd
+connorwatson     67555   0.0  2.4 414129120 598992   ??  S    Mon07PM   3:35.77 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16
+connorwatson     67547   0.0  0.0 410744576    992   ??  Ss   Mon07PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16 2>&1 < /dev/null | tee /tmp/xgboost_full_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-8e49-cwd
+connorwatson     61873   0.0  0.7 414125920 173792   ??  SN   Mon04PM  10:33.49 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually
+
+========== Wed Nov 19 06:24:34 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     10653   0.0  0.8 414053120 189056   ??  S    12:06AM   0:09.57 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10641   0.0  0.0 410761984   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-3eb3-cwd
+connorwatson     10634   0.0  0.7 414061312 188544   ??  S    12:06AM   0:09.64 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10626   0.0  0.0 410771200   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-c845-cwd
+connorwatson     83378   0.0  2.9 414315088 721712   ??  S    Mon10PM 2524:55.21 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17
+connorwatson     83370   0.0  0.0 410743552    992   ??  Ss   Mon10PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && echo '🚀 SARIMAX backfill (using stored semiannual models - default behavior)...' && python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17 2>&1 < /dev/null | tee /tmp/sarimax_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-ff91-cwd
+connorwatson     67555   0.0  2.4 414129120 599520   ??  S    Mon07PM   3:38.21 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16
+connorwatson     67547   0.0  0.0 410744576    992   ??  Ss   Mon07PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16 2>&1 < /dev/null | tee /tmp/xgboost_full_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-8e49-cwd
+connorwatson     61873   0.0  0.6 414125920 158528   ??  SN   Mon04PM  10:33.69 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually
+
+========== Wed Nov 19 08:56:58 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     83378 723.6  3.6 414315088 909776   ??  R    Mon10PM 2541:03.36 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17
+connorwatson     83370   0.0  0.0 410743552    976   ??  Ss   Mon10PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && echo '🚀 SARIMAX backfill (using stored semiannual models - default behavior)...' && python backfill_rolling_window.py --commodity Coffee --models sarimax_auto_weather --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-17 2>&1 < /dev/null | tee /tmp/sarimax_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-ff91-cwd
+connorwatson     67555   0.0  1.1 414111712 274928   ??  S    Mon07PM   3:39.58 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16
+connorwatson     67547   0.0  0.0 410744576    976   ??  Ss   Mon07PM   0:00.00 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1762054361911-1574ig.sh && eval "cd '/Users/connorwatson/Documents/Data Science/DS210/ucberkeley-capstone/forecast_agent' && set -a && source ../infra/.env && set +a && python backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-16 2>&1 < /dev/null | tee /tmp/xgboost_full_backfill.log" && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-8e49-cwd
+connorwatson     61873   0.0  0.6 414125920 162272   ??  SN   Mon04PM  10:33.86 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models xgboost --train-frequency semiannually
+connorwatson     10653   0.0  0.6 414053120 161984   ??  S    12:06AM   0:09.73 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10641   0.0  0.0 410761984    992   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-3eb3-cwd
+connorwatson     10634   0.0  0.6 414061312 159808   ??  S    12:06AM   0:09.81 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10626   0.0  0.0 410771200    992   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-c845-cwd
+
+========== Wed Nov 19 10:24:43 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     13897   0.0  1.0 414067376 247120   ??  SN    9:27AM   0:07.54 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     13885   0.0  0.9 414076672 219488   ??  SN    9:27AM   0:07.56 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10653   0.0  0.6 414053120 149712   ??  S    12:06AM   0:09.77 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10641   0.0  0.0 410761984   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-3eb3-cwd
+connorwatson     10634   0.0  0.6 414061312 148576   ??  S    12:06AM   0:09.84 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0
+connorwatson     10626   0.0  0.0 410771200   1008   ??  Ss   12:06AM   0:00.01 /bin/zsh -c -l source /Users/connorwatson/.claude/shell-snapshots/snapshot-zsh-1763537824605-ng4f7m.sh && eval 'set -a && source ../infra/.env && set +a && python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10 --model-version-tag v1.0' \< /dev/null && pwd -P >| /var/folders/4_/ylg6c6s163scgbb1vym7339r0000gn/T/claude-c845-cwd
+
+========== Wed Nov 19 14:34:22 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     14812   0.0  0.5 414077616 122256   ??  SN   10:37AM   0:06.16 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     14800   0.0  0.5 414078720 122784   ??  SN   10:37AM   0:06.00 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 14:49:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  2.9 414068416 738320   ??  SN    2:40PM   0:07.72 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  3.1 414069488 770192   ??  SN    2:40PM   0:07.91 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 15:04:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532   0.3  3.1 414069504 770704   ??  SN    2:40PM   0:10.85 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.1  2.9 414068480 738672   ??  SN    2:40PM   0:10.66 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 15:19:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532   0.1  2.9 414022400 725008   ??  SN    2:40PM   0:14.24 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.0  3.0 414076672 742992   ??  SN    2:40PM   0:14.62 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 15:34:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   1.3  3.0 414076672 743216   ??  SN    2:40PM   0:17.41 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.2  3.2 414069504 801232   ??  SN    2:40PM   0:17.97 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 15:49:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   1.8  3.0 414076672 744144   ??  SN    2:40PM   0:21.44 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.2  3.2 414069504 801264   ??  SN    2:40PM   0:21.96 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 16:04:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.8  3.0 414076672 744144   ??  SN    2:40PM   0:25.09 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.7  3.2 414069504 801296   ??  SN    2:40PM   0:24.43 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 16:19:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.6  3.0 414076672 744608   ??  SN    2:40PM   0:27.72 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  3.2 414069504 801840   ??  SN    2:40PM   0:28.25 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 16:34:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  2.9 414051072 719584   ??  SN    2:40PM   0:31.46 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  3.2 414069504 801952   ??  SN    2:40PM   0:31.27 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 16:49:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  3.0 414076672 745952   ??  SN    2:40PM   0:35.53 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  3.1 414041856 774304   ??  SN    2:40PM   0:34.73 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 17:04:23 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  3.0 414076672 744272   ??  SN    2:40PM   0:38.30 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  3.1 414069504 792288   ??  SN    2:40PM   0:38.69 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 17:19:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532   0.9  3.1 414069504 775776   ??  SN    2:40PM   0:41.22 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.1  3.0 414076672 745296   ??  SN    2:40PM   0:41.92 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 17:34:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.2  3.0 414076672 745280   ??  SN    2:40PM   0:44.34 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.1  3.1 414069504 785568   ??  SN    2:40PM   0:44.61 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 17:49:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532   0.1  3.1 414069504 785616   ??  SN    2:40PM   0:47.17 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.0  3.0 414076672 745488   ??  SN    2:40PM   0:47.92 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 18:04:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  3.0 414076672 743424   ??  SN    2:40PM   0:50.51 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  3.1 414069504 768592   ??  SN    2:40PM   0:50.41 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 18:19:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  2.8 414054144 714704   ??  SN    2:40PM   0:53.69 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  2.8 414043904 710160   ??  SN    2:40PM   0:53.83 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 18:34:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.5  2.4 414076672 615696   ??  SN    2:40PM   0:57.44 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  2.4 414043904 594464   ??  SN    2:40PM   0:56.45 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 18:49:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532   0.1  3.0 414101936 759808   ??  SN    2:40PM   1:01.56 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.0  2.5 414076672 616752   ??  SN    2:40PM   1:01.25 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 19:04:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.6  2.5 414076672 617904   ??  SN    2:40PM   1:03.55 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  3.0 414101936 759840   ??  SN    2:40PM   1:03.98 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 19:19:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  2.5 414076672 618912   ??  SN    2:40PM   1:07.22 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  3.0 414088160 752048   ??  SN    2:40PM   1:07.16 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 19:34:24 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   1.5  2.5 414076672 619056   ??  SN    2:40PM   1:09.08 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.3  4.5 414093312 1125504   ??  SN    2:40PM  54:29.52 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 19:49:25 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532 651.5  5.8 414220288 1452368   ??  RN    2:40PM 102:24.81 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.0  2.4 414057216 600304   ??  SN    2:40PM   1:11.76 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 20:04:25 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  2.5 414076672 622256   ??  SN    2:40PM   1:15.63 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  6.0 414254080 1513584   ??  SN    2:40PM 199:28.78 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 20:19:25 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  2.4 414076672 616416   ??  SN    2:40PM   1:18.03 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  6.0 414254080 1506480   ??  SN    2:40PM 199:31.68 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 20:34:25 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532 644.0  5.4 414225408 1358944   ??  RN    2:40PM 242:29.51 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.1  2.4 414076672 616368   ??  SN    2:40PM   1:20.98 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Wed Nov 19 23:57:16 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532 772.6  5.9 414225408 1480640   ??  RN    2:40PM 340:25.53 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.0  2.4 414076672 614240   ??  SN    2:40PM   1:22.13 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Thu Nov 20 09:34:06 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  2.5 414076672 622000   ??  SN    2:40PM   1:23.62 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  4.8 414371840 1217392   ??  SN    2:40PM 397:27.90 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Thu Nov 20 09:49:06 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532   3.3  4.1 414398464 1037792   ??  SN    2:40PM 397:29.91 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   1.0  2.4 414059264 607168   ??  SN    2:40PM   1:24.68 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Thu Nov 20 10:04:06 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17532   0.6  4.1 414398464 1037840   ??  SN    2:40PM 397:33.57 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17544   0.0  2.6 414074624 660544   ??  SN    2:40PM   1:28.88 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Thu Nov 20 10:19:37 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.1  2.6 414074624 661024   ??  SN    2:40PM   1:31.07 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  6.6 414369792 1666496   ??  SN    2:40PM 455:37.28 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Thu Nov 20 13:20:58 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+connorwatson     17544   0.0  2.6 414074624 661024   ??  SN    2:40PM   1:31.31 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Sugar --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+connorwatson     17532   0.0  6.2 414369792 1564416   ??  SN    2:40PM 455:37.54 /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python -u backfill_rolling_window.py --commodity Coffee --models naive sarimax_auto_weather xgboost --train-frequency semiannually --start-date 2018-01-01 --end-date 2025-11-10
+
+========== Thu Nov 20 14:20:45 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 14:36:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 14:51:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 15:06:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 15:21:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 15:36:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 15:51:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 16:06:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 16:21:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 16:36:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 16:51:51 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 17:06:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 17:21:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 17:36:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 17:51:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 18:06:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 18:21:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 18:36:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 18:51:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 19:06:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None
+
+========== Thu Nov 20 19:21:52 PST 2025 ==========
+
+Latest autonomous monitor activity:
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:12 PST 2025: Evaluating Sugar...
+usage: evaluate_historical_forecasts.py [-h] --commodity {Coffee,Sugar}
+                                        [--model MODEL]
+                                        [--start-date START_DATE]
+                                        [--end-date END_DATE]
+                                        [--horizons HORIZONS [HORIZONS ...]]
+                                        [--dry-run]
+evaluate_historical_forecasts.py: error: unrecognized arguments: --models naive sarimax_auto_weather xgboost
+Wed Nov 19 00:16:13 PST 2025: Checking for forecast errors...
+✅ No NULL forecasts found
+✅ No unrealistic forecasts found
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: ✅ ALL TASKS COMPLETE!
+Wed Nov 19 00:16:15 PST 2025: ========================================
+Wed Nov 19 00:16:15 PST 2025: Autonomous monitor exiting
+
+Active backfill processes:
+  None

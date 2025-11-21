@@ -152,3 +152,6 @@ research_agent/infrastructure/lambda/functions/*/bin/
 research_agent/infrastructure/lambda/functions/*/*.dist-info/
 research_agent/infrastructure/lambda/functions/*/.libs*/
 *.crc
+
+# Progress reports
+progress_reports/

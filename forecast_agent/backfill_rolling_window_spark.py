@@ -93,6 +93,22 @@ DISTRIBUTION_SCHEMA = StructType([
     StructField("has_data_leakage", BooleanType(), False),
 ])
 
+POINT_FORECAST_SCHEMA = StructType([
+    StructField("forecast_date", DateType(), False),
+    StructField("data_cutoff_date", DateType(), False),
+    StructField("generation_timestamp", TimestampType(), False),
+    StructField("day_ahead", IntegerType(), False),
+    StructField("forecast_mean", FloatType(), False),
+    StructField("forecast_std", FloatType(), False),
+    StructField("lower_95", FloatType(), False),
+    StructField("upper_95", FloatType(), False),
+    StructField("model_version", StringType(), False),
+    StructField("commodity", StringType(), False),
+    StructField("model_success", BooleanType(), False),
+    StructField("actual_close", FloatType(), True),
+    StructField("has_data_leakage", BooleanType(), False),
+])
+
 
 # ============================================================================
 # Helper Functions
@@ -163,7 +179,8 @@ def generate_forecast_partition(
         model_configs: Model registry configs
 
     Yields:
-        Dict with forecast results (distributions table rows)
+        Dict with 'row_type' key indicating 'distribution' or 'point_forecast'
+        and corresponding row data
     """
     from pyspark.sql import SparkSession
 
@@ -221,21 +238,23 @@ def generate_forecast_partition(
 
             forecast_df = result['forecast_df']
 
-            # Generate Monte Carlo paths
+            # Extract forecast output
             mean_forecast = forecast_df['yhat'].values[:14]
             forecast_std = forecast_df.get('yhat_std', pd.Series([3.0] * 14)).values[0]
 
+            generation_timestamp = datetime.now()
+
+            # Generate Monte Carlo paths for distributions table
             paths = generate_monte_carlo_paths(
                 mean_forecast=mean_forecast,
                 forecast_std=forecast_std,
                 n_paths=2000
             )
 
-            # Yield distribution rows
-            generation_timestamp = datetime.now()
-
+            # Yield distribution rows (2,000 paths)
             for path_id, path in enumerate(paths):
                 yield {
+                    'row_type': 'distribution',
                     'path_id': path_id,
                     'forecast_start_date': forecast_start_date,
                     'data_cutoff_date': data_cutoff_date,
@@ -258,6 +277,35 @@ def generate_forecast_partition(
                     'day_14': float(path[13]) if len(path) > 13 else None,
                     'is_actuals': False,
                     'has_data_leakage': False,
+                }
+
+            # Yield point forecast rows (14 days) from direct model inference
+            for day_idx in range(len(mean_forecast)):
+                forecast_date = forecast_start_date + timedelta(days=day_idx)
+                day_ahead = day_idx + 1
+
+                # Compute prediction intervals with time-scaling volatility
+                vol_scaled = forecast_std * np.sqrt(day_ahead)
+                lower_95 = mean_forecast[day_idx] - 1.96 * vol_scaled
+                upper_95 = mean_forecast[day_idx] + 1.96 * vol_scaled
+
+                has_data_leakage = forecast_date <= data_cutoff_date
+
+                yield {
+                    'row_type': 'point_forecast',
+                    'forecast_date': forecast_date,
+                    'data_cutoff_date': data_cutoff_date,
+                    'generation_timestamp': generation_timestamp,
+                    'day_ahead': day_ahead,
+                    'forecast_mean': float(mean_forecast[day_idx]),
+                    'forecast_std': float(forecast_std),
+                    'lower_95': float(lower_95),
+                    'upper_95': float(upper_95),
+                    'model_version': model_version,
+                    'commodity': commodity,
+                    'model_success': True,
+                    'actual_close': None,
+                    'has_data_leakage': has_data_leakage,
                 }
 
         except Exception as e:
@@ -334,6 +382,43 @@ def backfill_all_models_spark(
 
     print(f"   ✓ Created {len(tasks):,} forecast tasks")
 
+    # Step 1a: Filter out existing forecasts (resume mode)
+    print(f"\n📋 Step 1a: Checking for existing forecasts (resume mode)...")
+
+    # Create DataFrame from tasks
+    tasks_df_temp = spark.createDataFrame(tasks)
+
+    # Query existing forecasts
+    existing_forecasts_df = spark.sql("""
+        SELECT DISTINCT
+            forecast_start_date,
+            commodity,
+            model_version
+        FROM commodity.forecast.distributions
+        WHERE is_actuals = FALSE
+    """)
+
+    # Filter out existing forecasts using LEFT ANTI JOIN
+    tasks_df_filtered = tasks_df_temp.join(
+        existing_forecasts_df,
+        on=['forecast_start_date', 'commodity', 'model_version'],
+        how='left_anti'
+    )
+
+    # Convert back to list for tracking
+    tasks_filtered = tasks_df_filtered.collect()
+    existing_count = len(tasks) - len(tasks_filtered)
+
+    print(f"   ✓ Found {existing_count:,} existing forecasts (will skip)")
+    print(f"   ✓ {len(tasks_filtered):,} new forecasts to generate")
+
+    # Update tasks list with filtered tasks
+    tasks = [row.asDict() for row in tasks_filtered]
+
+    if len(tasks) == 0:
+        print("\n✅ All forecasts already exist! Nothing to do.")
+        return
+
     # Step 2: Load pretrained models
     print(f"\n📦 Step 2: Loading pretrained models...")
 
@@ -386,27 +471,98 @@ def backfill_all_models_spark(
         )
 
     # Execute forecasts in parallel
-    results_rdd = tasks_df.rdd.mapPartitions(forecast_wrapper)
-    results_df = spark.createDataFrame(results_rdd, schema=DISTRIBUTION_SCHEMA)
+    all_results_rdd = tasks_df.rdd.mapPartitions(forecast_wrapper)
 
-    # Step 6: Write results to Delta table
+    # Convert RDD to list to separate row types (in production, use filter on RDD)
+    # For now, we'll create DataFrames with different schemas
+
+    # Filter distributions and point forecasts
+    distributions_rdd = all_results_rdd.filter(lambda row: row.get('row_type') == 'distribution')
+    point_forecasts_rdd = all_results_rdd.filter(lambda row: row.get('row_type') == 'point_forecast')
+
+    # Remove row_type key from dictionaries and create DataFrames
+    distributions_rdd_clean = distributions_rdd.map(
+        lambda row: {k: v for k, v in row.items() if k != 'row_type'}
+    )
+    point_forecasts_rdd_clean = point_forecasts_rdd.map(
+        lambda row: {k: v for k, v in row.items() if k != 'row_type'}
+    )
+
+    # Step 6: Write distributions to Delta table
     print(f"\n💾 Step 6: Writing results to commodity.forecast.distributions...")
 
-    results_df.write \
+    distributions_df = spark.createDataFrame(distributions_rdd_clean, schema=DISTRIBUTION_SCHEMA)
+
+    distributions_df.write \
         .format("delta") \
         .mode("append") \
         .option("mergeSchema", "false") \
         .saveAsTable("commodity.forecast.distributions")
 
-    final_count = results_df.count()
-    print(f"   ✓ Wrote {final_count:,} forecast paths")
+    dist_count = distributions_df.count()
+    print(f"   ✓ Wrote {dist_count:,} distribution paths")
+
+    # Step 7: Write point forecasts (from direct model inference)
+    print(f"\n📊 Step 7: Writing point forecasts (from model inference)...")
+
+    point_forecasts_df = spark.createDataFrame(point_forecasts_rdd_clean, schema=POINT_FORECAST_SCHEMA)
+
+    point_forecasts_df.write \
+        .format("delta") \
+        .mode("append") \
+        .option("mergeSchema", "false") \
+        .saveAsTable("commodity.forecast.point_forecasts")
+
+    point_count = point_forecasts_df.count()
+    print(f"   ✓ Wrote {point_count:,} point forecasts")
+
+    # Step 8: Optionally write forecast actuals (if needed)
+    # Note: Actuals only need to be populated once per date range
+    # This step can be commented out if actuals already exist
+    write_actuals = False  # Set to True to populate actuals
+
+    if write_actuals:
+        print(f"\n📈 Step 8: Writing forecast actuals...")
+
+        # Create temp view from point forecasts to get unique dates
+        point_forecasts_df.createOrReplaceTempView("temp_point_forecasts")
+
+        # Get distinct forecast dates and commodities for actuals lookup
+        actuals_sql = """
+        SELECT DISTINCT
+            forecast_date,
+            commodity,
+            m.close AS actual_close
+        FROM temp_point_forecasts pf
+        JOIN commodity.bronze.market m
+            ON m.commodity = pf.commodity
+            AND m.date = pf.forecast_date
+        """
+
+        actuals_df = spark.sql(actuals_sql)
+
+        # Write actuals to table
+        actuals_df.write \
+            .format("delta") \
+            .mode("append") \
+            .option("mergeSchema", "false") \
+            .saveAsTable("commodity.forecast.forecast_actuals")
+
+        actuals_count = actuals_df.count()
+        print(f"   ✓ Wrote {actuals_count:,} actuals")
+    else:
+        actuals_count = 0
+        print(f"\n⏭️  Step 8: Skipping actuals (write_actuals=False)")
 
     # Summary
     print(f"\n{'='*80}")
     print(f"✅ Backfill Complete!")
     print(f"{'='*80}")
     print(f"Total forecasts: {len(tasks):,}")
-    print(f"Total paths: {final_count:,}")
+    print(f"Total distribution paths: {dist_count:,}")
+    print(f"Total point forecasts: {point_count:,}")
+    if write_actuals:
+        print(f"Total actuals: {actuals_count:,}")
     print(f"{'='*80}\n")
 
 

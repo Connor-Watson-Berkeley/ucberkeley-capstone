@@ -4,6 +4,34 @@
 
 ---
 
+## Documentation Structure (CRITICAL)
+
+**This project uses hierarchical documentation.** Before performing ANY task:
+
+1. **Read relevant documentation FIRST** from the appropriate folder
+2. Start with the component README.md for overview
+3. Follow links to detailed docs/ files for specifics
+4. Never search for files - all paths are explicit in the hierarchy
+
+**Full Documentation Strategy**: See [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) for:
+- Complete hierarchical structure explanation
+- "Read X before doing Y" pattern
+- Temp document lifecycle and cleanup
+- Reference rules and best practices
+
+**Example workflow:**
+- Before forecasting work → Read [forecast_agent/README.md](forecast_agent/README.md), then follow links to docs/
+- Before research work → Read [research_agent/README.md](research_agent/README.md) for navigation
+- Before any task → Check [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) if unsure about doc organization
+
+**Forecast Agent - Read X Before Doing Y:**
+- **Before training models** → Read [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md) sections on "Train-Once Pattern" and "Model Persistence"
+- **Before running Spark backfills** → Read [forecast_agent/docs/SPARK_BACKFILL_GUIDE.md](forecast_agent/docs/SPARK_BACKFILL_GUIDE.md) for cluster sizing and cost optimization
+- **Before modifying models** → Read [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md) section on "Model Implementation Pattern"
+- **Before large backfills** → Read [forecast_agent/README.md](forecast_agent/README.md) for execution environment guidance (local vs Databricks)
+
+---
+
 ## Before Making Any Code Changes
 
 ### 1. Read Documentation in Your Working Folder (REQUIRED)
@@ -22,22 +50,26 @@ cat trading_agent/README.md
 
 **Rule:** Read the local README first. It will point you to other docs you need.
 
-### 2. Follow Cross-References
-READMEs use **federated documentation** - each component owns its domain's docs:
+### 2. Follow Cross-References (Hierarchical Navigation)
+READMEs use **hierarchical documentation** - each component has a docs/ folder with detailed guides:
 
 ```
-forecast_agent/README.md
+forecast_agent/README.md (concise overview)
+  ↓ links to
+forecast_agent/docs/ARCHITECTURE.md  (detailed implementation)
   ↓ references
 research_agent/UNIFIED_DATA_ARCHITECTURE.md  (data source authority)
-  ↓ references
-research_agent/DATA_SOURCES.md  (raw data sources)
 ```
 
 **Key docs by topic:**
+- **Documentation strategy:** `docs/DOCUMENTATION_STRATEGY.md` (read this to understand our doc organization)
 - **Data architecture:** `research_agent/UNIFIED_DATA_ARCHITECTURE.md`
-- **Forecasting models:** `forecast_agent/README.md`
+- **Forecasting architecture:** `forecast_agent/docs/ARCHITECTURE.md`
+- **Spark parallelization:** `forecast_agent/docs/SPARK_BACKFILL_GUIDE.md`
 - **Data sources:** `research_agent/DATA_SOURCES.md`
 - **Trading system:** `trading_agent/README.md`
+
+**IMPORTANT**: All documentation is reachable from root README.md through explicit links. Never search for files - follow the hierarchy.
 
 ### 3. Data Source Rule (Forecasting Only)
 When writing **forecasting code specifically**:
@@ -52,7 +84,7 @@ When writing **forecasting code specifically**:
 
 **Note:** Bronze tables are fine for other use cases (data exploration, debugging, etc.)
 
-### 3. Check for Existing Patterns
+### 4. Check for Existing Patterns
 Before implementing new functionality:
 
 ```bash
@@ -60,7 +92,10 @@ Before implementing new functionality:
 grep -r "pattern_name" --include="*.py"
 ```
 
-**Example:** Before adding a new model, check existing models in `forecast_agent/ground_truth/models/`
+**Example:** Before adding a new model:
+1. Read [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md) section on "Model Implementation Pattern"
+2. Check existing models in `forecast_agent/ground_truth/models/`
+3. Follow the train/predict separation pattern
 
 ---
 
@@ -221,9 +256,10 @@ cat research_agent/UNIFIED_DATA_ARCHITECTURE.md | grep -A 10 "unified_data"
 └───────────┬─────────────────────────────┘
             ↓
 ┌─────────────────────────────────────────┐
-│ 1. Read relevant docs                   │
-│    - UNIFIED_DATA_ARCHITECTURE.md       │
-│    - Component README.md                │
+│ 1. Read relevant docs FIRST             │
+│    - Component README.md for overview   │
+│    - Follow links to docs/ for details  │
+│    - Check DOCUMENTATION_STRATEGY.md    │
 └───────────┬─────────────────────────────┘
             ↓
 ┌─────────────────────────────────────────┐
@@ -261,17 +297,26 @@ cat research_agent/UNIFIED_DATA_ARCHITECTURE.md | grep -A 10 "unified_data"
 ## Emergency Reference
 
 **If in doubt:**
-1. Read `research_agent/UNIFIED_DATA_ARCHITECTURE.md`
-2. Ask the user before creating new files/docs
-3. Query `commodity.silver.unified_data` for forecasting
-4. Never hardcode credentials
-5. Don't touch `trading_agent/`
+1. Read [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) to understand doc organization
+2. Read component README.md, then follow links to detailed docs/
+3. Ask the user before creating new files/docs
+4. Query `commodity.silver.unified_data` for forecasting
+5. Never hardcode credentials
+6. Don't touch `trading_agent/`
 
 **When stuck:**
-1. Check existing code for patterns
-2. Read component README
+1. Read relevant documentation FIRST (follow hierarchical links)
+2. Check existing code for patterns
 3. Ask user for clarification
 4. Don't guess - verify with data queries
+
+**Documentation Quick Links:**
+- [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) - How we organize docs
+- [forecast_agent/README.md](forecast_agent/README.md) - Forecast agent guide
+- [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md) - Train-once architecture
+- [forecast_agent/docs/SPARK_BACKFILL_GUIDE.md](forecast_agent/docs/SPARK_BACKFILL_GUIDE.md) - Spark parallelization
+- [research_agent/README.md](research_agent/README.md) - Research agent guide
+- [research_agent/UNIFIED_DATA_ARCHITECTURE.md](research_agent/UNIFIED_DATA_ARCHITECTURE.md) - Data architecture
 
 ---
 
