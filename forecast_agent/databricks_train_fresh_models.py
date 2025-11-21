@@ -238,8 +238,11 @@ for commodity in commodities:
                 # Get model parameters
                 params = model_config['params'].copy()
 
+                # Remove parameters that are not used during training (only used during prediction)
+                train_params = {k: v for k, v in params.items() if k != 'horizon'}
+
                 # Train model
-                fitted_model_dict = train_func(training_df, **params)
+                fitted_model_dict = train_func(training_df, **train_params)
 
                 # Ensure first_date is tracked (for training range visibility)
                 if 'first_date' not in fitted_model_dict:
