@@ -6,7 +6,7 @@ Trains Coffee & Sugar models using Databricks default package versions
 
 # COMMAND ----------
 
-# MAGIC %pip install xgboost statsmodels pmdarima
+# MAGIC %pip install databricks-sql-connector pmdarima
 
 # COMMAND ----------
 
