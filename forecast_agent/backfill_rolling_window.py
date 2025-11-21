@@ -205,6 +205,9 @@ def generate_forecast_for_date(
     model_params = model_config['params'].copy()
     model_params['horizon'] = forecast_horizon
 
+    # Initialize forecast_std to avoid UnboundLocalError in except block
+    forecast_std = None
+
     try:
         # Pass fitted_model if available (inference-only mode)
         if fitted_model is not None:
@@ -225,6 +228,16 @@ def generate_forecast_for_date(
                 horizon=forecast_horizon,
                 training_df=training_df
             )
+
+            # Compute forecast_std for metadata
+            if 'yhat_std' in forecast_df.columns:
+                forecast_std = forecast_df['yhat_std'].mean()
+            elif 'std' in result:
+                forecast_std = result['std']
+            else:
+                returns = training_df['close'].pct_change().dropna()
+                daily_std = returns.std()
+                forecast_std = training_df['close'].iloc[-1] * daily_std
         else:
             # Fallback to simple Gaussian noise if no fitted model
             if 'std' in result:
@@ -476,7 +489,8 @@ def backfill_rolling_window(
     if not databricks_token:
         databricks_token = os.getenv('DATABRICKS_TOKEN')
     if not databricks_http_path:
-        databricks_http_path = os.getenv('DATABRICKS_HTTP_PATH')
+        # Prefer cluster HTTP path for long-running jobs (no 15-min timeout)
+        databricks_http_path = os.getenv('DATABRICKS_CLUSTER_HTTP_PATH') or os.getenv('DATABRICKS_HTTP_PATH')
 
     connection = sql.connect(
         server_hostname=databricks_host.replace('https://', ''),
