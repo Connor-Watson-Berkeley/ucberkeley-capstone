@@ -10,6 +10,11 @@ Trains Coffee & Sugar models using Databricks default package versions
 
 # COMMAND ----------
 
+# Restart Python to load newly installed packages
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
 print("=" * 80)
 print("Training Fresh Models in Databricks")
 print("=" * 80)
