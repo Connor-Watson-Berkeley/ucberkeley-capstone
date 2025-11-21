@@ -23,10 +23,28 @@ print(f"✓ Added {forecast_agent_path} to Python path")
 
 # COMMAND ----------
 
-# Import the backfill function
-from backfill_rolling_window_spark import backfill_all_models_spark
+# Import the backfill function with retry logic (handles serverless race condition)
+import time
 
-print("✓ Successfully imported backfill_all_models_spark")
+retries = 5
+backfill_all_models_spark = None
+
+for attempt in range(retries):
+    try:
+        from backfill_rolling_window_spark import backfill_all_models_spark
+        print(f"✓ Successfully imported backfill_all_models_spark (attempt {attempt + 1}/{retries})")
+        break
+    except (ImportError, ModuleNotFoundError) as e:
+        if attempt < retries - 1:
+            print(f"Import attempt {attempt + 1} failed: {e}")
+            print(f"Retrying in 3 seconds... (serverless cluster may still be initializing)")
+            time.sleep(3)
+        else:
+            print(f"Failed to import after {retries} attempts")
+            raise
+
+if backfill_all_models_spark is None:
+    raise ImportError("Failed to import backfill_all_models_spark after all retries")
 
 # COMMAND ----------
 
