@@ -6,6 +6,10 @@ Trains Coffee & Sugar models using Databricks default package versions
 
 # COMMAND ----------
 
+# MAGIC %pip install xgboost statsmodels pmdarima
+
+# COMMAND ----------
+
 print("=" * 80)
 print("Training Fresh Models in Databricks")
 print("=" * 80)
@@ -14,7 +18,7 @@ print("All models will be trained using Databricks default package versions\n")
 
 # COMMAND ----------
 
-# Set up paths for imports
+# Set up paths for imports from Git repo
 import sys
 import os
 
@@ -24,167 +28,186 @@ if forecast_agent_path not in sys.path:
 
 print(f"✓ Added {forecast_agent_path} to Python path")
 
-# Change to forecast_agent directory for imports
+# Change to forecast_agent directory for relative imports
 os.chdir(forecast_agent_path)
 print(f"✓ Changed directory to {forecast_agent_path}")
 
 # COMMAND ----------
 
-# Import training modules
-print("\nImporting training modules...")
+# Verify package versions (Databricks default)
+import numpy as np
+import sklearn
+import xgboost as xgb
+import pandas as pd
 
-try:
-    import subprocess
-    print("✓ subprocess imported")
-
-    # Verify Python executable
-    python_exe = sys.executable
-    print(f"✓ Using Python: {python_exe}")
-
-    # Check package versions
-    import numpy as np
-    import sklearn
-    import xgboost as xgb
-    print(f"\n📦 Package Versions (Databricks):")
-    print(f"  NumPy: {np.__version__}")
-    print(f"  scikit-learn: {sklearn.__version__}")
-    print(f"  XGBoost: {xgb.__version__}")
-
-except Exception as e:
-    print(f"✗ Import error: {e}")
-    raise
+print(f"\n📦 Package Versions (Databricks):")
+print(f"  NumPy: {np.__version__}")
+print(f"  scikit-learn: {sklearn.__version__}")
+print(f"  XGBoost: {xgb.__version__}")
+print(f"  Pandas: {pd.__version__}")
 
 # COMMAND ----------
 
-# Train Coffee models
-print("\n" + "=" * 80)
-print("Training Coffee Models (Semiannually)")
-print("=" * 80)
+# Import training modules from Git repo
+print("\n📥 Importing training modules from Git repo...")
 
-cmd_coffee = [
-    sys.executable,
-    'train_models.py',
-    '--commodity', 'Coffee',
-    '--models', 'naive', 'xgboost', 'sarimax_auto_weather',
-    '--train-frequency', 'semiannually',
-    '--start-date', '2018-01-01',
-    '--end-date', '2025-11-17'
-]
+from databricks import sql
+from ground_truth.config.model_registry import BASELINE_MODELS
+from utils.model_persistence import save_model, model_exists
+from train_models import train_and_save_model, load_training_data, get_training_dates
+from datetime import datetime, timedelta
 
-print(f"\nExecuting: {' '.join(cmd_coffee)}\n")
-
-result_coffee = subprocess.run(cmd_coffee, capture_output=True, text=True, cwd=forecast_agent_path)
-
-print("STDOUT:")
-print(result_coffee.stdout)
-
-if result_coffee.stderr:
-    print("\nSTDERR:")
-    print(result_coffee.stderr)
-
-if result_coffee.returncode != 0:
-    print(f"\n❌ Training failed for Coffee with exit code {result_coffee.returncode}")
-    raise Exception(f"Training failed for Coffee: {result_coffee.stderr}")
-else:
-    print("\n✅ Coffee training completed successfully!")
+print("✓ All modules imported successfully")
 
 # COMMAND ----------
 
-# Train Sugar models
+# Load credentials
+DATABRICKS_HOST = os.getenv("DATABRICKS_HOST")
+DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
+DATABRICKS_HTTP_PATH = os.getenv("DATABRICKS_HTTP_PATH")
+
+if not all([DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_HTTP_PATH]):
+    raise ValueError("Missing Databricks credentials in environment variables")
+
+print("✓ Databricks credentials loaded")
+
+# COMMAND ----------
+
+# Configuration
+commodities = ['Coffee', 'Sugar']
+model_keys = ['naive', 'xgboost', 'sarimax_auto_weather']
+train_frequency = 'semiannually'
+start_date = datetime.strptime('2018-01-01', '%Y-%m-%d').date()
+end_date = datetime.strptime('2025-11-17', '%Y-%m-%d').date()
+model_version = 'v1.0'
+min_training_days = 1095  # 3 years
+
 print("\n" + "=" * 80)
-print("Training Sugar Models (Semiannually)")
+print("TRAINING CONFIGURATION")
+print("=" * 80)
+print(f"Commodities: {', '.join(commodities)}")
+print(f"Models: {', '.join(model_keys)}")
+print(f"Training Frequency: {train_frequency}")
+print(f"Date Range: {start_date} to {end_date}")
+print(f"Model Version: {model_version}")
+print(f"Min Training Days: {min_training_days}")
 print("=" * 80)
 
-cmd_sugar = [
-    sys.executable,
-    'train_models.py',
-    '--commodity', 'Sugar',
-    '--models', 'naive', 'xgboost', 'sarimax_auto_weather',
-    '--train-frequency', 'semiannually',
-    '--start-date', '2018-01-01',
-    '--end-date', '2025-11-17'
-]
+# COMMAND ----------
 
-print(f"\nExecuting: {' '.join(cmd_sugar)}\n")
+# Connect to Databricks
+print("\n📡 Connecting to Databricks...")
+connection = sql.connect(
+    server_hostname=DATABRICKS_HOST.replace('https://', ''),
+    http_path=DATABRICKS_HTTP_PATH,
+    access_token=DATABRICKS_TOKEN
+)
+print("✅ Connected to Databricks")
 
-result_sugar = subprocess.run(cmd_sugar, capture_output=True, text=True, cwd=forecast_agent_path)
+# COMMAND ----------
 
-print("STDOUT:")
-print(result_sugar.stdout)
+# Train models for each commodity
+for commodity in commodities:
+    print("\n" + "=" * 80)
+    print(f"TRAINING {commodity.upper()} MODELS")
+    print("=" * 80)
 
-if result_sugar.stderr:
-    print("\nSTDERR:")
-    print(result_sugar.stderr)
+    # Generate training dates
+    training_dates = get_training_dates(start_date, end_date, train_frequency)
+    print(f"\n📅 Training Windows: {len(training_dates)} windows from {training_dates[0]} to {training_dates[-1]}")
 
-if result_sugar.returncode != 0:
-    print(f"\n❌ Training failed for Sugar with exit code {result_sugar.returncode}")
-    raise Exception(f"Training failed for Sugar: {result_sugar.stderr}")
-else:
-    print("\n✅ Sugar training completed successfully!")
+    total_trained = 0
+    total_skipped = 0
+    total_failed = 0
+
+    # Training loop
+    for window_idx, training_cutoff in enumerate(training_dates, 1):
+        print(f"\n{'='*80}")
+        print(f"Window {window_idx}/{len(training_dates)}: Training Cutoff = {training_cutoff}")
+        print(f"{'='*80}")
+
+        # Load training data up to this cutoff
+        training_df = load_training_data(connection, commodity, training_cutoff)
+
+        # Check minimum training days
+        if len(training_df) < min_training_days:
+            print(f"   ⚠️  Insufficient training data: {len(training_df)} days < {min_training_days} days - skipping")
+            total_skipped += len(model_keys)
+            continue
+
+        print(f"   📊 Loaded {len(training_df):,} days of training data")
+        print(f"   📅 Data range: {training_df.index[0].date()} to {training_df.index[-1].date()}")
+
+        # Train each model
+        for model_key in model_keys:
+            model_config = BASELINE_MODELS[model_key]
+            model_name = model_config['name']
+
+            print(f"\n   🔧 {model_name} ({model_key}):")
+
+            model_id = train_and_save_model(
+                connection=connection,
+                training_df=training_df,
+                model_key=model_key,
+                model_config=model_config,
+                commodity=commodity,
+                model_version=model_version,
+                created_by="databricks_train_fresh_models.py"
+            )
+
+            if model_id:
+                total_trained += 1
+            elif model_id is None:
+                # Check if it was skipped or failed
+                if model_exists(connection, commodity, model_name, training_df.index[-1].strftime('%Y-%m-%d'), model_version):
+                    total_skipped += 1
+                else:
+                    total_failed += 1
+
+    # Summary for this commodity
+    print("\n" + "=" * 80)
+    print(f"{commodity.upper()} TRAINING COMPLETE")
+    print("=" * 80)
+    print(f"✅ Models Trained: {total_trained}")
+    print(f"⏩ Models Skipped (already exist): {total_skipped}")
+    print(f"❌ Models Failed: {total_failed}")
+    print("=" * 80)
 
 # COMMAND ----------
 
 # Verify trained models in database
 print("\n" + "=" * 80)
-print("Verifying Trained Models in Database")
+print("VERIFYING TRAINED MODELS IN DATABASE")
 print("=" * 80)
-
-from databricks import sql as databricks_sql
-
-# Get credentials
-host = os.environ.get('DATABRICKS_HOST', 'https://dbc-5e4780f4-fcec.cloud.databricks.com').replace('https://', '')
-http_path = os.environ.get('DATABRICKS_HTTP_PATH', '/sql/1.0/warehouses/c97ae2b0cf9cbc05')
-token = os.environ['DATABRICKS_TOKEN']
-
-# Connect
-print("\nConnecting to database...")
-connection = databricks_sql.connect(
-    server_hostname=host,
-    http_path=http_path,
-    access_token=token
-)
 
 cursor = connection.cursor()
 
-# Check Coffee models
-print("\n📊 Coffee Models:")
-cursor.execute("""
-    SELECT model_version, COUNT(*) as count
-    FROM commodity.forecast.trained_models
-    WHERE commodity = 'Coffee'
-    AND model_version IN ('naive', 'xgboost', 'sarimax_auto_weather')
-    GROUP BY model_version
-    ORDER BY model_version
-""")
+for commodity in commodities:
+    print(f"\n📊 {commodity} Models:")
+    cursor.execute(f"""
+        SELECT model_version, COUNT(*) as count
+        FROM commodity.forecast.trained_models
+        WHERE commodity = '{commodity}'
+        AND model_version IN ('naive', 'xgboost', 'sarimax_auto_weather')
+        GROUP BY model_version
+        ORDER BY model_version
+    """)
 
-coffee_results = cursor.fetchall()
-for row in coffee_results:
-    print(f"  {row[0]}: {row[1]} models")
-
-# Check Sugar models
-print("\n📊 Sugar Models:")
-cursor.execute("""
-    SELECT model_version, COUNT(*) as count
-    FROM commodity.forecast.trained_models
-    WHERE commodity = 'Sugar'
-    AND model_version IN ('naive', 'xgboost', 'sarimax_auto_weather')
-    GROUP BY model_version
-    ORDER BY model_version
-""")
-
-sugar_results = cursor.fetchall()
-for row in sugar_results:
-    print(f"  {row[0]}: {row[1]} models")
+    results = cursor.fetchall()
+    for row in results:
+        print(f"  {row[0]}: {row[1]} models")
 
 cursor.close()
 connection.close()
 
+# COMMAND ----------
+
 print("\n" + "=" * 80)
-print("✅ TRAINING COMPLETE!")
+print("✅ ALL TRAINING COMPLETE!")
 print("=" * 80)
 print("\n📝 Summary:")
-print("  ✓ All locally-trained models deleted")
+print("  ✓ All locally-trained models deleted (from previous session)")
 print("  ✓ Fresh models trained in Databricks")
 print("  ✓ Using Databricks default package versions")
-print("  ✓ Version consistency guaranteed\n")
-print("Next: Run backfill_rolling_window_spark.py in same environment")
+print("  ✓ Version consistency guaranteed")
+print("\nNext: Run backfill_rolling_window_spark.py in same environment")
