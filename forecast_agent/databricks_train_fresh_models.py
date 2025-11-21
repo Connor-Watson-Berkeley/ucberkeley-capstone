@@ -57,10 +57,12 @@ print(f"  Pandas: {pd.__version__}")
 print("\n📥 Importing training modules from Git repo...")
 
 from ground_truth.config.model_registry import BASELINE_MODELS
+from ground_truth.features.data_preparation import prepare_data_for_model
 from train_models import get_training_dates
 from datetime import datetime, timedelta
 
 print("✓ All modules imported successfully")
+print("✓ Feature engineering pipeline imported")
 print("✓ Running in Databricks - using spark.sql() (no credentials needed!)")
 
 # COMMAND ----------
@@ -90,7 +92,7 @@ print("=" * 80)
 
 # Helper functions for Spark-based data access
 def load_training_data_spark(commodity: str, cutoff_date):
-    """Load training data using Spark SQL (no credentials needed!)"""
+    """Load RAW training data using Spark SQL (multi-region format)"""
     query = f"""
         SELECT *
         FROM commodity.silver.unified_data
@@ -103,9 +105,40 @@ def load_training_data_spark(commodity: str, cutoff_date):
 
     # Set date as index
     pandas_df['date'] = pd.to_datetime(pandas_df['date'])
-    pandas_df = pandas_df.set_index('date')
 
     return pandas_df
+
+
+def prepare_training_data(commodity: str, cutoff_date, model_config: dict):
+    """Load and prepare training data with feature engineering based on model config"""
+    # Load raw multi-region data
+    raw_df = load_training_data_spark(commodity, cutoff_date)
+
+    # Get model parameters for feature engineering
+    params = model_config.get('params', {})
+    region_strategy = params.get('region_strategy', 'aggregate')
+    gdelt_strategy = params.get('gdelt_strategy', None)
+    gdelt_themes = params.get('gdelt_themes', None)
+    feature_columns = params.get('exog_features', None)
+
+    # If feature_columns is specified, add target column
+    if feature_columns:
+        target = params.get('target', 'close')
+        feature_columns_with_target = [target] + feature_columns
+    else:
+        feature_columns_with_target = None
+
+    # Apply feature engineering
+    prepared_df = prepare_data_for_model(
+        raw_data=raw_df,
+        commodity=commodity,
+        region_strategy=region_strategy,
+        gdelt_strategy=gdelt_strategy,
+        gdelt_themes=gdelt_themes,
+        feature_columns=feature_columns_with_target
+    )
+
+    return prepared_df
 
 def model_exists_spark(commodity: str, model_name: str, training_cutoff: str, model_version: str) -> bool:
     """Check if model already exists using Spark SQL"""
@@ -192,19 +225,7 @@ for commodity in commodities:
         print(f"Window {window_idx}/{len(training_dates)}: Training Cutoff = {training_cutoff}")
         print(f"{'='*80}")
 
-        # Load training data up to this cutoff using Spark
-        training_df = load_training_data_spark(commodity, training_cutoff)
-
-        # Check minimum training days
-        if len(training_df) < min_training_days:
-            print(f"   ⚠️  Insufficient training data: {len(training_df)} days < {min_training_days} days - skipping")
-            total_skipped += len(model_keys)
-            continue
-
-        print(f"   📊 Loaded {len(training_df):,} days of training data")
-        print(f"   📅 Data range: {training_df.index[0].date()} to {training_df.index[-1].date()}")
-
-        # Train each model
+        # Train each model with model-specific feature engineering
         for model_key in model_keys:
             model_config = BASELINE_MODELS[model_key]
             model_name = model_config['name']
@@ -216,6 +237,19 @@ for commodity in commodities:
                 print(f"      ⏩ Model already exists - skipping")
                 total_skipped += 1
                 continue
+
+            # Load and prepare training data with feature engineering for THIS model
+            print(f"      📥 Loading and preparing data with feature engineering...")
+            training_df = prepare_training_data(commodity, training_cutoff, model_config)
+
+            # Check minimum training days
+            if len(training_df) < min_training_days:
+                print(f"      ⚠️  Insufficient training data: {len(training_df)} days < {min_training_days} days - skipping")
+                total_skipped += 1
+                continue
+
+            print(f"      📊 Loaded {len(training_df):,} days of training data")
+            print(f"      📅 Data range: {training_df.index[0].date()} to {training_df.index[-1].date()}")
 
             try:
                 # Train the model
@@ -241,7 +275,7 @@ for commodity in commodities:
                 params = model_config['params'].copy()
 
                 # Remove parameters that are not used during training (only used during prediction)
-                train_params = {k: v for k, v in params.items() if k != 'horizon'}
+                train_params = {k: v for k, v in params.items() if k not in ['horizon', 'region_strategy', 'gdelt_strategy', 'gdelt_themes']}
 
                 # Train model
                 fitted_model_dict = train_func(training_df, **train_params)
