@@ -51,7 +51,14 @@ from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import *
 from pyspark.sql import functions as F
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Add current directory to path (Databricks compatible)
+# In Databricks, this will be the workspace path
+# Locally, this will be the script directory
+if '__file__' in globals():
+    sys.path.insert(0, str(Path(__file__).parent))
+else:
+    # Databricks notebook context - path should already be set
+    pass
 
 from ground_truth.config.model_registry import BASELINE_MODELS
 from utils.monte_carlo_simulation import generate_monte_carlo_paths
