@@ -56,25 +56,12 @@ print(f"  Pandas: {pd.__version__}")
 # Import training modules from Git repo
 print("\n📥 Importing training modules from Git repo...")
 
-import databricks.sql as sql
 from ground_truth.config.model_registry import BASELINE_MODELS
-from utils.model_persistence import save_model, model_exists
-from train_models import train_and_save_model, load_training_data, get_training_dates
+from train_models import get_training_dates
 from datetime import datetime, timedelta
 
 print("✓ All modules imported successfully")
-
-# COMMAND ----------
-
-# Load credentials
-DATABRICKS_HOST = os.getenv("DATABRICKS_HOST")
-DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
-DATABRICKS_HTTP_PATH = os.getenv("DATABRICKS_HTTP_PATH")
-
-if not all([DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_HTTP_PATH]):
-    raise ValueError("Missing Databricks credentials in environment variables")
-
-print("✓ Databricks credentials loaded")
+print("✓ Running in Databricks - using spark.sql() (no credentials needed!)")
 
 # COMMAND ----------
 
@@ -100,14 +87,82 @@ print("=" * 80)
 
 # COMMAND ----------
 
-# Connect to Databricks
-print("\n📡 Connecting to Databricks...")
-connection = sql.connect(
-    server_hostname=DATABRICKS_HOST.replace('https://', ''),
-    http_path=DATABRICKS_HTTP_PATH,
-    access_token=DATABRICKS_TOKEN
-)
-print("✅ Connected to Databricks")
+# Helper functions for Spark-based data access
+def load_training_data_spark(commodity: str, cutoff_date):
+    """Load training data using Spark SQL (no credentials needed!)"""
+    query = f"""
+        SELECT *
+        FROM commodity.silver.unified_data
+        WHERE commodity = '{commodity}'
+        AND date <= '{cutoff_date}'
+        ORDER BY date
+    """
+    spark_df = spark.sql(query)
+    pandas_df = spark_df.toPandas()
+
+    # Set date as index
+    pandas_df['date'] = pd.to_datetime(pandas_df['date'])
+    pandas_df = pandas_df.set_index('date')
+
+    return pandas_df
+
+def model_exists_spark(commodity: str, model_name: str, training_cutoff: str, model_version: str) -> bool:
+    """Check if model already exists using Spark SQL"""
+    query = f"""
+        SELECT COUNT(*) as count
+        FROM commodity.forecast.trained_models
+        WHERE commodity = '{commodity}'
+        AND model_name = '{model_name}'
+        AND training_cutoff_date = '{training_cutoff}'
+        AND model_version = '{model_version}'
+    """
+    result = spark.sql(query).collect()[0]
+    return result['count'] > 0
+
+def save_model_spark(fitted_model_dict: dict, commodity: str, model_name: str, model_version: str, created_by: str):
+    """Save trained model using Spark SQL"""
+    import json
+    from datetime import datetime
+
+    training_cutoff = fitted_model_dict['last_date'].strftime('%Y-%m-%d')
+
+    # Serialize model to JSON
+    model_json = json.dumps(fitted_model_dict, default=str)
+    model_size_mb = len(model_json) / (1024 * 1024)
+
+    print(f"      💾 Model size: {model_size_mb:.2f} MB")
+
+    if model_size_mb >= 1.0:
+        print(f"      ⚠️  Model too large for JSON ({model_size_mb:.2f} MB ≥ 1 MB) - skipping S3 upload for now")
+        return None
+
+    # Create record
+    year = int(training_cutoff[:4])
+    month = int(training_cutoff[5:7])
+
+    # Use Spark SQL to insert
+    insert_query = f"""
+        INSERT INTO commodity.forecast.trained_models
+        (commodity, model_name, model_version, training_cutoff_date, fitted_model_json,
+         created_at, created_by, year, month)
+        VALUES (
+            '{commodity}',
+            '{model_name}',
+            '{model_version}',
+            '{training_cutoff}',
+            '{model_json.replace("'", "''")}',
+            '{datetime.utcnow().isoformat()}',
+            '{created_by}',
+            {year},
+            {month}
+        )
+    """
+
+    spark.sql(insert_query)
+    print(f"      ✅ Model saved to trained_models table")
+    return f"{commodity}_{model_name}_{training_cutoff}_{model_version}"
+
+print("✓ Spark helper functions defined")
 
 # COMMAND ----------
 
@@ -131,8 +186,8 @@ for commodity in commodities:
         print(f"Window {window_idx}/{len(training_dates)}: Training Cutoff = {training_cutoff}")
         print(f"{'='*80}")
 
-        # Load training data up to this cutoff
-        training_df = load_training_data(connection, commodity, training_cutoff)
+        # Load training data up to this cutoff using Spark
+        training_df = load_training_data_spark(commodity, training_cutoff)
 
         # Check minimum training days
         if len(training_df) < min_training_days:
@@ -150,24 +205,55 @@ for commodity in commodities:
 
             print(f"\n   🔧 {model_name} ({model_key}):")
 
-            model_id = train_and_save_model(
-                connection=connection,
-                training_df=training_df,
-                model_key=model_key,
-                model_config=model_config,
-                commodity=commodity,
-                model_version=model_version,
-                created_by="databricks_train_fresh_models.py"
-            )
+            # Check if model already exists
+            if model_exists_spark(commodity, model_name, training_cutoff.strftime('%Y-%m-%d'), model_version):
+                print(f"      ⏩ Model already exists - skipping")
+                total_skipped += 1
+                continue
 
-            if model_id:
-                total_trained += 1
-            elif model_id is None:
-                # Check if it was skipped or failed
-                if model_exists(connection, commodity, model_name, training_df.index[-1].strftime('%Y-%m-%d'), model_version):
-                    total_skipped += 1
+            try:
+                # Train the model
+                from ground_truth.models import naive, random_walk, arima, sarimax, xgboost_model
+
+                # Map model keys to training functions
+                train_functions = {
+                    'naive': naive.naive_train,
+                    'random_walk': random_walk.random_walk_train,
+                    'arima_111': arima.arima_train,
+                    'sarimax_auto': sarimax.sarimax_train,
+                    'sarimax_auto_weather': sarimax.sarimax_train,
+                    'xgboost': xgboost_model.xgboost_train,
+                }
+
+                train_func = train_functions.get(model_key)
+                if not train_func:
+                    print(f"      ❌ No training function for {model_key}")
+                    total_failed += 1
+                    continue
+
+                # Get model parameters
+                params = model_config['params'].copy()
+
+                # Train model
+                fitted_model_dict = train_func(training_df, **params)
+
+                # Save model
+                model_id = save_model_spark(
+                    fitted_model_dict=fitted_model_dict,
+                    commodity=commodity,
+                    model_name=model_name,
+                    model_version=model_version,
+                    created_by="databricks_train_fresh_models.py"
+                )
+
+                if model_id:
+                    total_trained += 1
                 else:
                     total_failed += 1
+
+            except Exception as e:
+                print(f"      ❌ Training failed: {str(e)[:200]}")
+                total_failed += 1
 
     # Summary for this commodity
     print("\n" + "=" * 80)
@@ -185,25 +271,19 @@ print("\n" + "=" * 80)
 print("VERIFYING TRAINED MODELS IN DATABASE")
 print("=" * 80)
 
-cursor = connection.cursor()
-
 for commodity in commodities:
     print(f"\n📊 {commodity} Models:")
-    cursor.execute(f"""
-        SELECT model_version, COUNT(*) as count
+    result = spark.sql(f"""
+        SELECT model_name, COUNT(*) as count
         FROM commodity.forecast.trained_models
         WHERE commodity = '{commodity}'
-        AND model_version IN ('naive', 'xgboost', 'sarimax_auto_weather')
-        GROUP BY model_version
-        ORDER BY model_version
-    """)
+        AND model_name IN ('Naive', 'XGBoost', 'SARIMAX+Weather')
+        GROUP BY model_name
+        ORDER BY model_name
+    """).collect()
 
-    results = cursor.fetchall()
-    for row in results:
-        print(f"  {row[0]}: {row[1]} models")
-
-cursor.close()
-connection.close()
+    for row in result:
+        print(f"  {row['model_name']}: {row['count']} models")
 
 # COMMAND ----------
 
