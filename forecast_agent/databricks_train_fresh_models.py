@@ -51,7 +51,7 @@ print(f"  Pandas: {pd.__version__}")
 # Import training modules from Git repo
 print("\n📥 Importing training modules from Git repo...")
 
-from databricks import sql
+import databricks.sql as sql
 from ground_truth.config.model_registry import BASELINE_MODELS
 from utils.model_persistence import save_model, model_exists
 from train_models import train_and_save_model, load_training_data, get_training_dates
