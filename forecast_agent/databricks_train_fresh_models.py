@@ -113,7 +113,7 @@ def model_exists_spark(commodity: str, model_name: str, training_cutoff: str, mo
         FROM commodity.forecast.trained_models
         WHERE commodity = '{commodity}'
         AND model_name = '{model_name}'
-        AND training_cutoff_date = '{training_cutoff}'
+        AND training_date = '{training_cutoff}'
         AND model_version = '{model_version}'
     """
     result = spark.sql(query).collect()[0]
@@ -143,7 +143,7 @@ def save_model_spark(fitted_model_dict: dict, commodity: str, model_name: str, m
     # Use Spark SQL to insert
     insert_query = f"""
         INSERT INTO commodity.forecast.trained_models
-        (commodity, model_name, model_version, training_cutoff_date, fitted_model_json,
+        (commodity, model_name, model_version, training_date, fitted_model_json,
          created_at, created_by, year, month)
         VALUES (
             '{commodity}',
