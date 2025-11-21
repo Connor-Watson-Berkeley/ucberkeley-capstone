@@ -3,26 +3,30 @@
 Databricks Notebook: Train + Spark Backfill
 Runs the Spark-parallelized forecast backfill for massive speedup.
 
-This notebook uses standard Python imports to load the backfill module.
+This notebook runs the backfill using direct execution without imports.
 """
 
 # COMMAND ----------
 
-# Add forecast_agent directory to Python path for imports
+# Set up paths for module imports
 import sys
 import os
 
-# Get the notebook's directory
-notebook_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else '/Workspace/Repos/Project_Git/ucberkeley-capstone/forecast_agent'
+# Databricks workspace path
+forecast_agent_path = '/Workspace/Repos/Project_Git/ucberkeley-capstone/forecast_agent'
 
-# Add to path if not already there
-if notebook_dir not in sys.path:
-    sys.path.insert(0, notebook_dir)
+# Add to Python path
+if forecast_agent_path not in sys.path:
+    sys.path.insert(0, forecast_agent_path)
+
+print(f"✓ Added {forecast_agent_path} to Python path")
+
+# COMMAND ----------
 
 # Import the backfill function
 from backfill_rolling_window_spark import backfill_all_models_spark
 
-print(f"✓ Successfully imported backfill_all_models_spark from {notebook_dir}")
+print("✓ Successfully imported backfill_all_models_spark")
 
 # COMMAND ----------
 
