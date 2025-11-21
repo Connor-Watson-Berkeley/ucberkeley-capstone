@@ -6,7 +6,7 @@ Trains Coffee & Sugar models using Databricks default package versions
 
 # COMMAND ----------
 
-# No pip install needed! Using ML Runtime pre-installed packages only
+# MAGIC %pip install databricks-sql-connector pmdarima
 
 # COMMAND ----------
 
@@ -75,7 +75,7 @@ print("✓ Databricks credentials loaded")
 
 # Configuration
 commodities = ['Coffee', 'Sugar']
-model_keys = ['naive', 'xgboost']  # Removed SARIMAX to avoid pmdarima dependency
+model_keys = ['naive', 'xgboost', 'sarimax_auto_weather']
 train_frequency = 'semiannually'
 start_date = datetime.strptime('2018-01-01', '%Y-%m-%d').date()
 end_date = datetime.strptime('2025-11-17', '%Y-%m-%d').date()
