@@ -132,6 +132,7 @@ all-eventbridge.zip
 lambda_migration/
 
 # Lambda dependencies (installed at deploy time, not needed in git)
+research_agent/infrastructure/lambda/functions/*/package/
 research_agent/infrastructure/lambda/functions/*/boto*
 research_agent/infrastructure/lambda/functions/*/botocore*
 research_agent/infrastructure/lambda/functions/*/urllib3*
@@ -155,3 +156,13 @@ research_agent/infrastructure/lambda/functions/*/.libs*/
 
 # Progress reports
 progress_reports/
+
+# WhatsApp Lambda package dependencies (deployed separately)
+trading_agent/whatsapp/package/
+trading_agent/whatsapp/*.png
+
+# Temporary test files
+/tmp/*.py
+/tmp/*.sh
+/tmp/*.json
+/tmp/*.sql
