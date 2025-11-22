@@ -730,29 +730,45 @@ def parse_commodity_from_message(message_body):
     Examples:
         "coffee" → Coffee
         "sugar recommendation" → Sugar
-        "hello" → Coffee (default)
-    """
-    message_lower = message_body.lower()
+        "hello" → None (show help)
+        "exit" → 'EXIT' (special marker)
 
+    Returns:
+        Commodity name, 'EXIT' for exit commands, or None for help
+    """
+    message_lower = message_body.lower().strip()
+
+    # Handle exit/stop commands
+    exit_commands = ['exit', 'stop', 'quit', 'unsubscribe', 'leave', 'cancel']
+    if any(cmd in message_lower for cmd in exit_commands):
+        return 'EXIT'
+
+    # Recognize explicit commodity requests
     if 'sugar' in message_lower:
         return 'Sugar'
-    else:
-        # Default to Coffee
+    elif 'coffee' in message_lower:
         return 'Coffee'
+    else:
+        # Unrecognized message - return None to show help
+        return None
 
 
 def format_twilio_response(message):
     """
     Format response for Twilio webhook.
 
-    Twilio expects TwiML response format.
+    Twilio expects TwiML response format wrapped in API Gateway response.
     """
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Message>{message}</Message>
 </Response>"""
 
-    return twiml
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'text/xml'},
+        'body': twiml
+    }
 
 
 def lambda_handler(event, context):
@@ -783,8 +799,14 @@ def lambda_handler(event, context):
         if event.get('body'):
             # Parse URL-encoded form data
             from urllib.parse import parse_qs
+            import base64
 
             body = event['body']
+
+            # Lambda Function URLs base64-encode the body
+            if event.get('isBase64Encoded', False):
+                body = base64.b64decode(body).decode('utf-8')
+
             params = parse_qs(body)
 
             # Extract Twilio parameters
@@ -794,8 +816,38 @@ def lambda_handler(event, context):
             print(f"From: {from_number}")
             print(f"Message: {message_body}")
 
-            # Determine commodity from message
-            commodity = parse_commodity_from_message(message_body)
+            # Check if this is a JOIN message (Twilio sandbox activation)
+            message_lower = message_body.strip().lower()
+            if message_lower.startswith('join '):
+                print(f"🎉 New user joining via sandbox: {message_body}")
+                print("Auto-sending Coffee welcome recommendation")
+                commodity = 'Coffee'  # Welcome with Coffee by default
+            else:
+                # Determine commodity from message
+                commodity = parse_commodity_from_message(message_body)
+
+            # Handle special responses
+            if commodity == 'EXIT':
+                print(f"User requested exit: {message_body}")
+                goodbye_message = "Thanks for using GroundTruth Trading!\n\nTo unsubscribe from this sandbox, reply with STOP\n\nOr message 'coffee' or 'sugar' anytime to get new recommendations."
+                return format_twilio_response(goodbye_message)
+
+            if commodity is None:
+                print(f"Unrecognized message, sending help: {message_body}")
+                help_message = """Welcome to GroundTruth Trading!
+
+AI-powered commodity market recommendations.
+
+To get started, send one of these:
+  • coffee - Get coffee market update
+  • sugar - Get sugar market update
+
+You can also send:
+  • exit - Stop receiving messages
+
+Powered by real-time GDELT analysis"""
+                return format_twilio_response(help_message)
+
             print(f"Detected commodity: {commodity}")
 
             # Get recommendation
@@ -816,29 +868,13 @@ def lambda_handler(event, context):
             # Log metadata
             print(f"Recommendation metadata: {json.dumps(recommendation['metadata'])}")
 
-            # Format response
-            twiml = format_twilio_response(recommendation['whatsapp_message'])
-
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'text/xml'
-                },
-                'body': twiml
-            }
+            # Format and return response
+            return format_twilio_response(recommendation['whatsapp_message'])
 
         else:
             # No body - return error
             error_message = "No message received. Try sending 'coffee' or 'sugar'."
-            twiml = format_twilio_response(error_message)
-
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'text/xml'
-                },
-                'body': twiml
-            }
+            return format_twilio_response(error_message)
 
     except Exception as e:
         # Log error
@@ -848,15 +884,9 @@ def lambda_handler(event, context):
 
         # Return friendly error message
         error_message = "Sorry, something went wrong. Please try again later."
-        twiml = format_twilio_response(error_message)
-
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'text/xml'
-            },
-            'body': twiml
-        }
+        response = format_twilio_response(error_message)
+        response['statusCode'] = 500  # Override to 500 for errors
+        return response
 
 
 # For local testing

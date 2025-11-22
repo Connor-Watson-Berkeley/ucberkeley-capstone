@@ -56,8 +56,9 @@ BUILD_DIR="/tmp/lambda-whatsapp-build"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
-# Copy Lambda function
+# Copy Lambda function and dependencies
 cp lambda_handler_real.py "$BUILD_DIR/"
+cp trading_strategies.py "$BUILD_DIR/"
 
 # Install Python dependencies
 echo "Installing Python dependencies..."

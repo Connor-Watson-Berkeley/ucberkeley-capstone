@@ -96,14 +96,17 @@ def lambda_handler(event, context):
         dataset=True
     )
 
+    # Transform raw bronze data (date parsing, tone splitting, commodity flagging)
+    print("Transforming bronze data...")
+    df_transformed = transform_bronze_data(df_bronze)
+
     # Filter by date range
-    df_bronze['article_date'] = pd.to_datetime(df_bronze['article_date'])
-    df_bronze = df_bronze[
-        (df_bronze['article_date'].dt.date >= start_date) &
-        (df_bronze['article_date'].dt.date <= end_date)
+    df_transformed = df_transformed[
+        (df_transformed['article_date'] >= start_date) &
+        (df_transformed['article_date'] <= end_date)
     ]
 
-    record_count = len(df_bronze)
+    record_count = len(df_transformed)
     print(f"Loaded {record_count:,} records from Bronze table")
 
     if record_count == 0:
@@ -118,7 +121,7 @@ def lambda_handler(event, context):
 
     # Explode themes and create commodity rows
     print("Exploding themes...")
-    df_exploded = explode_themes(df_bronze)
+    df_exploded = explode_themes(df_transformed)
     print(f"Exploded to {len(df_exploded):,} theme records")
 
     # Aggregate and pivot
@@ -149,6 +152,46 @@ def lambda_handler(event, context):
             'date_range': f"{start_date} to {end_date}"
         })
     }
+
+
+def transform_bronze_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Transform raw bronze data: parse dates, split tone, flag commodities.
+    All processing logic moved from bronze layer to silver layer.
+    """
+    # Parse article_date from date field (format: yyyyMMddHHmmss string)
+    df['article_date'] = pd.to_datetime(
+        df['date'].str[:8],  # Extract YYYYMMDD
+        format='%Y%m%d',
+        errors='coerce'
+    ).dt.date
+
+    # Parse tone fields (comma-separated: avg,positive,negative,polarity)
+    tone_split = df['tone'].str.split(',', expand=True)
+    df['tone_avg'] = pd.to_numeric(tone_split[0], errors='coerce')
+    df['tone_positive'] = pd.to_numeric(tone_split[1], errors='coerce')
+    df['tone_negative'] = pd.to_numeric(tone_split[2], errors='coerce')
+    df['tone_polarity'] = pd.to_numeric(tone_split[3], errors='coerce')
+
+    # Flag commodities based on all_names
+    all_names_lower = df['all_names'].str.lower()
+
+    df['has_coffee'] = all_names_lower.str.contains(
+        'coffee|arabica|robusta',
+        regex=True,
+        na=False
+    )
+
+    df['has_sugar'] = (
+        all_names_lower.str.contains('sugarcane|sugar cane', regex=True, na=False) |
+        (all_names_lower.str.contains('sugar', regex=False, na=False) &
+         ~all_names_lower.str.contains('sugar ray', regex=False, na=False))
+    )
+
+    # Drop rows with invalid dates
+    df = df.dropna(subset=['article_date'])
+
+    return df
 
 
 def explode_themes(df: pd.DataFrame) -> pd.DataFrame:
