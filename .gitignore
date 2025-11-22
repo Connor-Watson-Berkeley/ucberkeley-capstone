@@ -157,6 +157,9 @@ research_agent/infrastructure/lambda/functions/*/.libs*/
 # Progress reports
 progress_reports/
 
+# Legacy Lambda dependencies (same patterns for legacy directory)
+research_agent/infrastructure/legacy/lambda_functions/*/package/
+
 # WhatsApp Lambda package dependencies (deployed separately)
 trading_agent/whatsapp/package/
 trading_agent/whatsapp/*.png
@@ -166,3 +169,9 @@ trading_agent/whatsapp/*.png
 /tmp/*.sh
 /tmp/*.json
 /tmp/*.sql
+
+# Exclude unorganized legacy files
+research_agent/legacy_gdelt_files/
+
+# GDELT master file list (too large for GitHub - 113 MB)
+research_agent/gdelt_master_list/
