@@ -17,7 +17,6 @@ Complete Strategy Suite - Percentage-Based Framework
 **Key Design:**
 - ALL thresholds as percentages (scale-invariant)
 - Matched pairs MIRROR baselines exactly (same params except prediction usage)
-- Prediction overlays are STRATEGY-SPECIFIC (optimized for each baseline's trigger type)
 - Full parameterization for grid search
 - Batch sizes 0.0 to 0.40 (never sell all except forced liquidation)
 
@@ -650,12 +649,6 @@ class MovingAveragePredictive(BaseStrategy):
 
     MIRRORS baseline exactly, adds prediction overlay.
     PERCENTAGE-BASED cost-benefit calculation.
-
-    PREDICTION LOGIC (REVERSED from PriceThreshold):
-    - MovingAverage triggers at MOMENTUM STARTS (crossover), not price spikes
-    - Strong predictions → SELL MORE (capitalize on confirmed momentum)
-    - Weak predictions → DEFER (wait for clearer signal)
-    - This is OPPOSITE of PriceThreshold which defers when predictions are good
     """
 
     def __init__(self,
@@ -766,13 +759,7 @@ class MovingAveragePredictive(BaseStrategy):
         return batch_size, reason
 
     def _analyze_with_predictions(self, current_price, price_history, predictions):
-        """Add prediction overlay to baseline analysis
-
-        IMPORTANT: MovingAverage triggers at MOMENTUM STARTS (crossover),
-        not price spikes. Therefore prediction logic is REVERSED from PriceThreshold:
-        - Good predictions → SELL MORE (capitalize on confirmed momentum)
-        - Bad predictions → DEFER (weak signal, wait for clarity)
-        """
+        """Add prediction overlay to baseline analysis"""
         # Start with baseline
         batch_size, _ = self._analyze_historical(current_price, price_history)
 
@@ -783,18 +770,15 @@ class MovingAveragePredictive(BaseStrategy):
         net_benefit_pct = self._calculate_cost_benefit_pct(current_price, predictions)
 
         # Adjust batch based on predictions (±max adjustment)
-        # REVERSED LOGIC: MA crossover = momentum starting, capitalize if confirmed
         adjustment = 0.0
         reasons = []
 
         if cv < self.high_confidence_cv and net_benefit_pct > self.min_net_benefit_pct:
-            # Strong momentum confirmed by predictions: SELL MORE
-            adjustment += self.batch_adjustment_max
-            reasons.append(f'strong_momentum_confirmed_capitalize_net{net_benefit_pct:.2f}%')
-        elif cv > 0.20 or net_benefit_pct < 0:
-            # Weak/unclear signal: DEFER for clarity
             adjustment -= self.batch_adjustment_max
-            reasons.append(f'weak_momentum_defer_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
+            reasons.append(f'momentum_continues_defer_net{net_benefit_pct:.2f}%')
+        elif cv > 0.20 or net_benefit_pct < 0:
+            adjustment += self.batch_adjustment_max
+            reasons.append(f'low_conf_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
 
         batch_size = np.clip(batch_size + adjustment, 0.10, 0.45)
         reason = '_'.join(reasons) if reasons else 'baseline'
