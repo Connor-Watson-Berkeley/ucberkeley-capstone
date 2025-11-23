@@ -1,0 +1,534 @@
+"""
+Diagnostic 16: Comprehensive Grid Search for All Prediction Parameters
+
+Optimizes parameters for:
+1. Matched Pairs (Price Threshold Predictive, Moving Average Predictive)
+2. Standalone Predictions (Expected Value, Consensus, Risk-Adjusted)
+
+Total combinations: ~268 parameter sets
+"""
+
+# Databricks notebook source
+# MAGIC %md
+# MAGIC # Diagnostic 16: Comprehensive Grid Search
+# MAGIC
+# MAGIC **Goal:** Find optimal prediction parameters for all 5 prediction-based strategies
+# MAGIC
+# MAGIC **Strategies:**
+# MAGIC 1. Price Threshold Predictive (matched pair)
+# MAGIC 2. Moving Average Predictive (matched pair)
+# MAGIC 3. Expected Value (standalone)
+# MAGIC 4. Consensus (standalone)
+# MAGIC 5. Risk-Adjusted (standalone)
+
+# COMMAND ----------
+
+%run ../00_setup_and_config
+
+# COMMAND ----------
+
+import sys
+import os
+import pandas as pd
+import numpy as np
+import pickle
+from datetime import datetime
+from itertools import product
+import importlib.util
+
+print("="*80)
+print("DIAGNOSTIC 16: COMPREHENSIVE GRID SEARCH")
+print("="*80)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Load Strategies
+
+# COMMAND ----------
+
+# Force fresh reload
+if 'all_strategies_pct' in sys.modules:
+    del sys.modules['all_strategies_pct']
+
+spec = importlib.util.spec_from_file_location("all_strategies_pct", "all_strategies_pct.py")
+strategies_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(strategies_module)
+
+PriceThresholdPredictive = strategies_module.PriceThresholdPredictive
+MovingAveragePredictive = strategies_module.MovingAveragePredictive
+ExpectedValueStrategy = strategies_module.ExpectedValueStrategy
+ConsensusStrategy = strategies_module.ConsensusStrategy
+RiskAdjustedStrategy = strategies_module.RiskAdjustedStrategy
+
+print("✓ Loaded prediction strategies")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Load Data
+
+# COMMAND ----------
+
+COMMODITY = 'coffee'
+MODEL_VERSION = 'synthetic_acc90'
+
+DATA_PATHS = get_data_paths(COMMODITY, MODEL_VERSION)
+COMMODITY_CONFIG = COMMODITY_CONFIGS[COMMODITY]
+
+# OVERRIDE: Small farmer realistic costs
+COMMODITY_CONFIG['storage_cost_pct_per_day'] = 0.005  # Was 0.025%
+COMMODITY_CONFIG['transaction_cost_pct'] = 0.01       # Was 0.25%
+
+print("Loading prices...")
+prices_table = get_data_paths(COMMODITY)['prices_prepared']
+prices = spark.table(prices_table).toPandas()
+prices['date'] = pd.to_datetime(prices['date'])
+print(f"✓ Loaded {len(prices)} price records")
+
+print("\nLoading predictions...")
+matrices_path = DATA_PATHS['prediction_matrices']
+with open(matrices_path, 'rb') as f:
+    prediction_matrices = pickle.load(f)
+print(f"✓ Loaded {len(prediction_matrices)} prediction matrices")
+
+prediction_matrices = {pd.to_datetime(k): v for k, v in prediction_matrices.items()}
+
+print(f"\nCommodity: {COMMODITY}")
+print(f"Storage: {COMMODITY_CONFIG['storage_cost_pct_per_day']}% per day")
+print(f"Transaction: {COMMODITY_CONFIG['transaction_cost_pct']}%")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Backtest Engine
+
+# COMMAND ----------
+
+class GridSearchBacktestEngine:
+    """Simplified backtest for grid search"""
+
+    def __init__(self, prices_df, prediction_matrices, commodity_config):
+        self.prices = prices_df
+        self.prediction_matrices = prediction_matrices
+        self.config = commodity_config
+
+    def run_backtest(self, strategy, initial_inventory=50.0):
+        """Run single backtest"""
+        inventory = initial_inventory
+        total_revenue = 0
+        total_transaction_costs = 0
+        total_storage_costs = 0
+        num_trades = 0
+
+        strategy.reset()
+        strategy.set_harvest_start(0)
+
+        for day in range(len(self.prices)):
+            current_date = self.prices.iloc[day]['date']
+            current_price = self.prices.iloc[day]['price']
+            price_history = self.prices.iloc[:day+1].copy()
+            predictions = self.prediction_matrices.get(current_date, None)
+
+            decision = strategy.decide(
+                day=day,
+                inventory=inventory,
+                current_price=current_price,
+                price_history=price_history,
+                predictions=predictions
+            )
+
+            if decision['action'] == 'SELL' and decision['amount'] > 0:
+                amount = min(decision['amount'], inventory)
+                price_per_ton = current_price * 20
+                revenue = amount * price_per_ton
+                transaction_cost = revenue * (self.config['transaction_cost_pct'] / 100)
+
+                total_revenue += revenue
+                total_transaction_costs += transaction_cost
+                inventory -= amount
+                num_trades += 1
+
+            if inventory > 0:
+                avg_price = self.prices.iloc[:day+1]['price'].mean()
+                price_per_ton = avg_price * 20
+                storage_cost = inventory * price_per_ton * (self.config['storage_cost_pct_per_day'] / 100)
+                total_storage_costs += storage_cost
+
+        net_earnings = total_revenue - total_transaction_costs - total_storage_costs
+
+        return {
+            'net_earnings': net_earnings,
+            'total_revenue': total_revenue,
+            'storage_costs': total_storage_costs,
+            'transaction_costs': total_transaction_costs,
+            'num_trades': num_trades,
+            'final_inventory': inventory
+        }
+
+engine = GridSearchBacktestEngine(prices, prediction_matrices, COMMODITY_CONFIG)
+print("✓ Backtest engine ready")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Define Parameter Grids
+
+# COMMAND ----------
+
+# Matched Pairs (Price Threshold Predictive, Moving Average Predictive)
+MATCHED_PAIR_GRID = {
+    'min_net_benefit_pct': [0.3, 0.5, 0.7, 1.0],
+    'high_confidence_cv': [0.03, 0.05, 0.08, 0.10],
+    'batch_adjustment_max': [0.05, 0.10, 0.15, 0.20]
+}
+
+# Expected Value
+EXPECTED_VALUE_GRID = {
+    'min_net_benefit_pct': [0.3, 0.5, 0.7, 1.0],
+    'negative_threshold_pct': [-0.5, -0.3, -0.1, 0.0]
+}
+
+# Consensus
+CONSENSUS_GRID = {
+    'consensus_threshold': [0.65, 0.70, 0.75, 0.80],
+    'min_return_pct': [0.5, 1.0, 1.5, 2.0]
+}
+
+# Risk-Adjusted
+RISK_ADJUSTED_GRID = {
+    'min_return_pct': [0.5, 1.0, 1.5, 2.0],
+    'max_uncertainty_low': [0.03, 0.05, 0.08],
+    'max_uncertainty_medium': [0.10, 0.15, 0.20],
+    'max_uncertainty_high': [0.25, 0.30, 0.35]
+}
+
+print("Parameter Grids Defined:")
+print(f"  Matched Pairs: {len(list(product(*MATCHED_PAIR_GRID.values())))} combinations per strategy")
+print(f"  Expected Value: {len(list(product(*EXPECTED_VALUE_GRID.values())))} combinations")
+print(f"  Consensus: {len(list(product(*CONSENSUS_GRID.values())))} combinations")
+print(f"  Risk-Adjusted: {len(list(product(*RISK_ADJUSTED_GRID.values())))} combinations")
+
+total = (2 * len(list(product(*MATCHED_PAIR_GRID.values()))) +
+         len(list(product(*EXPECTED_VALUE_GRID.values()))) +
+         len(list(product(*CONSENSUS_GRID.values()))) +
+         len(list(product(*RISK_ADJUSTED_GRID.values()))))
+print(f"\nTotal backtests: {total}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Grid Search: Price Threshold Predictive
+
+# COMMAND ----------
+
+print("="*80)
+print("GRID SEARCH: Price Threshold Predictive")
+print("="*80)
+
+pt_results = []
+param_combinations = list(product(*MATCHED_PAIR_GRID.values()))
+
+print(f"Testing {len(param_combinations)} parameter combinations...")
+
+for i, params in enumerate(param_combinations, 1):
+    min_benefit, cv, adjustment = params
+
+    strategy = PriceThresholdPredictive(
+        storage_cost_pct_per_day=COMMODITY_CONFIG['storage_cost_pct_per_day'],
+        transaction_cost_pct=COMMODITY_CONFIG['transaction_cost_pct'],
+        min_net_benefit_pct=min_benefit,
+        high_confidence_cv=cv,
+        batch_adjustment_max=adjustment
+    )
+
+    result = engine.run_backtest(strategy)
+
+    pt_results.append({
+        'min_net_benefit_pct': min_benefit,
+        'high_confidence_cv': cv,
+        'batch_adjustment_max': adjustment,
+        'net_earnings': result['net_earnings'],
+        'storage_costs': result['storage_costs'],
+        'num_trades': result['num_trades']
+    })
+
+    if i % 10 == 0:
+        print(f"  Progress: {i}/{len(param_combinations)}")
+
+# Find best
+pt_df = pd.DataFrame(pt_results)
+best_pt = pt_df.loc[pt_df['net_earnings'].idxmax()]
+
+print(f"\n✓ Best Price Threshold Predictive:")
+print(f"  Net Earnings: ${best_pt['net_earnings']:,.2f}")
+print(f"  Parameters:")
+print(f"    min_net_benefit_pct: {best_pt['min_net_benefit_pct']}")
+print(f"    high_confidence_cv: {best_pt['high_confidence_cv']}")
+print(f"    batch_adjustment_max: {best_pt['batch_adjustment_max']}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Grid Search: Moving Average Predictive
+
+# COMMAND ----------
+
+print("="*80)
+print("GRID SEARCH: Moving Average Predictive")
+print("="*80)
+
+ma_results = []
+
+print(f"Testing {len(param_combinations)} parameter combinations...")
+
+for i, params in enumerate(param_combinations, 1):
+    min_benefit, cv, adjustment = params
+
+    strategy = MovingAveragePredictive(
+        storage_cost_pct_per_day=COMMODITY_CONFIG['storage_cost_pct_per_day'],
+        transaction_cost_pct=COMMODITY_CONFIG['transaction_cost_pct'],
+        min_net_benefit_pct=min_benefit,
+        high_confidence_cv=cv,
+        batch_adjustment_max=adjustment
+    )
+
+    result = engine.run_backtest(strategy)
+
+    ma_results.append({
+        'min_net_benefit_pct': min_benefit,
+        'high_confidence_cv': cv,
+        'batch_adjustment_max': adjustment,
+        'net_earnings': result['net_earnings'],
+        'storage_costs': result['storage_costs'],
+        'num_trades': result['num_trades']
+    })
+
+    if i % 10 == 0:
+        print(f"  Progress: {i}/{len(param_combinations)}")
+
+# Find best
+ma_df = pd.DataFrame(ma_results)
+best_ma = ma_df.loc[ma_df['net_earnings'].idxmax()]
+
+print(f"\n✓ Best Moving Average Predictive:")
+print(f"  Net Earnings: ${best_ma['net_earnings']:,.2f}")
+print(f"  Parameters:")
+print(f"    min_net_benefit_pct: {best_ma['min_net_benefit_pct']}")
+print(f"    high_confidence_cv: {best_ma['high_confidence_cv']}")
+print(f"    batch_adjustment_max: {best_ma['batch_adjustment_max']}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Grid Search: Expected Value
+
+# COMMAND ----------
+
+print("="*80)
+print("GRID SEARCH: Expected Value")
+print("="*80)
+
+ev_results = []
+param_combinations = list(product(*EXPECTED_VALUE_GRID.values()))
+
+print(f"Testing {len(param_combinations)} parameter combinations...")
+
+for i, params in enumerate(param_combinations, 1):
+    min_benefit, neg_threshold = params
+
+    strategy = ExpectedValueStrategy(
+        storage_cost_pct_per_day=COMMODITY_CONFIG['storage_cost_pct_per_day'],
+        transaction_cost_pct=COMMODITY_CONFIG['transaction_cost_pct'],
+        min_net_benefit_pct=min_benefit,
+        negative_threshold_pct=neg_threshold
+    )
+
+    result = engine.run_backtest(strategy)
+
+    ev_results.append({
+        'min_net_benefit_pct': min_benefit,
+        'negative_threshold_pct': neg_threshold,
+        'net_earnings': result['net_earnings'],
+        'storage_costs': result['storage_costs'],
+        'num_trades': result['num_trades']
+    })
+
+ev_df = pd.DataFrame(ev_results)
+best_ev = ev_df.loc[ev_df['net_earnings'].idxmax()]
+
+print(f"\n✓ Best Expected Value:")
+print(f"  Net Earnings: ${best_ev['net_earnings']:,.2f}")
+print(f"  Parameters:")
+print(f"    min_net_benefit_pct: {best_ev['min_net_benefit_pct']}")
+print(f"    negative_threshold_pct: {best_ev['negative_threshold_pct']}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Grid Search: Consensus
+
+# COMMAND ----------
+
+print("="*80)
+print("GRID SEARCH: Consensus")
+print("="*80)
+
+consensus_results = []
+param_combinations = list(product(*CONSENSUS_GRID.values()))
+
+print(f"Testing {len(param_combinations)} parameter combinations...")
+
+for i, params in enumerate(param_combinations, 1):
+    consensus_thresh, min_return = params
+
+    strategy = ConsensusStrategy(
+        storage_cost_pct_per_day=COMMODITY_CONFIG['storage_cost_pct_per_day'],
+        transaction_cost_pct=COMMODITY_CONFIG['transaction_cost_pct'],
+        consensus_threshold=consensus_thresh,
+        min_return_pct=min_return
+    )
+
+    result = engine.run_backtest(strategy)
+
+    consensus_results.append({
+        'consensus_threshold': consensus_thresh,
+        'min_return_pct': min_return,
+        'net_earnings': result['net_earnings'],
+        'storage_costs': result['storage_costs'],
+        'num_trades': result['num_trades']
+    })
+
+consensus_df = pd.DataFrame(consensus_results)
+best_consensus = consensus_df.loc[consensus_df['net_earnings'].idxmax()]
+
+print(f"\n✓ Best Consensus:")
+print(f"  Net Earnings: ${best_consensus['net_earnings']:,.2f}")
+print(f"  Parameters:")
+print(f"    consensus_threshold: {best_consensus['consensus_threshold']}")
+print(f"    min_return_pct: {best_consensus['min_return_pct']}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Grid Search: Risk-Adjusted
+
+# COMMAND ----------
+
+print("="*80)
+print("GRID SEARCH: Risk-Adjusted")
+print("="*80)
+
+ra_results = []
+param_combinations = list(product(*RISK_ADJUSTED_GRID.values()))
+
+print(f"Testing {len(param_combinations)} parameter combinations...")
+
+for i, params in enumerate(param_combinations, 1):
+    min_return, unc_low, unc_med, unc_high = params
+
+    strategy = RiskAdjustedStrategy(
+        storage_cost_pct_per_day=COMMODITY_CONFIG['storage_cost_pct_per_day'],
+        transaction_cost_pct=COMMODITY_CONFIG['transaction_cost_pct'],
+        min_return_pct=min_return,
+        max_uncertainty_low=unc_low,
+        max_uncertainty_medium=unc_med,
+        max_uncertainty_high=unc_high
+    )
+
+    result = engine.run_backtest(strategy)
+
+    ra_results.append({
+        'min_return_pct': min_return,
+        'max_uncertainty_low': unc_low,
+        'max_uncertainty_medium': unc_med,
+        'max_uncertainty_high': unc_high,
+        'net_earnings': result['net_earnings'],
+        'storage_costs': result['storage_costs'],
+        'num_trades': result['num_trades']
+    })
+
+    if i % 20 == 0:
+        print(f"  Progress: {i}/{len(param_combinations)}")
+
+ra_df = pd.DataFrame(ra_results)
+best_ra = ra_df.loc[ra_df['net_earnings'].idxmax()]
+
+print(f"\n✓ Best Risk-Adjusted:")
+print(f"  Net Earnings: ${best_ra['net_earnings']:,.2f}")
+print(f"  Parameters:")
+print(f"    min_return_pct: {best_ra['min_return_pct']}")
+print(f"    max_uncertainty_low: {best_ra['max_uncertainty_low']}")
+print(f"    max_uncertainty_medium: {best_ra['max_uncertainty_medium']}")
+print(f"    max_uncertainty_high: {best_ra['max_uncertainty_high']}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Summary and Save Results
+
+# COMMAND ----------
+
+print("="*80)
+print("GRID SEARCH COMPLETE - OPTIMAL PARAMETERS")
+print("="*80)
+
+summary = {
+    'timestamp': datetime.now().isoformat(),
+    'commodity': COMMODITY,
+    'model_version': MODEL_VERSION,
+    'total_combinations_tested': len(pt_df) + len(ma_df) + len(ev_df) + len(consensus_df) + len(ra_df),
+    'optimal_parameters': {
+        'PriceThresholdPredictive': {
+            'params': best_pt.to_dict(),
+            'net_earnings': float(best_pt['net_earnings'])
+        },
+        'MovingAveragePredictive': {
+            'params': best_ma.to_dict(),
+            'net_earnings': float(best_ma['net_earnings'])
+        },
+        'ExpectedValue': {
+            'params': best_ev.to_dict(),
+            'net_earnings': float(best_ev['net_earnings'])
+        },
+        'Consensus': {
+            'params': best_consensus.to_dict(),
+            'net_earnings': float(best_consensus['net_earnings'])
+        },
+        'RiskAdjusted': {
+            'params': best_ra.to_dict(),
+            'net_earnings': float(best_ra['net_earnings'])
+        }
+    }
+}
+
+# Save summary
+import json
+summary_path = '/Volumes/commodity/trading_agent/files/diagnostic_16_grid_search_summary.json'
+with open(summary_path, 'w') as f:
+    json.dump(summary, f, indent=2)
+print(f"✓ Summary saved: {summary_path}")
+
+# Save detailed results
+results_path = '/Volumes/commodity/trading_agent/files/diagnostic_16_grid_search_results.pkl'
+with open(results_path, 'wb') as f:
+    pickle.dump({
+        'price_threshold_predictive': pt_df,
+        'moving_average_predictive': ma_df,
+        'expected_value': ev_df,
+        'consensus': consensus_df,
+        'risk_adjusted': ra_df
+    }, f)
+print(f"✓ Detailed results saved: {results_path}")
+
+print("\n" + "="*80)
+print("OPTIMAL PARAMETERS SUMMARY")
+print("="*80)
+
+for strategy_name, data in summary['optimal_parameters'].items():
+    print(f"\n{strategy_name}:")
+    print(f"  Net Earnings: ${data['net_earnings']:,.2f}")
+    print(f"  Parameters:")
+    for param, value in data['params'].items():
+        if param != 'net_earnings' and param != 'storage_costs' and param != 'num_trades':
+            print(f"    {param}: {value}")
