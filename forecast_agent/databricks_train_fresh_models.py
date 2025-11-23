@@ -65,6 +65,7 @@ print("✓ Running in Databricks - using spark.sql() (no credentials needed!)")
 
 # COMMAND ----------
 
+
 # Configuration
 commodities = ['Coffee', 'Sugar']
 model_keys = ['naive', 'xgboost', 'sarimax_auto_weather']
@@ -169,6 +170,7 @@ def save_model_spark(fitted_model_dict: dict, commodity: str, model_name: str, m
 print("✓ Spark helper functions defined")
 
 # COMMAND ----------
+
 
 # Train models for each commodity
 for commodity in commodities:
@@ -277,6 +279,8 @@ for commodity in commodities:
 
 # COMMAND ----------
 
+
+
 # Verify trained models in database
 print("\n" + "=" * 80)
 print("VERIFYING TRAINED MODELS IN DATABASE")
@@ -307,3 +311,7 @@ print("  ✓ Fresh models trained in Databricks")
 print("  ✓ Using Databricks default package versions")
 print("  ✓ Version consistency guaranteed")
 print("\nNext: Run backfill_rolling_window_spark.py in same environment")
+
+# COMMAND ----------
+
+
