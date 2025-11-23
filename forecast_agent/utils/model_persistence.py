@@ -27,6 +27,24 @@ except ImportError:
 import boto3
 
 
+# Globals for Databricks detection
+_IS_DATABRICKS = None
+_SPARK = None
+
+
+def is_databricks():
+    """Detect if running in Databricks environment."""
+    global _IS_DATABRICKS, _SPARK
+    if _IS_DATABRICKS is None:
+        try:
+            from pyspark.sql import SparkSession
+            _SPARK = SparkSession.builder.getOrCreate()
+            _IS_DATABRICKS = True
+        except:
+            _IS_DATABRICKS = False
+    return _IS_DATABRICKS
+
+
 def generate_model_id(commodity: str, model_name: str, training_date: str, version: str = "v1.0") -> str:
     """Generate unique model ID."""
     return f"{commodity}_{model_name}_{training_date}_{version}"
@@ -218,7 +236,7 @@ def load_model(
     Load trained model from Databricks.
 
     Args:
-        connection: Databricks SQL connection
+        connection: Databricks SQL connection (None if running in Databricks)
         commodity: 'Coffee' or 'Sugar'
         model_name: 'Naive', 'XGBoost', etc.
         training_date: Training cutoff date (YYYY-MM-DD)
@@ -228,30 +246,46 @@ def load_model(
         Dict with 'fitted_model', 'parameters', 'metadata'
         Returns None if model not found
     """
-    cursor = connection.cursor()
-
     model_id = generate_model_id(commodity, model_name, training_date, model_version)
 
     # Query model
-    query_sql = """
+    query_sql = f"""
     SELECT
         fitted_model_json, fitted_model_s3_path, parameters,
         training_samples, training_start_date, model_size_bytes,
         created_at, is_active
     FROM commodity.forecast.trained_models
-    WHERE model_id = ?
+    WHERE model_id = '{model_id}'
     """
 
-    cursor.execute(query_sql, (model_id,))
-    row = cursor.fetchone()
-    cursor.close()
+    if is_databricks():
+        # Running in Databricks - use Spark SQL
+        import pandas as pd
+        result_df = _SPARK.sql(query_sql).toPandas()
+        if result_df.empty:
+            return None
+        row = result_df.iloc[0]
+        fitted_model_json = row['fitted_model_json']
+        fitted_model_s3_path = row['fitted_model_s3_path']
+        parameters_json = row['parameters']
+        training_samples = row['training_samples']
+        training_start_date = row['training_start_date']
+        model_size_bytes = row['model_size_bytes']
+        created_at = row['created_at']
+        is_active = row['is_active']
+    else:
+        # Running locally - use databricks.sql connection
+        cursor = connection.cursor()
+        cursor.execute(query_sql.replace("'{model_id}'", "?"), (model_id,))
+        row = cursor.fetchone()
+        cursor.close()
 
-    if not row:
-        return None
+        if not row:
+            return None
 
-    (fitted_model_json, fitted_model_s3_path, parameters_json,
-     training_samples, training_start_date, model_size_bytes,
-     created_at, is_active) = row
+        (fitted_model_json, fitted_model_s3_path, parameters_json,
+         training_samples, training_start_date, model_size_bytes,
+         created_at, is_active) = row
 
     # Deserialize model
     if fitted_model_json:

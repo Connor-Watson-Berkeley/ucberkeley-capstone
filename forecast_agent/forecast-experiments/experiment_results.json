@@ -1,0 +1,16 @@
+{
+  "experiment_date": "2025-11-22T17:42:38.043066",
+  "data_config": {
+    "lookback_days": 730,
+    "forecast_horizon": 14,
+    "region": "Bahia_Brazil",
+    "commodity": "Coffee"
+  },
+  "models": {
+    "N-BEATS": {
+      "mape": 1.8095596985961602,
+      "rmse": 8.296898203123703,
+      "mae": 5.72253699939217,
+      "forecast": [
+        {
+          "date": 

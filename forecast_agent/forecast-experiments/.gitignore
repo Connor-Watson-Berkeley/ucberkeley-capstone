@@ -1,0 +1,10 @@
+# Data files (downloaded locally to avoid Databricks costs)
+data/
+*.parquet
+*.csv
+
+# Model checkpoints and logs (too large for GitHub)
+darts_logs/
+*.ckpt
+*.pth
+*.pth.tar
