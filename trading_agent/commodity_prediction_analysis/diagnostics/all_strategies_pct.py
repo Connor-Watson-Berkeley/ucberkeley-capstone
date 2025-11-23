@@ -775,7 +775,16 @@ class MovingAveragePredictive(BaseStrategy):
         return batch_size, reason
 
     def _analyze_with_predictions(self, current_price, price_history, predictions):
-        """Add prediction overlay to baseline analysis"""
+        """
+        Add prediction overlay to baseline analysis.
+
+        Context: Called at DOWNWARD MA crossover (signal to sell)
+
+        Logic:
+        - Predictions show UPWARD (reversal expected) → Sell MORE (lock in current prices)
+        - Predictions show DOWNWARD (continued fall) → Sell LESS (gradual exit)
+        - Weak/uncertain predictions → Baseline batch size
+        """
         # Start with baseline
         batch_size, _ = self._analyze_historical(current_price, price_history)
 
@@ -789,12 +798,24 @@ class MovingAveragePredictive(BaseStrategy):
         adjustment = 0.0
         reasons = []
 
-        if cv < self.high_confidence_cv and net_benefit_pct > self.min_net_benefit_pct:
-            adjustment -= self.batch_adjustment_max
-            reasons.append(f'momentum_continues_defer_net{net_benefit_pct:.2f}%')
-        elif cv > 0.20 or net_benefit_pct < 0:
-            adjustment += self.batch_adjustment_max
-            reasons.append(f'low_conf_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
+        # High confidence predictions
+        if cv < self.high_confidence_cv:
+            if net_benefit_pct > self.min_net_benefit_pct:
+                # Predictions show UPWARD (contradict MA down signal)
+                # Sell MORE to lock in current prices before predicted rebound
+                adjustment += self.batch_adjustment_max
+                reasons.append(f'pred_up_sell_more_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
+            elif net_benefit_pct < -self.min_net_benefit_pct:
+                # Predictions show DOWNWARD (agree with MA signal)
+                # Sell LESS to spread sales over time (gradual exit)
+                adjustment -= self.batch_adjustment_max
+                reasons.append(f'pred_down_sell_less_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
+            else:
+                # Weak signal (net benefit near zero)
+                reasons.append(f'weak_signal_net{net_benefit_pct:.2f}%')
+        else:
+            # Low confidence - stick with baseline
+            reasons.append(f'low_conf_baseline_cv{cv:.2%}')
 
         batch_size = np.clip(batch_size + adjustment, 0.10, 0.45)
         reason = '_'.join(reasons) if reasons else 'baseline'
