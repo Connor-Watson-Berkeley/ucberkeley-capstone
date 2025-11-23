@@ -49,7 +49,7 @@ class DatabricksForecastWriter:
         """
 
         self.server_hostname = server_hostname or os.environ.get("DATABRICKS_HOST", "").replace("https://", "")
-        self.http_path = http_path or os.environ.get("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/3cede8561503a13c")
+        self.http_path = http_path or os.environ.get("DATABRICKS_HTTP_PATH")
         self.token = token or os.environ.get("DATABRICKS_TOKEN")
 
         # Try reading from config file if not found

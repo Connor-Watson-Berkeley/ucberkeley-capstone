@@ -27,13 +27,77 @@ import sys
 import os
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Add parent directory to path (skip in Databricks notebooks where __file__ doesn't exist)
+try:
+    sys.path.insert(0, str(Path(__file__).parent))
+except NameError:
+    pass  # Running in Databricks notebook
 
 from databricks import sql
 from databricks.sql.exc import RequestError
 from ground_truth.config.model_registry import BASELINE_MODELS
 from utils.model_persistence import load_model
 from utils.monte_carlo_simulation import generate_monte_carlo_paths
+
+
+# Global flag to detect execution environment
+_IS_DATABRICKS = None
+_SPARK = None
+
+
+def is_databricks():
+    """Detect if running in Databricks environment."""
+    global _IS_DATABRICKS, _SPARK
+    if _IS_DATABRICKS is None:
+        try:
+            from pyspark.sql import SparkSession
+            _SPARK = SparkSession.builder.getOrCreate()
+            _IS_DATABRICKS = True
+        except:
+            _IS_DATABRICKS = False
+    return _IS_DATABRICKS
+
+
+def execute_sql(query: str, connection=None):
+    """
+    Execute SQL query in appropriate environment.
+
+    In Databricks: Uses spark.sql()
+    Locally: Uses databricks.sql connection
+
+    Returns: pandas DataFrame
+    """
+    if is_databricks():
+        # Running in Databricks - use Spark SQL
+        return _SPARK.sql(query).toPandas()
+    else:
+        # Running locally - use databricks.sql connector
+        cursor = connection.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        if rows:
+            columns = [desc[0] for desc in cursor.description]
+            return pd.DataFrame(rows, columns=columns)
+        return pd.DataFrame()
+
+
+def execute_insert(query: str, connection=None):
+    """
+    Execute INSERT/UPDATE/DELETE query in appropriate environment.
+
+    In Databricks: Uses spark.sql()
+    Locally: Uses databricks.sql connection
+
+    Returns: None
+    """
+    if is_databricks():
+        # Running in Databricks - use Spark SQL
+        _SPARK.sql(query)
+    else:
+        # Running locally - use databricks.sql connector
+        cursor = connection.cursor()
+        cursor.execute(query)
+        cursor.close()
 
 
 def get_training_dates(
@@ -86,6 +150,10 @@ def reconnect_if_needed(connection, databricks_host, databricks_token, databrick
     Check if connection is alive and reconnect if needed.
     Returns: connection (either existing or new)
     """
+    # In Databricks, there's no connection to check - Spark SQL is always available
+    if is_databricks():
+        return None
+
     try:
         # Try a simple query to test connection
         cursor = connection.cursor()
@@ -115,7 +183,7 @@ def load_training_data(connection, commodity: str, cutoff_date: date, lookback_d
     Load data up to cutoff_date for training or inference.
 
     Args:
-        connection: Databricks SQL connection
+        connection: Databricks SQL connection (None if running in Databricks)
         commodity: 'Coffee' or 'Sugar'
         cutoff_date: Latest date to include
         lookback_days: If specified, only load last N days (for inference with pretrained models).
@@ -124,8 +192,6 @@ def load_training_data(connection, commodity: str, cutoff_date: date, lookback_d
     Returns:
         DataFrame with market data
     """
-    cursor = connection.cursor()
-
     # For inference with pretrained models, only load recent data
     if lookback_days is not None:
         start_date = cutoff_date - timedelta(days=lookback_days)
@@ -152,15 +218,11 @@ def load_training_data(connection, commodity: str, cutoff_date: date, lookback_d
         ORDER BY date
     """
 
-    cursor.execute(query)
-    rows = cursor.fetchall()
-    columns = [desc[0] for desc in cursor.description]
+    df = execute_sql(query, connection)
+    if not df.empty:
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.set_index('date')
 
-    df = pd.DataFrame(rows, columns=columns)
-    df['date'] = pd.to_datetime(df['date'])
-    df = df.set_index('date')
-
-    cursor.close()
     return df
 
 
@@ -276,146 +338,312 @@ def generate_forecast_for_date(
         }
 
 
+def accumulate_forecast_data(
+    forecast_data: Dict,
+    distributions_list: List[Dict],
+    point_forecasts_list: List[Dict],
+    generation_timestamp: datetime
+):
+    """
+    Accumulate forecast data into lists for DataFrame batch writing.
+
+    Instead of writing to DB immediately, we accumulate all data in memory
+    and write as Spark DataFrames at the end (much faster for Databricks).
+
+    Args:
+        forecast_data: Single forecast with paths, mean_forecast, etc.
+        distributions_list: List to accumulate distribution rows
+        point_forecasts_list: List to accumulate point forecast rows
+        generation_timestamp: When this forecast was generated
+    """
+    forecast_start_date = forecast_data['forecast_start_date']
+    data_cutoff_date = forecast_data['data_cutoff_date']
+    paths = forecast_data['paths']
+    mean_forecast = forecast_data['mean_forecast']
+    forecast_std = forecast_data['forecast_std']
+    model_version = forecast_data['model_version']
+    commodity = forecast_data['commodity']
+
+    # Accumulate distribution rows
+    for path in paths:
+        path_id = path['path_id']
+        values = path['values']
+
+        # Pad with None if needed
+        day_values = {}
+        for i in range(14):
+            day_col = f'day_{i+1}'
+            day_values[day_col] = float(values[i]) if i < len(values) else None
+
+        has_data_leakage = forecast_start_date <= data_cutoff_date
+
+        distributions_list.append({
+            'path_id': path_id,
+            'forecast_start_date': forecast_start_date,
+            'data_cutoff_date': data_cutoff_date,
+            'generation_timestamp': generation_timestamp,
+            'model_version': model_version,
+            'commodity': commodity,
+            **day_values,
+            'is_actuals': False,
+            'has_data_leakage': has_data_leakage
+        })
+
+    # Accumulate point forecast rows
+    for day_idx in range(len(mean_forecast)):
+        forecast_date = forecast_start_date + timedelta(days=day_idx)
+        day_ahead = day_idx + 1
+
+        vol_scaled = forecast_std * np.sqrt(day_ahead)
+        lower_95 = mean_forecast[day_idx] - 1.96 * vol_scaled
+        upper_95 = mean_forecast[day_idx] + 1.96 * vol_scaled
+
+        has_data_leakage = forecast_date <= data_cutoff_date
+
+        point_forecasts_list.append({
+            'forecast_date': forecast_date,
+            'data_cutoff_date': data_cutoff_date,
+            'generation_timestamp': generation_timestamp,
+            'day_ahead': day_ahead,
+            'forecast_mean': float(mean_forecast[day_idx]),
+            'forecast_std': float(forecast_std),
+            'lower_95': float(lower_95),
+            'upper_95': float(upper_95),
+            'model_version': model_version,
+            'commodity': commodity,
+            'model_success': True,
+            'actual_close': None,
+            'has_data_leakage': has_data_leakage
+        })
+
+
+def write_dataframes_to_tables(
+    connection,
+    distributions_data: List[Dict],
+    point_forecasts_data: List[Dict]
+):
+    """
+    Write accumulated forecast data to tables using Spark DataFrames (Databricks)
+    or SQL inserts (local execution).
+
+    This is the DataFrame approach - accumulate all data, write once.
+    Much faster than incremental batch inserts for Databricks.
+
+    Args:
+        connection: Databricks SQL connection (None if running in Databricks)
+        distributions_data: List of distribution row dicts
+        point_forecasts_data: List of point forecast row dicts
+    """
+    if not distributions_data and not point_forecasts_data:
+        print("       No data to write")
+        return
+
+    print(f"       Writing {len(distributions_data):,} distribution rows and {len(point_forecasts_data):,} point forecast rows...")
+
+    if is_databricks():
+        # ============================================================
+        # DATABRICKS: Use Spark DataFrames (fast!)
+        # ============================================================
+        from pyspark.sql.types import StructType, StructField, IntegerType, StringType, TimestampType, DoubleType, BooleanType, DateType
+        from pyspark.sql.functions import col, to_date
+
+        # Write distributions
+        if distributions_data:
+            # Create DataFrame and cast types to match table schema
+            from pyspark.sql.types import FloatType
+            dist_df = _SPARK.createDataFrame(distributions_data)
+
+            # Ensure correct types for metadata columns
+            dist_df = dist_df.withColumn("path_id", col("path_id").cast(IntegerType())) \
+                             .withColumn("forecast_start_date", to_date(col("forecast_start_date"))) \
+                             .withColumn("data_cutoff_date", to_date(col("data_cutoff_date"))) \
+                             .withColumn("generation_timestamp", col("generation_timestamp").cast(TimestampType())) \
+                             .withColumn("is_actuals", col("is_actuals").cast(BooleanType())) \
+                             .withColumn("has_data_leakage", col("has_data_leakage").cast(BooleanType()))
+
+            # Cast all day_N columns to float (Spark infers double from Python floats)
+            for i in range(1, 15):
+                day_col = f"day_{i}"
+                dist_df = dist_df.withColumn(day_col, col(day_col).cast(FloatType()))
+
+            dist_df.write.mode("append").saveAsTable("commodity.forecast.distributions")
+            print(f"       ✅ Wrote {len(distributions_data):,} distribution rows")
+
+        # Write point forecasts
+        if point_forecasts_data:
+            # Create DataFrame and cast types to match table schema
+            from pyspark.sql.types import FloatType
+            point_df = _SPARK.createDataFrame(point_forecasts_data)
+
+            # Ensure correct types
+            point_df = point_df.withColumn("forecast_date", to_date(col("forecast_date"))) \
+                               .withColumn("data_cutoff_date", to_date(col("data_cutoff_date"))) \
+                               .withColumn("generation_timestamp", col("generation_timestamp").cast(TimestampType())) \
+                               .withColumn("day_ahead", col("day_ahead").cast(IntegerType())) \
+                               .withColumn("forecast_mean", col("forecast_mean").cast(FloatType())) \
+                               .withColumn("forecast_std", col("forecast_std").cast(FloatType())) \
+                               .withColumn("lower_95", col("lower_95").cast(FloatType())) \
+                               .withColumn("upper_95", col("upper_95").cast(FloatType())) \
+                               .withColumn("model_success", col("model_success").cast(BooleanType())) \
+                               .withColumn("has_data_leakage", col("has_data_leakage").cast(BooleanType()))
+
+            point_df.write.mode("append").saveAsTable("commodity.forecast.point_forecasts")
+            print(f"       ✅ Wrote {len(point_forecasts_data):,} point forecast rows")
+
+    else:
+        # ============================================================
+        # LOCAL: Use SQL INSERT statements (slower but necessary)
+        # ============================================================
+
+        # Write distributions in chunks
+        if distributions_data:
+            chunk_size = 500
+            for i in range(0, len(distributions_data), chunk_size):
+                chunk = distributions_data[i:i+chunk_size]
+
+                # Convert dicts to SQL VALUES
+                value_rows = []
+                for row in chunk:
+                    day_vals = [f"{row[f'day_{i+1}']:.2f}" if row[f'day_{i+1}'] is not None else "NULL" for i in range(14)]
+                    has_leak = 1 if row['has_data_leakage'] else 0
+                    value_rows.append(
+                        f"({row['path_id']}, '{row['forecast_start_date']}', '{row['data_cutoff_date']}', "
+                        f"'{row['generation_timestamp']}', '{row['model_version']}', '{row['commodity']}', "
+                        f"{', '.join(day_vals)}, FALSE, {has_leak})"
+                    )
+
+                insert_sql = f"""
+                INSERT INTO commodity.forecast.distributions
+                (path_id, forecast_start_date, data_cutoff_date, generation_timestamp,
+                 model_version, commodity, day_1, day_2, day_3, day_4, day_5, day_6, day_7,
+                 day_8, day_9, day_10, day_11, day_12, day_13, day_14, is_actuals, has_data_leakage)
+                VALUES {', '.join(value_rows)}
+                """
+                execute_insert(insert_sql, connection)
+
+            print(f"       ✅ Wrote {len(distributions_data):,} distribution rows")
+
+        # Write point forecasts in chunks
+        if point_forecasts_data:
+            chunk_size = 1000
+            for i in range(0, len(point_forecasts_data), chunk_size):
+                chunk = point_forecasts_data[i:i+chunk_size]
+
+                value_rows = []
+                for row in chunk:
+                    has_leak = 1 if row['has_data_leakage'] else 0
+                    value_rows.append(
+                        f"('{row['forecast_date']}', '{row['data_cutoff_date']}', '{row['generation_timestamp']}', "
+                        f"{row['day_ahead']}, {row['forecast_mean']:.2f}, {row['forecast_std']:.2f}, "
+                        f"{row['lower_95']:.2f}, {row['upper_95']:.2f}, '{row['model_version']}', "
+                        f"'{row['commodity']}', TRUE, NULL, {has_leak})"
+                    )
+
+                insert_sql = f"""
+                INSERT INTO commodity.forecast.point_forecasts
+                (forecast_date, data_cutoff_date, generation_timestamp, day_ahead,
+                 forecast_mean, forecast_std, lower_95, upper_95, model_version,
+                 commodity, model_success, actual_close, has_data_leakage)
+                VALUES {', '.join(value_rows)}
+                """
+                execute_insert(insert_sql, connection)
+
+            print(f"       ✅ Wrote {len(point_forecasts_data):,} point forecast rows")
+
+
+def write_actuals_to_table(connection, commodity: str, forecast_dates: List[date]):
+    """
+    Fetch and write actuals for all forecast dates.
+
+    This is separate from the main DataFrame write because actuals
+    need to be fetched from bronze.market first.
+    """
+    if not forecast_dates:
+        return
+
+    # Get unique date range
+    min_date = min(forecast_dates)
+    max_date = max(forecast_dates) + timedelta(days=14)
+
+    # Fetch all actuals for this commodity in date range
+    actuals_df = execute_sql(f"""
+        SELECT date, close
+        FROM commodity.bronze.market
+        WHERE commodity = '{commodity}'
+          AND date >= '{min_date}'
+          AND date < '{max_date}'
+        ORDER BY date
+    """, connection)
+
+    if actuals_df.empty:
+        return
+
+    total_written = 0
+
+    if is_databricks():
+        # Use Spark DataFrame for actuals
+        actuals_data = []
+        for _, row in actuals_df.iterrows():
+            actuals_data.append({
+                'forecast_date': row['date'],
+                'commodity': commodity,
+                'actual_close': float(row['close'])
+            })
+
+        if actuals_data:
+            actuals_spark_df = _SPARK.createDataFrame(actuals_data)
+            # Use insertInto with overwrite=False to handle duplicates gracefully
+            actuals_spark_df.write.mode("append").saveAsTable("commodity.forecast.forecast_actuals")
+            total_written = len(actuals_data)
+    else:
+        # Local: Insert one by one (handle duplicates)
+        for _, row in actuals_df.iterrows():
+            try:
+                execute_insert(f"""
+                    INSERT INTO commodity.forecast.forecast_actuals
+                    (forecast_date, commodity, actual_close)
+                    VALUES ('{row['date']}', '{commodity}', {row['close']:.2f})
+                """, connection)
+                total_written += 1
+            except Exception:
+                # Duplicate key, skip
+                pass
+
+    if total_written > 0:
+        print(f"       ✅ Wrote {total_written} actuals")
+
+
 def write_batch_to_tables(
     connection,
     batch_data: List[Dict]
 ):
     """
-    Write a batch of forecasts to all 3 tables at once.
+    DEPRECATED: Legacy function for backward compatibility.
 
-    This dramatically speeds up writes by:
-    - Reducing network round trips (1 batch vs N individual writes)
-    - Allowing database to optimize bulk inserts
-
-    Args:
-        connection: Databricks SQL connection
-        batch_data: List of dicts, each containing:
-            - forecast_start_date
-            - data_cutoff_date
-            - paths
-            - mean_forecast
-            - forecast_std
-            - model_version
-            - commodity
+    New approach: Use accumulate_forecast_data() + write_dataframes_to_tables()
+    instead of immediate batch writes.
     """
-    if not batch_data:
-        return
-
-    cursor = connection.cursor()
+    # For backward compatibility, convert to new approach
+    distributions_list = []
+    point_forecasts_list = []
     generation_timestamp = datetime.now()
 
-    # Accumulate all rows across all forecasts in batch
-    all_dist_rows = []
-    all_point_rows = []
-    actuals_to_fetch = []  # (start_date, commodity) tuples
-
     for forecast_data in batch_data:
-        forecast_start_date = forecast_data['forecast_start_date']
-        data_cutoff_date = forecast_data['data_cutoff_date']
-        paths = forecast_data['paths']
-        mean_forecast = forecast_data['mean_forecast']
-        forecast_std = forecast_data['forecast_std']
-        model_version = forecast_data['model_version']
-        commodity = forecast_data['commodity']
+        accumulate_forecast_data(
+            forecast_data,
+            distributions_list,
+            point_forecasts_list,
+            generation_timestamp
+        )
 
-        # Build distribution rows for this forecast
-        for path in paths:
-            path_id = path['path_id']
-            values = path['values']
+    write_dataframes_to_tables(connection, distributions_list, point_forecasts_list)
 
-            day_values = []
-            for i in range(14):
-                if i < len(values):
-                    day_values.append(f"{values[i]:.2f}")
-                else:
-                    day_values.append("NULL")
+    # Write actuals
+    forecast_dates = [fd['forecast_start_date'] for fd in batch_data]
+    commodities = list(set([fd['commodity'] for fd in batch_data]))
 
-            has_data_leakage = 1 if forecast_start_date <= data_cutoff_date else 0
-            row_sql = f"({path_id}, '{forecast_start_date}', '{data_cutoff_date}', '{generation_timestamp}', '{model_version}', '{commodity}', {', '.join(day_values)}, FALSE, {has_data_leakage})"
-            all_dist_rows.append(row_sql)
-
-        # Build point forecast rows for this forecast
-        for day_idx in range(len(mean_forecast)):
-            forecast_date = forecast_start_date + timedelta(days=day_idx)
-            day_ahead = day_idx + 1
-
-            vol_scaled = forecast_std * np.sqrt(day_ahead)
-            lower_95 = mean_forecast[day_idx] - 1.96 * vol_scaled
-            upper_95 = mean_forecast[day_idx] + 1.96 * vol_scaled
-
-            has_data_leakage = 1 if forecast_date <= data_cutoff_date else 0
-
-            all_point_rows.append(
-                f"('{forecast_date}', '{data_cutoff_date}', '{generation_timestamp}', "
-                f"{day_ahead}, {mean_forecast[day_idx]:.2f}, {forecast_std:.2f}, "
-                f"{lower_95:.2f}, {upper_95:.2f}, '{model_version}', '{commodity}', "
-                f"TRUE, NULL, {has_data_leakage})"
-            )
-
-        # Track actuals we need to fetch
-        actuals_to_fetch.append((forecast_start_date, commodity))
-
-    # ============================================================
-    # 1. DISTRIBUTIONS TABLE - Write in chunks of 500
-    # ============================================================
-    chunk_size = 500
-    for i in range(0, len(all_dist_rows), chunk_size):
-        chunk = all_dist_rows[i:i+chunk_size]
-        insert_sql = f"""
-        INSERT INTO commodity.forecast.distributions
-        (path_id, forecast_start_date, data_cutoff_date, generation_timestamp,
-         model_version, commodity, day_1, day_2, day_3, day_4, day_5, day_6, day_7,
-         day_8, day_9, day_10, day_11, day_12, day_13, day_14, is_actuals, has_data_leakage)
-        VALUES {', '.join(chunk)}
-        """
-        cursor.execute(insert_sql)
-
-    # ============================================================
-    # 2. POINT_FORECASTS TABLE - Write in chunks of 1000
-    # ============================================================
-    if all_point_rows:
-        chunk_size = 1000
-        for i in range(0, len(all_point_rows), chunk_size):
-            chunk = all_point_rows[i:i+chunk_size]
-            insert_sql = f"""
-            INSERT INTO commodity.forecast.point_forecasts
-            (forecast_date, data_cutoff_date, generation_timestamp, day_ahead,
-             forecast_mean, forecast_std, lower_95, upper_95, model_version,
-             commodity, model_success, actual_close, has_data_leakage)
-            VALUES {', '.join(chunk)}
-            """
-            cursor.execute(insert_sql)
-
-    # ============================================================
-    # 3. ACTUALS TABLE - Fetch and write
-    # ============================================================
-    total_actuals = 0
-    for forecast_start_date, commodity in actuals_to_fetch:
-        cursor.execute(f"""
-            SELECT date, close
-            FROM commodity.bronze.market
-            WHERE commodity = '{commodity}'
-              AND date >= '{forecast_start_date}'
-              AND date < '{forecast_start_date + timedelta(days=14)}'
-            ORDER BY date
-        """)
-
-        actuals = cursor.fetchall()
-        if actuals:
-            for actual_date, actual_close in actuals:
-                try:
-                    cursor.execute(f"""
-                        INSERT INTO commodity.forecast.forecast_actuals
-                        (forecast_date, commodity, actual_close)
-                        VALUES ('{actual_date}', '{commodity}', {actual_close:.2f})
-                    """)
-                except Exception:
-                    # Duplicate key, skip
-                    pass
-            total_actuals += len(actuals)
-
-    cursor.close()
-    print(f"       ✅ Batch wrote {len(batch_data)} forecasts ({len(all_dist_rows):,} paths, {len(all_point_rows):,} points, {total_actuals} actuals)")
+    for commodity in commodities:
+        write_actuals_to_table(connection, commodity, forecast_dates)
 
 
 def write_all_tables(
@@ -447,17 +675,17 @@ def write_all_tables(
 
 def get_existing_forecast_dates(connection, commodity: str, model_version: str) -> set:
     """Get set of dates that already have forecasts."""
-    cursor = connection.cursor()
-    cursor.execute(f"""
+    result_df = execute_sql(f"""
         SELECT DISTINCT forecast_start_date
         FROM commodity.forecast.distributions
         WHERE commodity = '{commodity}'
           AND model_version = '{model_version}'
           AND is_actuals = FALSE
-    """)
-    existing = {row[0] for row in cursor.fetchall()}
-    cursor.close()
-    return existing
+    """, connection)
+
+    if result_df.empty:
+        return set()
+    return set(result_df['forecast_start_date'].tolist())
 
 
 def backfill_rolling_window(
@@ -483,30 +711,30 @@ def backfill_rolling_window(
            - Generate forecasts for all days until next training date
         3. Populate all 3 tables (distributions, point_forecasts, actuals)
     """
-    # Load credentials
-    if not databricks_host:
-        databricks_host = os.getenv('DATABRICKS_HOST')
-    if not databricks_token:
-        databricks_token = os.getenv('DATABRICKS_TOKEN')
-    if not databricks_http_path:
-        # Prefer cluster HTTP path for long-running jobs (no 15-min timeout)
-        databricks_http_path = os.getenv('DATABRICKS_CLUSTER_HTTP_PATH') or os.getenv('DATABRICKS_HTTP_PATH')
+    # Setup connection (only needed for local execution)
+    connection = None
+    if not is_databricks():
+        # Running locally - need databricks.sql connection
+        if not databricks_host:
+            databricks_host = os.getenv('DATABRICKS_HOST')
+        if not databricks_token:
+            databricks_token = os.getenv('DATABRICKS_TOKEN')
+        if not databricks_http_path:
+            databricks_http_path = os.getenv('DATABRICKS_CLUSTER_HTTP_PATH') or os.getenv('DATABRICKS_HTTP_PATH')
 
-    connection = sql.connect(
-        server_hostname=databricks_host.replace('https://', ''),
-        http_path=databricks_http_path,
-        access_token=databricks_token
-    )
-
-    cursor = connection.cursor()
+        connection = sql.connect(
+            server_hostname=databricks_host.replace('https://', ''),
+            http_path=databricks_http_path,
+            access_token=databricks_token
+        )
 
     # Get earliest data date
-    cursor.execute(f"""
+    result_df = execute_sql(f"""
         SELECT MIN(date) as earliest_date
         FROM commodity.bronze.market
         WHERE commodity = '{commodity}'
-    """)
-    earliest_data_date = cursor.fetchall()[0][0]
+    """, connection)
+    earliest_data_date = result_df['earliest_date'].iloc[0] if not result_df.empty else None
 
     if start_date is None:
         start_date = earliest_data_date + timedelta(days=min_training_days)
@@ -550,6 +778,12 @@ def backfill_rolling_window(
         success_count = 0
         error_count = 0
         skipped_count = 0
+
+        # Accumulate all forecast data for this model (DataFrame approach)
+        all_distributions = []
+        all_point_forecasts = []
+        all_forecast_dates = []
+        generation_timestamp = datetime.now()
 
         # Rolling window: train periodically, forecast daily
         for train_idx, train_date in enumerate(training_dates, 1):
@@ -621,15 +855,11 @@ def backfill_rolling_window(
 
             print(f"     Generating {len(forecast_dates)} daily forecasts (reusing trained model)...")
 
-            # Batch writing for speed (10-20x faster)
-            batch_data = []
-            batch_size = 50  # Write every 50 forecasts
-
             for i, forecast_date in enumerate(forecast_dates, 1):
                 # Skip if already exists (resume mode)
                 if forecast_date in existing_dates:
                     skipped_count += 1
-                    if skipped_count % 50 == 0:
+                    if skipped_count % 100 == 0:
                         print(f"       Skipped: {skipped_count} (resume mode)")
                     continue
 
@@ -647,8 +877,8 @@ def backfill_rolling_window(
                     error_count += 1
                     continue
 
-                # Add to batch instead of writing immediately
-                batch_data.append({
+                # Accumulate forecast data (no immediate write)
+                forecast_data = {
                     'forecast_start_date': forecast_date,
                     'data_cutoff_date': cutoff_date,
                     'paths': result['paths'],
@@ -656,40 +886,44 @@ def backfill_rolling_window(
                     'forecast_std': result['forecast_std'],
                     'model_version': model_version,
                     'commodity': commodity
-                })
+                }
 
-                # Flush batch when full
-                if len(batch_data) >= batch_size:
-                    try:
-                        connection = reconnect_if_needed(connection, databricks_host, databricks_token, databricks_http_path)
-                        write_batch_to_tables(connection, batch_data)
-                        success_count += len(batch_data)
-                        batch_data = []  # Clear batch
-                    except Exception as e:
-                        print(f"       ❌ Batch write failed: {e}")
-                        error_count += len(batch_data)
-                        batch_data = []
+                accumulate_forecast_data(
+                    forecast_data,
+                    all_distributions,
+                    all_point_forecasts,
+                    generation_timestamp
+                )
 
-                if (success_count + skipped_count) % 50 == 0:
-                    print(f"       Progress: {success_count} new + {skipped_count} skipped = {success_count + skipped_count} total")
+                all_forecast_dates.append(forecast_date)
+                success_count += 1
 
-            # Flush remaining batch at end of training window
-            if batch_data:
-                try:
-                    connection = reconnect_if_needed(connection, databricks_host, databricks_token, databricks_http_path)
-                    write_batch_to_tables(connection, batch_data)
-                    success_count += len(batch_data)
-                    batch_data = []
-                except Exception as e:
-                    print(f"       ❌ Final batch write failed: {e}")
-                    error_count += len(batch_data)
+                if success_count % 100 == 0:
+                    print(f"       Progress: {success_count} new forecasts generated")
+
+        # Write all accumulated data at once (DataFrame approach - much faster!)
+        print(f"\n  💾 Writing all data to tables...")
+        try:
+            connection = reconnect_if_needed(connection, databricks_host, databricks_token, databricks_http_path)
+            write_dataframes_to_tables(connection, all_distributions, all_point_forecasts)
+
+            # Write actuals separately
+            if all_forecast_dates:
+                write_actuals_to_table(connection, commodity, all_forecast_dates)
+
+        except Exception as e:
+            print(f"       ❌ Write failed: {e}")
+            import traceback
+            traceback.print_exc()
 
         print(f"\n  ✅ Completed {model_version}")
         print(f"     New forecasts: {success_count:,}")
         print(f"     Skipped (existing): {skipped_count:,}")
         print(f"     Errors: {error_count}")
 
-    connection.close()
+    # Close connection if running locally
+    if connection is not None:
+        connection.close()
 
     print(f"\n{'='*80}")
     print(f"Backfill Complete!")
@@ -697,33 +931,83 @@ def backfill_rolling_window(
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Rolling window forecast backfill')
-    parser.add_argument('--commodity', required=True, choices=['Coffee', 'Sugar'])
-    parser.add_argument('--models', nargs='+', required=True,
-                       help='Model versions to backfill')
-    parser.add_argument('--train-frequency', default='semiannually',
-                       choices=['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'semiannually', 'annually'],
-                       help='How often to retrain models (default: semiannually)')
-    parser.add_argument('--start-date', type=lambda s: datetime.strptime(s, '%Y-%m-%d').date(),
-                       help='First training date (YYYY-MM-DD)')
-    parser.add_argument('--end-date', type=lambda s: datetime.strptime(s, '%Y-%m-%d').date(),
-                       help='Last forecast date (YYYY-MM-DD)')
-    parser.add_argument('--train-all-forecasts', action='store_true',
-                       help='Train a new model for each forecast date (slow, ~180x slower than default). Default behavior uses pretrained models.')
-    parser.add_argument('--model-version-tag', default='v1.0',
-                       help='Model version tag for pretrained models (default: v1.0)')
+    # Check if running in Databricks (dbutils available)
+    try:
+        from pyspark.dbutils import DBUtils
+        from pyspark.sql import SparkSession
+        spark = SparkSession.builder.getOrCreate()
+        dbutils = DBUtils(spark)
 
-    args = parser.parse_args()
+        # Running in Databricks - use widgets
+        print("Running in Databricks notebook mode - using widgets for parameters")
 
-    backfill_rolling_window(
-        commodity=args.commodity,
-        model_versions=args.models,
-        train_frequency=args.train_frequency,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        use_pretrained=not args.train_all_forecasts,
-        model_version_tag=args.model_version_tag
-    )
+        # Get Databricks connection details from Spark conf or environment
+        # These should be set by the cluster or we use dummy values (won't be used in notebook mode)
+        databricks_host = spark.conf.get("spark.databricks.workspaceUrl", None)
+        if databricks_host:
+            databricks_host = f"https://{databricks_host}"
+            os.environ['DATABRICKS_HOST'] = databricks_host
+
+        # For notebook execution, we can use the cluster's built-in auth
+        # Set a placeholder for the token (won't actually be used in notebook context)
+        os.environ['DATABRICKS_TOKEN'] = os.getenv('DATABRICKS_TOKEN', 'not-needed-in-notebook')
+        os.environ['DATABRICKS_HTTP_PATH'] = os.getenv('DATABRICKS_HTTP_PATH', '/sql/1.0/endpoints/dummy')
+
+        commodity_param = dbutils.widgets.get("commodity")
+        commodities = [c.strip() for c in commodity_param.split(',')]
+        models = dbutils.widgets.get("models").split(',')
+        train_frequency = dbutils.widgets.get("train_frequency")
+        start_date = datetime.strptime(dbutils.widgets.get("start_date"), '%Y-%m-%d').date()
+        end_date = datetime.strptime(dbutils.widgets.get("end_date"), '%Y-%m-%d').date()
+        model_version_tag = dbutils.widgets.get("model_version_tag")
+
+        # Run backfill for each commodity
+        for commodity in commodities:
+            commodity = commodity.strip()
+            print(f"\n{'='*80}")
+            print(f"Processing commodity: {commodity}")
+            print(f"{'='*80}")
+            backfill_rolling_window(
+                commodity=commodity,
+                model_versions=models,
+                train_frequency=train_frequency,
+                start_date=start_date,
+                end_date=end_date,
+                use_pretrained=True,
+                model_version_tag=model_version_tag
+            )
+
+    except (ImportError, Exception):
+        # Running locally - use argparse
+        print("Running in local mode - using command-line arguments")
+
+        parser = argparse.ArgumentParser(description='Rolling window forecast backfill')
+        parser.add_argument('--commodity', required=True, choices=['Coffee', 'Sugar'])
+        parser.add_argument('--models', nargs='+', required=True,
+                           help='Model versions to backfill')
+        parser.add_argument('--train-frequency', default='semiannually',
+                           choices=['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'semiannually', 'annually'],
+                           help='How often to retrain models (default: semiannually)')
+        parser.add_argument('--start-date', type=lambda s: datetime.strptime(s, '%Y-%m-%d').date(),
+                           help='First training date (YYYY-MM-DD)')
+        parser.add_argument('--end-date', type=lambda s: datetime.strptime(s, '%Y-%m-%d').date(),
+                           help='Last forecast date (YYYY-MM-DD)')
+        parser.add_argument('--train-all-forecasts', action='store_true',
+                           help='Train a new model for each forecast date (slow, ~180x slower than default). Default behavior uses pretrained models.')
+        parser.add_argument('--model-version-tag', default='v1.0',
+                           help='Model version tag for pretrained models (default: v1.0)')
+
+        args = parser.parse_args()
+
+        backfill_rolling_window(
+            commodity=args.commodity,
+            model_versions=args.models,
+            train_frequency=args.train_frequency,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            use_pretrained=not args.train_all_forecasts,
+            model_version_tag=args.model_version_tag
+        )
 
 
 if __name__ == '__main__':
