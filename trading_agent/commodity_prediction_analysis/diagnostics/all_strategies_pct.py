@@ -504,7 +504,8 @@ class PriceThresholdPredictive(BaseStrategy):
                  transaction_cost_pct=0.25,
                  min_net_benefit_pct=0.5,
                  high_confidence_cv=0.05,
-                 batch_adjustment_max=0.10):
+                 scenario_shift_aggressive=1,      # Levels to shift up when pred down
+                 scenario_shift_conservative=1):   # Levels to shift down when pred up
 
         super().__init__("Price Threshold Predictive")
 
@@ -526,7 +527,8 @@ class PriceThresholdPredictive(BaseStrategy):
         self.transaction_cost_pct = transaction_cost_pct
         self.min_net_benefit_pct = min_net_benefit_pct
         self.high_confidence_cv = high_confidence_cv
-        self.batch_adjustment_max = batch_adjustment_max
+        self.scenario_shift_aggressive = scenario_shift_aggressive
+        self.scenario_shift_conservative = scenario_shift_conservative
 
     def decide(self, day, inventory, current_price, price_history, predictions=None):
         if inventory <= 0:
@@ -591,29 +593,63 @@ class PriceThresholdPredictive(BaseStrategy):
         return batch_size, reason
 
     def _analyze_with_predictions(self, current_price, price_history, predictions):
-        """Add prediction overlay to baseline analysis"""
-        # Start with baseline
-        batch_size, _ = self._analyze_historical(current_price, price_history)
+        """
+        Add prediction overlay at price threshold signal using scenario shifting.
+
+        Price threshold signal: SELL (prices above threshold)
+        - Predictions show DOWNWARD (agree) → Shift to more aggressive scenario
+        - Predictions show UPWARD (disagree) → Shift to more conservative scenario
+        """
+        # Get technical indicators
+        prices = price_history['price'].values
+        rsi = calculate_rsi(prices, period=14)
+        adx, _, _ = calculate_adx(price_history, period=14)
 
         # Calculate prediction indicators
         cv = calculate_prediction_confidence(predictions, horizon_day=13)
-
-        # PERCENTAGE-BASED cost-benefit
         net_benefit_pct = self._calculate_cost_benefit_pct(current_price, predictions)
 
-        # Adjust batch based on predictions (±max adjustment)
-        adjustment = 0.0
-        reasons = []
+        # Define scenario levels (from conservative to aggressive)
+        scenarios = [
+            ('conservative', self.batch_strong_trend, 'strong_trend'),
+            ('baseline', self.batch_baseline, 'baseline'),
+            ('moderate', self.batch_overbought, 'overbought'),
+            ('aggressive', self.batch_overbought_strong, 'overbought_strong')
+        ]
 
-        if cv < self.high_confidence_cv and net_benefit_pct > self.min_net_benefit_pct:
-            adjustment -= self.batch_adjustment_max
-            reasons.append(f'high_conf_defer_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
-        elif cv > 0.20 or net_benefit_pct < 0:
-            adjustment += self.batch_adjustment_max
-            reasons.append(f'low_conf_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
+        # Determine baseline scenario from technical indicators
+        if rsi > self.rsi_overbought and adx > self.adx_strong:
+            base_level = 3  # aggressive (overbought + strong trend)
+        elif rsi > self.rsi_overbought:
+            base_level = 2  # moderate (overbought)
+        elif adx > self.adx_strong and rsi < self.rsi_moderate:
+            base_level = 0  # conservative (strong trend with low RSI)
+        else:
+            base_level = 1  # baseline
 
-        batch_size = np.clip(batch_size + adjustment, 0.10, 0.45)
-        reason = '_'.join(reasons) if reasons else 'baseline'
+        # Apply prediction-based scenario shift
+        shift = 0
+        shift_reason = ''
+
+        if cv < self.high_confidence_cv:
+            if net_benefit_pct < -self.min_net_benefit_pct:
+                # Predictions show DOWNWARD (agree) → shift more aggressive
+                shift = self.scenario_shift_aggressive
+                shift_reason = f'pred_down_shift+{shift}_net{net_benefit_pct:.2f}%'
+            elif net_benefit_pct > self.min_net_benefit_pct:
+                # Predictions show UPWARD (disagree) → shift more conservative
+                shift = -self.scenario_shift_conservative
+                shift_reason = f'pred_up_shift-{self.scenario_shift_conservative}_net{net_benefit_pct:.2f}%'
+            else:
+                shift_reason = f'weak_signal_net{net_benefit_pct:.2f}%'
+        else:
+            shift_reason = f'low_conf_cv{cv:.2%}'
+
+        # Apply shift and clip to valid range
+        final_level = np.clip(base_level + shift, 0, len(scenarios) - 1)
+        scenario_name, batch_size, scenario_type = scenarios[final_level]
+
+        reason = f'{scenario_type}_rsi{rsi:.0f}_adx{adx:.0f}_{shift_reason}'
 
         return batch_size, reason
 
@@ -677,7 +713,8 @@ class MovingAveragePredictive(BaseStrategy):
                  transaction_cost_pct=0.25,
                  min_net_benefit_pct=0.5,
                  high_confidence_cv=0.05,
-                 batch_adjustment_max=0.10):
+                 scenario_shift_aggressive=1,      # Levels to shift up when pred down
+                 scenario_shift_conservative=1):   # Levels to shift down when pred up
 
         super().__init__("Moving Average Predictive")
 
@@ -700,7 +737,8 @@ class MovingAveragePredictive(BaseStrategy):
         self.transaction_cost_pct = transaction_cost_pct
         self.min_net_benefit_pct = min_net_benefit_pct
         self.high_confidence_cv = high_confidence_cv
-        self.batch_adjustment_max = batch_adjustment_max
+        self.scenario_shift_aggressive = scenario_shift_aggressive
+        self.scenario_shift_conservative = scenario_shift_conservative
 
     def decide(self, day, inventory, current_price, price_history, predictions=None):
         if inventory <= 0:
@@ -732,6 +770,18 @@ class MovingAveragePredictive(BaseStrategy):
 
         # Upward crossover: Transition from falling to rising - HOLD for higher prices
         if upward_cross:
+            # Check if predictions contradict the bullish signal
+            if predictions is not None and predictions.size > 0 and can_trade:
+                net_benefit_pct = self._calculate_cost_benefit_pct(current_price, predictions)
+                cv = calculate_prediction_confidence(predictions, horizon_day=13)
+
+                # If predictions show DOWNWARD despite upward cross, make small hedge sale
+                if cv < self.high_confidence_cv and net_benefit_pct < -self.min_net_benefit_pct:
+                    batch_size = 0.10  # Small hedge sale
+                    return self._execute_trade(day, inventory, batch_size,
+                                              f'upward_cross_pred_down_hedge_net{net_benefit_pct:.2f}%')
+
+            # Otherwise HOLD as MA signal suggests
             return {'action': 'HOLD', 'amount': 0, 'reason': 'upward_crossover_bullish'}
 
         # Downward crossover: Transition from rising to falling - SELL to avoid decline
@@ -776,49 +826,62 @@ class MovingAveragePredictive(BaseStrategy):
 
     def _analyze_with_predictions(self, current_price, price_history, predictions):
         """
-        Add prediction overlay to baseline analysis.
+        Add prediction overlay at DOWNWARD MA crossover using scenario shifting.
 
-        Context: Called at DOWNWARD MA crossover (signal to sell)
-
-        Logic:
-        - Predictions show UPWARD (reversal expected) → Sell MORE (lock in current prices)
-        - Predictions show DOWNWARD (continued fall) → Sell LESS (gradual exit)
-        - Weak/uncertain predictions → Baseline batch size
+        MA signal: SELL (prices falling)
+        - Predictions show DOWNWARD (agree) → Shift to more aggressive scenario
+        - Predictions show UPWARD (disagree) → Shift to more conservative scenario
         """
-        # Start with baseline
-        batch_size, _ = self._analyze_historical(current_price, price_history)
+        # Get technical indicators
+        prices = price_history['price'].values
+        rsi = calculate_rsi(prices, period=14)
+        adx, _, _ = calculate_adx(price_history, period=14)
 
         # Calculate prediction indicators
         cv = calculate_prediction_confidence(predictions, horizon_day=13)
-
-        # PERCENTAGE-BASED cost-benefit
         net_benefit_pct = self._calculate_cost_benefit_pct(current_price, predictions)
 
-        # Adjust batch based on predictions (±max adjustment)
-        adjustment = 0.0
-        reasons = []
+        # Define scenario levels (from conservative to aggressive)
+        scenarios = [
+            ('conservative', self.batch_strong_momentum, 'strong_momentum'),
+            ('baseline', self.batch_baseline, 'baseline'),
+            ('moderate', self.batch_overbought, 'overbought'),
+            ('aggressive', self.batch_overbought_strong, 'overbought_strong')
+        ]
 
-        # High confidence predictions
-        if cv < self.high_confidence_cv:
-            if net_benefit_pct > self.min_net_benefit_pct:
-                # Predictions show UPWARD (contradict MA down signal)
-                # Sell MORE to lock in current prices before predicted rebound
-                adjustment += self.batch_adjustment_max
-                reasons.append(f'pred_up_sell_more_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
-            elif net_benefit_pct < -self.min_net_benefit_pct:
-                # Predictions show DOWNWARD (agree with MA signal)
-                # Sell LESS to spread sales over time (gradual exit)
-                adjustment -= self.batch_adjustment_max
-                reasons.append(f'pred_down_sell_less_cv{cv:.2%}_net{net_benefit_pct:.2f}%')
-            else:
-                # Weak signal (net benefit near zero)
-                reasons.append(f'weak_signal_net{net_benefit_pct:.2f}%')
+        # Determine baseline scenario from technical indicators
+        if adx > self.adx_strong and rsi >= self.rsi_min and rsi <= self.rsi_overbought:
+            base_level = 0  # conservative (strong momentum)
+        elif rsi > self.rsi_overbought and adx > self.adx_strong:
+            base_level = 3  # aggressive (overbought + strong trend)
+        elif rsi > self.rsi_overbought:
+            base_level = 2  # moderate (overbought)
         else:
-            # Low confidence - stick with baseline
-            reasons.append(f'low_conf_baseline_cv{cv:.2%}')
+            base_level = 1  # baseline
 
-        batch_size = np.clip(batch_size + adjustment, 0.10, 0.45)
-        reason = '_'.join(reasons) if reasons else 'baseline'
+        # Apply prediction-based scenario shift
+        shift = 0
+        shift_reason = ''
+
+        if cv < self.high_confidence_cv:
+            if net_benefit_pct < -self.min_net_benefit_pct:
+                # Predictions show DOWNWARD (agree) → shift more aggressive
+                shift = self.scenario_shift_aggressive
+                shift_reason = f'pred_down_shift+{shift}_net{net_benefit_pct:.2f}%'
+            elif net_benefit_pct > self.min_net_benefit_pct:
+                # Predictions show UPWARD (disagree) → shift more conservative
+                shift = -self.scenario_shift_conservative
+                shift_reason = f'pred_up_shift-{self.scenario_shift_conservative}_net{net_benefit_pct:.2f}%'
+            else:
+                shift_reason = f'weak_signal_net{net_benefit_pct:.2f}%'
+        else:
+            shift_reason = f'low_conf_cv{cv:.2%}'
+
+        # Apply shift and clip to valid range
+        final_level = np.clip(base_level + shift, 0, len(scenarios) - 1)
+        scenario_name, batch_size, scenario_type = scenarios[final_level]
+
+        reason = f'{scenario_type}_rsi{rsi:.0f}_adx{adx:.0f}_{shift_reason}'
 
         return batch_size, reason
 
