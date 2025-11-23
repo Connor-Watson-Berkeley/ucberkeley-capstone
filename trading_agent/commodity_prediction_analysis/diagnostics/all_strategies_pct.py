@@ -422,19 +422,27 @@ class MovingAverageStrategy(BaseStrategy):
         ma_prev = np.mean(recent_prices[-(self.period+1):-1])
         prev_price = recent_prices[-2]
 
-        crossover = (prev_price <= ma_prev and current_price > ma_current)
+        # Detect both crossover directions
+        upward_cross = (prev_price <= ma_prev and current_price > ma_current)
+        downward_cross = (prev_price >= ma_prev and current_price < ma_current)
         can_trade = days_since_sale >= self.cooldown_days
 
-        if not crossover:
-            return {'action': 'HOLD', 'amount': 0, 'reason': 'no_crossover'}
+        # Upward crossover: Transition from falling to rising - HOLD for higher prices
+        if upward_cross:
+            return {'action': 'HOLD', 'amount': 0, 'reason': 'upward_crossover_bullish'}
 
-        if not can_trade:
-            return {'action': 'HOLD', 'amount': 0,
-                   'reason': f'cooldown_{self.cooldown_days - days_since_sale}d'}
+        # Downward crossover: Transition from rising to falling - SELL to avoid decline
+        if downward_cross:
+            if not can_trade:
+                return {'action': 'HOLD', 'amount': 0,
+                       'reason': f'cooldown_{self.cooldown_days - days_since_sale}d'}
 
-        # Analyze with historical indicators
-        batch_size, reason = self._analyze_historical(current_price, price_history)
-        return self._execute_trade(day, inventory, batch_size, reason)
+            # Analyze with historical indicators
+            batch_size, reason = self._analyze_historical(current_price, price_history)
+            return self._execute_trade(day, inventory, batch_size, reason)
+
+        # No crossover: Maintain current position
+        return {'action': 'HOLD', 'amount': 0, 'reason': 'no_crossover'}
 
     def _analyze_historical(self, current_price, price_history):
         """Analyze using historical technical indicators"""
@@ -717,25 +725,33 @@ class MovingAveragePredictive(BaseStrategy):
         ma_prev = np.mean(recent_prices[-(self.period+1):-1])
         prev_price = recent_prices[-2]
 
-        crossover = (prev_price <= ma_prev and current_price > ma_current)
+        # Detect both crossover directions
+        upward_cross = (prev_price <= ma_prev and current_price > ma_current)
+        downward_cross = (prev_price >= ma_prev and current_price < ma_current)
         can_trade = days_since_sale >= self.cooldown_days
 
-        if not crossover:
-            return {'action': 'HOLD', 'amount': 0, 'reason': 'no_crossover'}
+        # Upward crossover: Transition from falling to rising - HOLD for higher prices
+        if upward_cross:
+            return {'action': 'HOLD', 'amount': 0, 'reason': 'upward_crossover_bullish'}
 
-        if not can_trade:
-            return {'action': 'HOLD', 'amount': 0,
-                   'reason': f'cooldown_{self.cooldown_days - days_since_sale}d'}
+        # Downward crossover: Transition from rising to falling - SELL to avoid decline
+        if downward_cross:
+            if not can_trade:
+                return {'action': 'HOLD', 'amount': 0,
+                       'reason': f'cooldown_{self.cooldown_days - days_since_sale}d'}
 
-        # Choose analysis based on prediction availability
-        if predictions is None or predictions.size == 0:
-            batch_size, reason = self._analyze_historical(current_price, price_history)
-        else:
-            batch_size, reason = self._analyze_with_predictions(
-                current_price, price_history, predictions
-            )
+            # Choose analysis based on prediction availability
+            if predictions is None or predictions.size == 0:
+                batch_size, reason = self._analyze_historical(current_price, price_history)
+            else:
+                batch_size, reason = self._analyze_with_predictions(
+                    current_price, price_history, predictions
+                )
 
-        return self._execute_trade(day, inventory, batch_size, reason)
+            return self._execute_trade(day, inventory, batch_size, reason)
+
+        # No crossover: Maintain current position
+        return {'action': 'HOLD', 'amount': 0, 'reason': 'no_crossover'}
 
     def _analyze_historical(self, current_price, price_history):
         """IDENTICAL to baseline MovingAverageStrategy"""
