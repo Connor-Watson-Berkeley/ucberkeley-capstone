@@ -1,18 +1,25 @@
 """
-Corrected Trading Strategies - Proper Storage Cost Handling
+Corrected Trading Strategies - Percentage-Based Decision Framework
 
-**Purpose:** Prediction strategies that properly account for storage costs in decisions
+**Purpose:** Prediction strategies with rational cost-benefit analysis
 
-**Key Fix:**
-Net benefit (profit after storage costs) is the PRIMARY decision driver.
-Confidence and trend indicators are SECONDARY, used to adjust batch sizing.
+**Key Design Principles:**
+1. NET BENEFIT as PERCENTAGE of current price (scale-invariant)
+2. Compare percentage returns to percentage costs (apples-to-apples)
+3. Full parameterization (everything exposed for grid search)
+4. Reasonable batch sizing (0.0 to ~0.40, rarely sell all inventory)
 
-**Parameterization:**
-All thresholds and decision points are exposed as parameters for grid search optimization.
+**The Fix:**
+- Calculate net_benefit_pct = (EV_future - EV_today) / current_price
+- Compare to min_net_benefit_pct (e.g., 0.5%)
+- This is comparable to storage costs (0.025%/day) and transaction costs (0.25%)
 
-**Matched Pairs:**
-These prediction strategies can be compared to baseline strategies (PriceThreshold, MovingAverage)
-that use the same parameters but don't use predictions.
+**Example:**
+- Predictions show +2% price increase over 14 days
+- Storage cost: 0.025% × 14 = 0.35%
+- Transaction cost: 0.25%
+- Net benefit: +2% - 0.6% = +1.4%
+- If min_net_benefit_pct = 0.5%: HOLD (rational!)
 """
 
 import numpy as np
@@ -106,117 +113,103 @@ def calculate_adx(price_history, period=14):
 # BASE STRATEGY CLASS
 # =============================================================================
 
-class Strategy(ABC):
-    """Base class for all strategies"""
-
-    def __init__(self, name, max_holding_days=365):
+class BaseStrategy(ABC):
+    def __init__(self, name):
         self.name = name
-        self.history = []
-        self.max_holding_days = max_holding_days
-        self.harvest_start_day = None
+        self.harvest_start = None
 
     @abstractmethod
     def decide(self, day, inventory, current_price, price_history, predictions=None):
         pass
 
-    def set_harvest_start(self, day):
-        self.harvest_start_day = day
-
     def reset(self):
-        self.history = []
-        self.harvest_start_day = None
+        self.harvest_start = None
 
-    def _days_held(self, day):
-        if self.harvest_start_day is None:
-            return 0
-        return day - self.harvest_start_day
+    def set_harvest_start(self, day):
+        self.harvest_start = day
 
     def _force_liquidation_check(self, day, inventory):
-        if self.harvest_start_day is None:
-            return None
-
-        days_held = self._days_held(day)
-        days_remaining = self.max_holding_days - days_held
-
-        if days_remaining <= 0 and inventory > 0:
-            return {'action': 'SELL', 'amount': inventory,
-                   'reason': 'max_holding_365d_reached'}
-        elif days_remaining <= 30 and inventory > 0:
-            sell_fraction = min(1.0, 0.05 * (31 - days_remaining))
-            amount = inventory * sell_fraction
-            return {'action': 'SELL', 'amount': amount,
-                   'reason': f'approaching_365d_deadline_{days_remaining}d_left'}
-
+        """Force liquidation approaching day 365"""
+        if self.harvest_start is not None:
+            days_since_harvest = day - self.harvest_start
+            if days_since_harvest >= 365:
+                return {'action': 'SELL', 'amount': inventory,
+                       'reason': 'forced_liquidation_365d'}
+            elif days_since_harvest >= 345:
+                days_left = 365 - days_since_harvest
+                return {'action': 'SELL', 'amount': inventory * 0.05,
+                       'reason': f'approaching_365d_deadline_{days_left}d_left'}
         return None
 
 
 # =============================================================================
-# CORRECTED: EXPECTED VALUE STRATEGY
+# CORRECTED: EXPECTED VALUE STRATEGY (PERCENTAGE-BASED)
 # =============================================================================
 
-class ExpectedValueStrategyCorrected(Strategy):
+class ExpectedValueStrategyCorrected(BaseStrategy):
     """
-    Expected Value Strategy - Corrected for proper storage cost handling
+    Expected value strategy with percentage-based decision framework.
 
     Decision Logic:
-    1. Calculate net benefit of waiting (includes storage costs)
-    2. PRIMARY: If net_benefit > threshold → consider holding
-    3. SECONDARY: Use confidence/trend to adjust batch size
-    4. If net_benefit < 0 → sell (storage costs exceed gains)
+    1. Calculate net_benefit as % of current price
+    2. If net_benefit_pct > min_threshold: HOLD (profitable to wait)
+    3. If net_benefit_pct < 0: SELL (storage costs exceed gains)
+    4. Confidence modulates batch sizing (not primary decision)
 
     Parameters (all exposed for grid search):
-    - min_net_benefit: Minimum $ benefit required to hold (default: 50)
-    - negative_threshold: Below this, sell aggressively (default: -20)
-    - high_confidence_cv: CV below this = high confidence (default: 0.05)
-    - medium_confidence_cv: CV below this = medium confidence (default: 0.10)
-    - strong_trend_adx: ADX above this = strong trend (default: 25)
-    - batch_positive_confident: Batch when profitable + confident (default: 0.0)
-    - batch_positive_uncertain: Batch when profitable + uncertain (default: 0.05)
-    - batch_marginal: Batch when near-zero benefit (default: 0.15)
-    - batch_negative_mild: Batch when mildly negative (default: 0.20)
-    - batch_negative_strong: Batch when strongly negative (default: 0.30)
-    - cooldown_days: Days between trades (default: 7)
-    - baseline_batch: Fallback batch size (default: 0.15)
-    - baseline_frequency: Days before fallback trade (default: 30)
+    - Cost parameters: storage_cost_pct_per_day, transaction_cost_pct
+    - Decision thresholds: min_net_benefit_pct, negative_threshold_pct
+    - Confidence thresholds: high_confidence_cv, medium_confidence_cv
+    - Trend threshold: strong_trend_adx
+    - Batch sizing: 5 different batch sizes for different scenarios
+    - Timing: cooldown_days, baseline_batch, baseline_frequency
     """
 
     def __init__(self,
                  storage_cost_pct_per_day,
                  transaction_cost_pct,
-                 min_net_benefit=50,
-                 negative_threshold=-20,
-                 high_confidence_cv=0.05,
-                 medium_confidence_cv=0.10,
-                 strong_trend_adx=25,
-                 batch_positive_confident=0.0,
-                 batch_positive_uncertain=0.05,
-                 batch_marginal=0.15,
-                 batch_negative_mild=0.20,
-                 batch_negative_strong=0.30,
-                 cooldown_days=7,
-                 baseline_batch=0.15,
-                 baseline_frequency=30):
+                 # PERCENTAGE thresholds (scale-invariant)
+                 min_net_benefit_pct=0.5,          # Min % return to hold (0.5% = 50 basis points)
+                 negative_threshold_pct=-0.3,       # Sell aggressively below this % (-0.3%)
+                 # Confidence thresholds (CV = std/mean)
+                 high_confidence_cv=0.05,           # CV < 5% = high confidence
+                 medium_confidence_cv=0.10,         # CV < 10% = medium confidence
+                 # Trend strength (ADX)
+                 strong_trend_adx=25,               # ADX > 25 = strong trend
+                 # Batch sizing (0.0 to ~0.40, rarely sell all)
+                 batch_positive_confident=0.0,      # Hold all when profitable + confident
+                 batch_positive_uncertain=0.10,     # Small hedge when profitable + uncertain
+                 batch_marginal=0.15,               # Gradual liquidation near zero
+                 batch_negative_mild=0.25,          # Sell when mildly negative
+                 batch_negative_strong=0.35,        # Sell aggressively when strongly negative
+                 # Timing parameters
+                 cooldown_days=7,                   # Days between trades
+                 baseline_batch=0.15,               # Fallback batch size
+                 baseline_frequency=30):            # Days before fallback
+
         super().__init__("Expected Value (Corrected)")
 
         # Cost parameters
         self.storage_cost_pct_per_day = storage_cost_pct_per_day
         self.transaction_cost_pct = transaction_cost_pct
 
-        # Decision thresholds
-        self.min_net_benefit = min_net_benefit
-        self.negative_threshold = negative_threshold
+        # PERCENTAGE-based decision thresholds
+        self.min_net_benefit_pct = min_net_benefit_pct
+        self.negative_threshold_pct = negative_threshold_pct
+
+        # Confidence and trend thresholds
         self.high_confidence_cv = high_confidence_cv
         self.medium_confidence_cv = medium_confidence_cv
         self.strong_trend_adx = strong_trend_adx
 
-        # Batch sizing parameters
+        # Batch sizing (secondary modulation)
         self.batch_positive_confident = batch_positive_confident
         self.batch_positive_uncertain = batch_positive_uncertain
         self.batch_marginal = batch_marginal
         self.batch_negative_mild = batch_negative_mild
         self.batch_negative_strong = batch_negative_strong
 
-        # Trading frequency
+        # Timing
         self.cooldown_days = cooldown_days
         self.baseline_batch = baseline_batch
         self.baseline_frequency = baseline_frequency
@@ -227,93 +220,104 @@ class ExpectedValueStrategyCorrected(Strategy):
         if inventory <= 0:
             return {'action': 'HOLD', 'amount': 0, 'reason': 'no_inventory'}
 
+        # Check forced liquidation
         forced = self._force_liquidation_check(day, inventory)
         if forced:
             return forced
 
         days_since_sale = day - self.last_sale_day
 
+        # Cooldown period
         if days_since_sale < self.cooldown_days:
             return {'action': 'HOLD', 'amount': 0,
                    'reason': f'cooldown_{self.cooldown_days - days_since_sale}d'}
 
+        # No predictions fallback
         if predictions is None or predictions.size == 0:
             if days_since_sale >= self.baseline_frequency:
                 return self._execute_trade(day, inventory, self.baseline_batch,
                                           'no_predictions_fallback')
             return {'action': 'HOLD', 'amount': 0, 'reason': 'no_predictions_waiting'}
 
-        batch_size, reason = self._analyze_expected_value(
+        # Main decision logic (PERCENTAGE-BASED)
+        batch_size, reason = self._analyze_expected_value_pct(
             current_price, price_history, predictions
         )
 
-        if batch_size > 0:
-            return self._execute_trade(day, inventory, batch_size, reason)
-        else:
-            return {'action': 'HOLD', 'amount': 0, 'reason': reason}
+        return self._execute_trade(day, inventory, batch_size, reason)
 
-    def _analyze_expected_value(self, current_price, price_history, predictions):
+    def _analyze_expected_value_pct(self, current_price, price_history, predictions):
         """
-        PRIMARY: Calculate net benefit (includes storage costs)
-        SECONDARY: Use confidence/trend to adjust batch sizing
+        Calculate expected value and make decision based on PERCENTAGE returns.
+
+        Returns: (batch_size, reason)
         """
-
-        # Calculate optimal sale day and net benefit (accounts for storage costs)
-        optimal_day, net_benefit = self._find_optimal_sale_day(current_price, predictions)
-
-        # Calculate confidence and trend indicators
-        cv_pred = calculate_prediction_confidence(predictions, horizon_day=min(13, predictions.shape[1]-1))
-        adx_pred, _, _ = calculate_adx(
-            pd.DataFrame({'price': [np.median(predictions[:, h])
-                                   for h in range(predictions.shape[1])]})
+        # Find optimal day and net benefit as PERCENTAGE
+        optimal_day, net_benefit_pct = self._find_optimal_sale_day_pct(
+            current_price, predictions
         )
 
-        # PRIMARY DECISION: Is there net benefit to waiting?
-        if net_benefit > self.min_net_benefit:
-            # Profitable to wait - adjust batch by confidence
-            if cv_pred < self.high_confidence_cv and adx_pred > self.strong_trend_adx:
-                # High confidence + strong trend
-                batch_size = self.batch_positive_confident
-                reason = f'net_benefit_${net_benefit:.0f}_high_conf_hold_to_day{optimal_day}'
-            elif cv_pred < self.medium_confidence_cv:
-                # Medium confidence
-                batch_size = self.batch_positive_uncertain
-                reason = f'net_benefit_${net_benefit:.0f}_med_conf_small_hedge_day{optimal_day}'
-            else:
-                # Lower confidence - larger hedge
-                batch_size = self.batch_marginal
-                reason = f'net_benefit_${net_benefit:.0f}_low_conf_larger_hedge'
+        # Calculate confidence and trend indicators (secondary)
+        cv_pred = calculate_prediction_confidence(
+            predictions,
+            horizon_day=min(13, predictions.shape[1]-1)
+        )
+        adx_pred, _, _ = calculate_adx(price_history, period=min(14, len(price_history)-1))
 
-        elif net_benefit > 0:
+        # PRIMARY DECISION: Is net benefit percentage positive and significant?
+        if net_benefit_pct > self.min_net_benefit_pct:
+            # Profitable to wait - modulate batch by confidence
+
+            if cv_pred < self.high_confidence_cv and adx_pred > self.strong_trend_adx:
+                # High confidence + strong trend: hold all inventory
+                batch_size = self.batch_positive_confident
+                reason = f'net_benefit_{net_benefit_pct:.2f}%_high_conf_hold_to_day{optimal_day}'
+
+            elif cv_pred < self.medium_confidence_cv:
+                # Medium confidence: small hedge
+                batch_size = self.batch_positive_uncertain
+                reason = f'net_benefit_{net_benefit_pct:.2f}%_med_conf_small_hedge_day{optimal_day}'
+
+            else:
+                # Lower confidence: larger hedge
+                batch_size = self.batch_marginal
+                reason = f'net_benefit_{net_benefit_pct:.2f}%_low_conf_hedge'
+
+        elif net_benefit_pct > 0:
             # Positive but below threshold - marginal case
             batch_size = self.batch_marginal
-            reason = f'marginal_benefit_${net_benefit:.0f}_gradual_liquidation'
+            reason = f'marginal_benefit_{net_benefit_pct:.2f}%_gradual_liquidation'
 
-        elif net_benefit > self.negative_threshold:
+        elif net_benefit_pct > self.negative_threshold_pct:
             # Mildly negative - storage costs slightly exceed gains
             batch_size = self.batch_negative_mild
-            reason = f'mild_negative_ev_${net_benefit:.0f}_avoid_storage_costs'
+            reason = f'mild_negative_{net_benefit_pct:.2f}%_avoid_storage'
 
         else:
             # Strongly negative - storage costs far exceed gains
             batch_size = self.batch_negative_strong
-            reason = f'strong_negative_ev_${net_benefit:.0f}_sell_to_avoid_losses'
+            reason = f'strong_negative_{net_benefit_pct:.2f}%_sell_to_cut_losses'
 
         return batch_size, reason
 
-    def _find_optimal_sale_day(self, current_price, predictions):
-        """Find the day with maximum expected value after costs"""
+    def _find_optimal_sale_day_pct(self, current_price, predictions):
+        """
+        Find optimal sale day and calculate net benefit as PERCENTAGE.
+
+        Returns: (optimal_day, net_benefit_pct)
+        where net_benefit_pct is the % return relative to current price
+        """
         ev_by_day = []
         for h in range(predictions.shape[1]):
             future_price = np.median(predictions[:, h])
             days_to_wait = h + 1
 
-            # Storage cost accumulates linearly
+            # Storage cost accumulates linearly (in cents/lb)
             storage_cost = current_price * (self.storage_cost_pct_per_day / 100) * days_to_wait
             # Transaction cost as % of sale value
             transaction_cost = future_price * (self.transaction_cost_pct / 100)
 
-            # Net expected value
+            # Net expected value per pound
             ev = future_price - storage_cost - transaction_cost
             ev_by_day.append(ev)
 
@@ -323,9 +327,11 @@ class ExpectedValueStrategyCorrected(Strategy):
 
         # Find optimal day
         optimal_day = np.argmax(ev_by_day)
-        net_benefit = ev_by_day[optimal_day] - ev_today
 
-        return optimal_day, net_benefit
+        # Calculate net benefit as PERCENTAGE of current price
+        net_benefit_pct = 100 * (ev_by_day[optimal_day] - ev_today) / current_price
+
+        return optimal_day, net_benefit_pct
 
     def _execute_trade(self, day, inventory, batch_size, reason):
         amount = inventory * batch_size
@@ -338,62 +344,64 @@ class ExpectedValueStrategyCorrected(Strategy):
 
 
 # =============================================================================
-# CORRECTED: CONSENSUS STRATEGY
+# CORRECTED: CONSENSUS STRATEGY (PERCENTAGE-BASED)
 # =============================================================================
 
-class ConsensusStrategyCorrected(Strategy):
+class ConsensusStrategyCorrected(BaseStrategy):
     """
-    Consensus Strategy - Corrected for proper storage cost handling
+    Consensus strategy with percentage-based decision framework.
 
     Decision Logic:
-    1. Calculate net benefit AND consensus metrics
-    2. PRIMARY: Net benefit determines hold vs sell
-    3. SECONDARY: Consensus strength adjusts batch sizing
+    1. Count % of predictions that are bullish (above min_return)
+    2. If consensus >= threshold AND net_benefit_pct > min: HOLD
+    3. If bearish consensus: SELL
+    4. Batch size modulated by consensus strength
 
-    Parameters (all exposed for grid search):
-    - consensus_threshold: % of predictions that must be bullish (default: 0.70)
-    - min_return: Minimum required return % (default: 0.03)
-    - min_net_benefit: Minimum $ benefit to hold (default: 50)
-    - evaluation_day: Which day's predictions to evaluate (default: 14)
-    - high_confidence_cv: CV threshold for high confidence (default: 0.05)
-    - very_strong_consensus: Threshold for very strong consensus (default: 0.80)
-    - moderate_consensus: Threshold for moderate consensus (default: 0.60)
-    - batch_strong_consensus: Batch for strong consensus (default: 0.0)
-    - batch_moderate: Batch for moderate consensus (default: 0.15)
-    - batch_weak: Batch for weak consensus (default: 0.25)
-    - batch_bearish: Batch for bearish consensus (default: 0.35)
-    - cooldown_days: Days between trades (default: 7)
+    All thresholds are percentages for scale-invariance.
     """
 
     def __init__(self,
                  storage_cost_pct_per_day,
                  transaction_cost_pct,
-                 consensus_threshold=0.70,
-                 min_return=0.03,
-                 min_net_benefit=50,
+                 # Consensus thresholds
+                 consensus_threshold=0.70,           # 70% agreement to act
+                 very_strong_consensus=0.85,         # 85% = very strong
+                 moderate_consensus=0.60,            # 60% = moderate
+                 # Percentage-based decision thresholds
+                 min_return=0.03,                    # 3% minimum return
+                 min_net_benefit_pct=0.5,            # 0.5% minimum net benefit
+                 # Confidence threshold
+                 high_confidence_cv=0.05,            # CV < 5% = high confidence
+                 # Which day to evaluate
                  evaluation_day=14,
-                 high_confidence_cv=0.05,
-                 very_strong_consensus=0.80,
-                 moderate_consensus=0.60,
-                 batch_strong_consensus=0.0,
-                 batch_moderate=0.15,
-                 batch_weak=0.25,
-                 batch_bearish=0.35,
+                 # Batch sizing (0.0 to ~0.40)
+                 batch_strong_consensus=0.0,         # Hold when very strong consensus
+                 batch_moderate=0.15,                # Gradual when moderate
+                 batch_weak=0.25,                    # Sell when weak consensus
+                 batch_bearish=0.35,                 # Sell aggressively when bearish
+                 # Timing
                  cooldown_days=7):
+
         super().__init__("Consensus (Corrected)")
 
         # Cost parameters
         self.storage_cost_pct_per_day = storage_cost_pct_per_day
         self.transaction_cost_pct = transaction_cost_pct
 
-        # Decision thresholds
+        # Consensus thresholds
         self.consensus_threshold = consensus_threshold
-        self.min_return = min_return
-        self.min_net_benefit = min_net_benefit
-        self.evaluation_day = evaluation_day
-        self.high_confidence_cv = high_confidence_cv
         self.very_strong_consensus = very_strong_consensus
         self.moderate_consensus = moderate_consensus
+
+        # PERCENTAGE-based decision thresholds
+        self.min_return = min_return
+        self.min_net_benefit_pct = min_net_benefit_pct
+
+        # Confidence
+        self.high_confidence_cv = high_confidence_cv
+
+        # Evaluation parameters
+        self.evaluation_day = evaluation_day
 
         # Batch sizing
         self.batch_strong_consensus = batch_strong_consensus
@@ -423,93 +431,69 @@ class ConsensusStrategyCorrected(Strategy):
                 return self._execute_trade(day, inventory, 0.20, 'no_predictions_fallback')
             return {'action': 'HOLD', 'amount': 0, 'reason': 'no_predictions_waiting'}
 
-        batch_size, reason = self._analyze_consensus(
+        batch_size, reason = self._analyze_consensus_pct(
             current_price, price_history, predictions
         )
 
-        if batch_size > 0:
-            return self._execute_trade(day, inventory, batch_size, reason)
-        else:
-            return {'action': 'HOLD', 'amount': 0, 'reason': reason}
+        return self._execute_trade(day, inventory, batch_size, reason)
 
-    def _analyze_consensus(self, current_price, price_history, predictions):
-        """
-        PRIMARY: Net benefit determines hold vs sell
-        SECONDARY: Consensus strength adjusts batch sizing
-        """
+    def _analyze_consensus_pct(self, current_price, price_history, predictions):
+        """Calculate consensus and make percentage-based decision"""
+
+        # Evaluate at specific day
+        eval_day = min(self.evaluation_day, predictions.shape[1] - 1)
+        day_predictions = predictions[:, eval_day]
+
+        # Calculate expected return as percentage
+        median_future = np.median(day_predictions)
+        expected_return_pct = (median_future - current_price) / current_price
+
+        # Count bullish predictions (those showing sufficient return)
+        bullish_count = np.sum(
+            (day_predictions - current_price) / current_price > self.min_return
+        )
+        bullish_pct = bullish_count / len(day_predictions)
 
         # Calculate confidence
-        cv_pred = calculate_prediction_confidence(
-            predictions,
-            horizon_day=min(self.evaluation_day-1, predictions.shape[1]-1)
-        )
+        cv = calculate_prediction_confidence(predictions, eval_day)
 
-        # Get consensus metrics
-        eval_day_idx = min(self.evaluation_day, predictions.shape[1]) - 1
-        day_preds = predictions[:, eval_day_idx]
-        median_pred = np.median(day_preds)
-        expected_return = (median_pred - current_price) / current_price
-        bullish_pct = np.mean(day_preds > current_price)
+        # Calculate net benefit accounting for costs
+        days_to_wait = eval_day + 1
+        storage_cost_pct = (self.storage_cost_pct_per_day / 100) * days_to_wait
+        transaction_cost_pct = self.transaction_cost_pct / 100
+        net_benefit_pct = 100 * (expected_return_pct - storage_cost_pct - transaction_cost_pct)
 
-        # Calculate net benefit (includes storage costs)
-        net_benefit = self._calculate_net_benefit(current_price, predictions)
+        # Decision based on consensus and net benefit
+        if bullish_pct >= self.very_strong_consensus and net_benefit_pct > self.min_net_benefit_pct:
+            # Very strong consensus + positive net benefit
+            batch_size = self.batch_strong_consensus
+            reason = f'very_strong_consensus_{bullish_pct:.0%}_net_{net_benefit_pct:.2f}%_hold'
 
-        # PRIMARY DECISION: Is there net benefit?
-        if net_benefit > self.min_net_benefit:
-            # Profitable to wait - use consensus to adjust batch
-            if (bullish_pct >= self.very_strong_consensus and
-                expected_return >= self.min_return and
-                cv_pred < self.high_confidence_cv):
-                # Very strong consensus + high confidence
+        elif bullish_pct >= self.consensus_threshold and net_benefit_pct > self.min_net_benefit_pct:
+            # Strong consensus + positive net benefit
+            if cv < self.high_confidence_cv:
                 batch_size = self.batch_strong_consensus
-                reason = f'very_strong_consensus_{bullish_pct:.0%}_net_benefit_${net_benefit:.0f}_hold'
-            elif (bullish_pct >= self.consensus_threshold and
-                  expected_return >= self.min_return):
-                # Strong consensus
-                batch_size = self.batch_strong_consensus
-                reason = f'strong_consensus_{bullish_pct:.0%}_net_benefit_${net_benefit:.0f}_hold'
-            elif bullish_pct >= self.moderate_consensus:
-                # Moderate consensus - small hedge
+                reason = f'strong_consensus_{bullish_pct:.0%}_high_conf_hold'
+            else:
                 batch_size = self.batch_moderate
-                reason = f'moderate_consensus_{bullish_pct:.0%}_partial_hold'
-            else:
-                # Weak consensus despite positive net benefit
-                batch_size = self.batch_weak
-                reason = f'weak_consensus_{bullish_pct:.0%}_despite_positive_benefit'
+                reason = f'strong_consensus_{bullish_pct:.0%}_med_conf_gradual'
 
-        elif net_benefit < 0:
-            # Negative net benefit - sell regardless of consensus
-            if bullish_pct < 0.40:
-                # Bearish + negative benefit
-                batch_size = self.batch_bearish
-                reason = f'bearish_{bullish_pct:.0%}_negative_benefit_${net_benefit:.0f}'
-            else:
-                # Mixed signals but costs exceed gains
-                batch_size = self.batch_weak
-                reason = f'negative_benefit_${net_benefit:.0f}_storage_exceeds_gains'
+        elif bullish_pct >= self.moderate_consensus:
+            # Moderate consensus
+            batch_size = self.batch_moderate
+            reason = f'moderate_consensus_{bullish_pct:.0%}_gradual'
+
+        elif bullish_pct < (1 - self.consensus_threshold):
+            # Bearish consensus (most predictions negative)
+            batch_size = self.batch_bearish
+            reason = f'bearish_consensus_{bullish_pct:.0%}_sell'
 
         else:
-            # Marginal benefit
-            batch_size = self.batch_moderate
-            reason = f'marginal_benefit_${net_benefit:.0f}_consensus_{bullish_pct:.0%}'
+            # Weak/unclear consensus
+            batch_size = self.batch_weak
+            reason = f'weak_consensus_{bullish_pct:.0%}_sell'
 
         return batch_size, reason
-
-    def _calculate_net_benefit(self, current_price, predictions):
-        """Calculate max net benefit across forecast horizon"""
-        ev_by_day = []
-        for h in range(predictions.shape[1]):
-            future_price = np.median(predictions[:, h])
-            days_to_wait = h + 1
-            storage_cost = current_price * (self.storage_cost_pct_per_day / 100) * days_to_wait
-            transaction_cost = future_price * (self.transaction_cost_pct / 100)
-            ev = future_price - storage_cost - transaction_cost
-            ev_by_day.append(ev)
-
-        transaction_cost_today = current_price * (self.transaction_cost_pct / 100)
-        ev_today = current_price - transaction_cost_today
-
-        return max(ev_by_day) - ev_today
 
     def _execute_trade(self, day, inventory, batch_size, reason):
         amount = inventory * batch_size
@@ -522,64 +506,66 @@ class ConsensusStrategyCorrected(Strategy):
 
 
 # =============================================================================
-# CORRECTED: RISK-ADJUSTED STRATEGY
+# CORRECTED: RISK-ADJUSTED STRATEGY (PERCENTAGE-BASED)
 # =============================================================================
 
-class RiskAdjustedStrategyCorrected(Strategy):
+class RiskAdjustedStrategyCorrected(BaseStrategy):
     """
-    Risk-Adjusted Strategy - Corrected for proper storage cost handling
+    Risk-adjusted strategy with percentage-based framework.
 
     Decision Logic:
-    1. Calculate net benefit AND risk metrics
-    2. PRIMARY: Net benefit determines hold vs sell
-    3. SECONDARY: Risk level adjusts batch sizing
+    1. Evaluate expected return as percentage
+    2. Measure uncertainty (CV)
+    3. If return > threshold AND uncertainty < max AND net_benefit_pct > min: HOLD
+    4. Batch size based on risk tier (low/medium/high/very high)
 
-    Parameters (all exposed for grid search):
-    - min_return: Minimum required return % (default: 0.03)
-    - max_uncertainty_low: CV threshold for low risk (default: 0.05)
-    - max_uncertainty_medium: CV threshold for medium risk (default: 0.10)
-    - max_uncertainty_high: CV threshold for high risk (default: 0.20)
-    - min_net_benefit: Minimum $ benefit to hold (default: 50)
-    - strong_trend_adx: ADX threshold for strong trend (default: 25)
-    - evaluation_day: Which day to evaluate (default: 14)
-    - batch_low_risk: Batch for low risk (default: 0.0)
-    - batch_medium_risk: Batch for medium risk (default: 0.10)
-    - batch_high_risk: Batch for high risk (default: 0.25)
-    - batch_very_high_risk: Batch for very high risk (default: 0.35)
-    - cooldown_days: Days between trades (default: 7)
+    All thresholds in percentages.
     """
 
     def __init__(self,
                  storage_cost_pct_per_day,
                  transaction_cost_pct,
-                 min_return=0.03,
-                 max_uncertainty_low=0.05,
-                 max_uncertainty_medium=0.10,
-                 max_uncertainty_high=0.20,
-                 min_net_benefit=50,
+                 # Return threshold (percentage)
+                 min_return=0.03,                    # 3% minimum return
+                 min_net_benefit_pct=0.5,            # 0.5% minimum net benefit
+                 # Uncertainty thresholds (CV levels)
+                 max_uncertainty_low=0.05,           # CV < 5% = low risk
+                 max_uncertainty_medium=0.10,        # CV < 10% = medium risk
+                 max_uncertainty_high=0.20,          # CV < 20% = high risk
+                 # Trend strength
                  strong_trend_adx=25,
+                 # Evaluation day
                  evaluation_day=14,
-                 batch_low_risk=0.0,
-                 batch_medium_risk=0.10,
-                 batch_high_risk=0.25,
-                 batch_very_high_risk=0.35,
+                 # Batch sizing by risk tier
+                 batch_low_risk=0.0,                 # Hold when low risk
+                 batch_medium_risk=0.10,             # Small hedge medium risk
+                 batch_high_risk=0.25,               # Sell more at high risk
+                 batch_very_high_risk=0.35,          # Aggressive at very high risk
+                 # Timing
                  cooldown_days=7):
+
         super().__init__("Risk-Adjusted (Corrected)")
 
         # Cost parameters
         self.storage_cost_pct_per_day = storage_cost_pct_per_day
         self.transaction_cost_pct = transaction_cost_pct
 
-        # Decision thresholds
+        # PERCENTAGE-based thresholds
         self.min_return = min_return
+        self.min_net_benefit_pct = min_net_benefit_pct
+
+        # Uncertainty (risk) thresholds
         self.max_uncertainty_low = max_uncertainty_low
         self.max_uncertainty_medium = max_uncertainty_medium
         self.max_uncertainty_high = max_uncertainty_high
-        self.min_net_benefit = min_net_benefit
+
+        # Trend
         self.strong_trend_adx = strong_trend_adx
+
+        # Evaluation
         self.evaluation_day = evaluation_day
 
-        # Batch sizing
+        # Batch sizing by risk tier
         self.batch_low_risk = batch_low_risk
         self.batch_medium_risk = batch_medium_risk
         self.batch_high_risk = batch_high_risk
@@ -604,97 +590,72 @@ class RiskAdjustedStrategyCorrected(Strategy):
 
         if predictions is None or predictions.size == 0:
             if days_since_sale >= 30:
-                return self._execute_trade(day, inventory, 0.18, 'no_predictions_fallback')
+                return self._execute_trade(day, inventory, 0.20, 'no_predictions_fallback')
             return {'action': 'HOLD', 'amount': 0, 'reason': 'no_predictions_waiting'}
 
-        batch_size, reason = self._analyze_risk_adjusted(
+        batch_size, reason = self._analyze_risk_adjusted_pct(
             current_price, price_history, predictions
         )
 
-        if batch_size > 0:
-            return self._execute_trade(day, inventory, batch_size, reason)
-        else:
-            return {'action': 'HOLD', 'amount': 0, 'reason': reason}
+        return self._execute_trade(day, inventory, batch_size, reason)
 
-    def _analyze_risk_adjusted(self, current_price, price_history, predictions):
-        """
-        PRIMARY: Net benefit determines hold vs sell
-        SECONDARY: Risk level (CV) adjusts batch sizing
-        """
+    def _analyze_risk_adjusted_pct(self, current_price, price_history, predictions):
+        """Risk-adjusted decision with percentage-based logic"""
 
-        # Calculate risk metrics
-        cv_pred = calculate_prediction_confidence(
-            predictions,
-            horizon_day=min(self.evaluation_day-1, predictions.shape[1]-1)
-        )
+        # Evaluate at specific day
+        eval_day = min(self.evaluation_day, predictions.shape[1] - 1)
+        day_predictions = predictions[:, eval_day]
 
-        adx_pred, _, _ = calculate_adx(
-            pd.DataFrame({'price': [np.median(predictions[:, h])
-                                   for h in range(predictions.shape[1])]})
-        )
+        # Calculate expected return as percentage
+        median_future = np.median(day_predictions)
+        expected_return_pct = (median_future - current_price) / current_price
 
-        # Get expected return
-        eval_day_idx = min(self.evaluation_day, predictions.shape[1]) - 1
-        day_preds = predictions[:, eval_day_idx]
-        median_pred = np.median(day_preds)
-        expected_return = (median_pred - current_price) / current_price
+        # Measure uncertainty (risk)
+        cv = calculate_prediction_confidence(predictions, eval_day)
 
-        # Calculate net benefit (includes storage costs)
-        net_benefit = self._calculate_net_benefit(current_price, predictions)
+        # Calculate net benefit accounting for costs
+        days_to_wait = eval_day + 1
+        storage_cost_pct = (self.storage_cost_pct_per_day / 100) * days_to_wait
+        transaction_cost_pct = self.transaction_cost_pct / 100
+        net_benefit_pct = 100 * (expected_return_pct - storage_cost_pct - transaction_cost_pct)
 
-        # PRIMARY DECISION: Is there net benefit?
-        if net_benefit > self.min_net_benefit and expected_return >= self.min_return:
-            # Profitable to wait - use risk to adjust batch
-            if cv_pred < self.max_uncertainty_low and adx_pred > self.strong_trend_adx:
-                # Very low risk
+        # Get trend strength
+        adx, _, _ = calculate_adx(price_history, period=min(14, len(price_history)-1))
+
+        # Decision based on risk tier and net benefit
+        if expected_return_pct >= self.min_return and net_benefit_pct > self.min_net_benefit_pct:
+            # Sufficient expected return and net benefit
+
+            if cv < self.max_uncertainty_low and adx > self.strong_trend_adx:
+                # Low risk + strong trend: hold all
                 batch_size = self.batch_low_risk
-                reason = f'very_low_risk_cv{cv_pred:.1%}_net_benefit_${net_benefit:.0f}_hold'
-            elif cv_pred < self.max_uncertainty_medium:
-                # Low to medium risk
-                batch_size = self.batch_low_risk
-                reason = f'low_risk_cv{cv_pred:.1%}_net_benefit_${net_benefit:.0f}_hold'
-            elif cv_pred < self.max_uncertainty_high:
-                # Medium risk - small hedge
+                reason = f'low_risk_cv{cv:.2%}_return{expected_return_pct:.2%}_hold'
+
+            elif cv < self.max_uncertainty_medium:
+                # Medium risk: small hedge
                 batch_size = self.batch_medium_risk
-                reason = f'medium_risk_cv{cv_pred:.1%}_partial_hold'
-            else:
-                # Higher risk - larger hedge
-                batch_size = self.batch_high_risk
-                reason = f'high_risk_cv{cv_pred:.1%}_larger_hedge'
+                reason = f'medium_risk_cv{cv:.2%}_return{expected_return_pct:.2%}_small_hedge'
 
-        elif net_benefit < 0:
-            # Negative net benefit - sell based on risk level
-            if cv_pred > self.max_uncertainty_high:
-                # High uncertainty + negative benefit
-                batch_size = self.batch_very_high_risk
-                reason = f'very_high_risk_cv{cv_pred:.1%}_negative_benefit_${net_benefit:.0f}'
-            else:
-                # Moderate uncertainty but costs exceed gains
+            elif cv < self.max_uncertainty_high:
+                # High risk: larger hedge
                 batch_size = self.batch_high_risk
-                reason = f'negative_benefit_${net_benefit:.0f}_storage_exceeds_gains'
+                reason = f'high_risk_cv{cv:.2%}_return{expected_return_pct:.2%}_hedge'
+
+            else:
+                # Very high risk: sell aggressively
+                batch_size = self.batch_very_high_risk
+                reason = f'very_high_risk_cv{cv:.2%}_sell'
 
         else:
-            # Marginal benefit or low expected return
-            batch_size = self.batch_medium_risk
-            reason = f'marginal_benefit_${net_benefit:.0f}_risk_cv{cv_pred:.1%}'
+            # Insufficient return or negative net benefit
+            if net_benefit_pct < 0:
+                batch_size = self.batch_very_high_risk
+                reason = f'negative_net_benefit_{net_benefit_pct:.2f}%_sell'
+            else:
+                batch_size = self.batch_high_risk
+                reason = f'insufficient_return_{expected_return_pct:.2%}_sell'
 
         return batch_size, reason
-
-    def _calculate_net_benefit(self, current_price, predictions):
-        """Calculate max net benefit across forecast horizon"""
-        ev_by_day = []
-        for h in range(predictions.shape[1]):
-            future_price = np.median(predictions[:, h])
-            days_to_wait = h + 1
-            storage_cost = current_price * (self.storage_cost_pct_per_day / 100) * days_to_wait
-            transaction_cost = future_price * (self.transaction_cost_pct / 100)
-            ev = future_price - storage_cost - transaction_cost
-            ev_by_day.append(ev)
-
-        transaction_cost_today = current_price * (self.transaction_cost_pct / 100)
-        ev_today = current_price - transaction_cost_today
-
-        return max(ev_by_day) - ev_today
 
     def _execute_trade(self, day, inventory, batch_size, reason):
         amount = inventory * batch_size
