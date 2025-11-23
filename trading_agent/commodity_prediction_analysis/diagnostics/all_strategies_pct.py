@@ -286,7 +286,7 @@ class PriceThresholdStrategy(BaseStrategy):
         # Timing
         self.cooldown_days = cooldown_days
         self.max_days_without_sale = max_days_without_sale
-        self.last_sale_day = -max_days_without_sale
+        self.last_sale_day = 0  # Start from day 0, give strategy 60 days to operate
 
     def decide(self, day, inventory, current_price, price_history, predictions=None):
         if inventory <= 0:
@@ -351,7 +351,7 @@ class PriceThresholdStrategy(BaseStrategy):
 
     def reset(self):
         super().reset()
-        self.last_sale_day = -self.max_days_without_sale
+        self.last_sale_day = 0
 
 
 class MovingAverageStrategy(BaseStrategy):
@@ -397,7 +397,7 @@ class MovingAverageStrategy(BaseStrategy):
         # Timing
         self.cooldown_days = cooldown_days
         self.max_days_without_sale = max_days_without_sale
-        self.last_sale_day = -max_days_without_sale
+        self.last_sale_day = 0  # Start from day 0, give strategy 60 days to operate
 
     def decide(self, day, inventory, current_price, price_history, predictions=None):
         if inventory <= 0:
@@ -464,7 +464,7 @@ class MovingAverageStrategy(BaseStrategy):
 
     def reset(self):
         super().reset()
-        self.last_sale_day = -self.max_days_without_sale
+        self.last_sale_day = 0
 
 
 # =============================================================================
@@ -511,7 +511,7 @@ class PriceThresholdPredictive(BaseStrategy):
         self.adx_strong = adx_strong
         self.cooldown_days = cooldown_days
         self.max_days_without_sale = max_days_without_sale
-        self.last_sale_day = -max_days_without_sale
+        self.last_sale_day = 0  # Start from day 0, give strategy 60 days to operate
 
         # PREDICTION parameters
         self.storage_cost_pct_per_day = storage_cost_pct_per_day
@@ -636,7 +636,7 @@ class PriceThresholdPredictive(BaseStrategy):
 
     def reset(self):
         super().reset()
-        self.last_sale_day = -self.max_days_without_sale
+        self.last_sale_day = 0
 
 
 # =============================================================================
@@ -685,7 +685,7 @@ class MovingAveragePredictive(BaseStrategy):
         self.adx_weak = adx_weak
         self.cooldown_days = cooldown_days
         self.max_days_without_sale = max_days_without_sale
-        self.last_sale_day = -max_days_without_sale
+        self.last_sale_day = 0  # Start from day 0, give strategy 60 days to operate
 
         # PREDICTION parameters
         self.storage_cost_pct_per_day = storage_cost_pct_per_day
@@ -812,7 +812,7 @@ class MovingAveragePredictive(BaseStrategy):
 
     def reset(self):
         super().reset()
-        self.last_sale_day = -self.max_days_without_sale
+        self.last_sale_day = 0
 
 
 # =============================================================================
