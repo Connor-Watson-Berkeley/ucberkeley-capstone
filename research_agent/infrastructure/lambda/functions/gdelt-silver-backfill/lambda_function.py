@@ -682,32 +682,48 @@ def combine_wide_chunks(chunk_dfs: list) -> pd.DataFrame:
         )
 
         # For each metric column, combine values
+        # Get all columns from merged dataframe (excluding base cols and _new suffixes)
         base_cols = ['article_date', 'commodity']
-        metric_cols = [c for c in chunk_dfs[0].columns if c not in base_cols]
+        all_cols = set(combined.columns) - set(base_cols)
+        metric_cols = [c for c in all_cols if not c.endswith('_new')]
 
         for col in metric_cols:
-            if col.endswith('_count'):
-                # Sum counts
-                combined[col] = combined[col].fillna(0) + combined[f'{col}_new'].fillna(0)
-            elif col.endswith('_tone_avg'):
-                # Recalculate weighted average
-                count_col = col.replace('_tone_avg', '_count')
-                old_count = combined[count_col].fillna(0) - combined[f'{count_col}_new'].fillna(0)
-                new_count = combined[f'{count_col}_new'].fillna(0)
-                total_count = combined[count_col].fillna(0)
+            new_col = f'{col}_new'
 
-                old_avg = combined[col].fillna(0)
-                new_avg = combined[f'{col}_new'].fillna(0)
+            # Check if this column has a _new version (exists in both chunks)
+            if new_col in combined.columns:
+                if col.endswith('_count'):
+                    # Sum counts
+                    combined[col] = combined[col].fillna(0) + combined[new_col].fillna(0)
+                elif col.endswith('_tone_avg'):
+                    # Recalculate weighted average
+                    count_col = col.replace('_tone_avg', '_count')
+                    count_new_col = f'{count_col}_new'
 
-                # Weighted average: (old_count * old_avg + new_count * new_avg) / total_count
-                combined[col] = np.where(
-                    total_count > 0,
-                    (old_count * old_avg + new_count * new_avg) / total_count,
-                    0
-                )
-            else:
-                # For tone_positive, tone_negative, tone_polarity: sum them
-                combined[col] = combined[col].fillna(0) + combined[f'{col}_new'].fillna(0)
+                    # Check if count columns exist for weighted average calculation
+                    if count_new_col in combined.columns:
+                        old_count = combined[count_col].fillna(0) - combined[count_new_col].fillna(0)
+                        new_count = combined[count_new_col].fillna(0)
+                        total_count = combined[count_col].fillna(0)
+                    else:
+                        # Count column doesn't exist in new chunk, keep old average
+                        old_count = combined[count_col].fillna(0)
+                        new_count = 0
+                        total_count = combined[count_col].fillna(0)
+
+                    old_avg = combined[col].fillna(0)
+                    new_avg = combined[new_col].fillna(0)
+
+                    # Weighted average: (old_count * old_avg + new_count * new_avg) / total_count
+                    combined[col] = np.where(
+                        total_count > 0,
+                        (old_count * old_avg + new_count * new_avg) / total_count,
+                        0
+                    )
+                else:
+                    # For tone_positive, tone_negative, tone_polarity: sum them
+                    combined[col] = combined[col].fillna(0) + combined[new_col].fillna(0)
+            # else: column only exists in one chunk, keep as-is
 
         # Drop _new columns
         new_cols = [c for c in combined.columns if c.endswith('_new')]
