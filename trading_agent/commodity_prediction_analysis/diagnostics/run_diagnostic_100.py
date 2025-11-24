@@ -18,7 +18,11 @@ import os
 import importlib.util
 
 # Try multiple paths to find all_strategies_pct.py
-script_dir = os.path.dirname(os.path.abspath(__file__))
+try:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics'
+
 possible_paths = [
     os.path.join(script_dir, 'all_strategies_pct.py'),  # Same directory as this script
     '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics/all_strategies_pct.py',
