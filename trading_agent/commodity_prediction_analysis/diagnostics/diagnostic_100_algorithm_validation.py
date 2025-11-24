@@ -29,7 +29,15 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-# Import strategies
+# Import strategies - handle both Databricks and local execution
+import sys
+import os
+
+# Add diagnostics directory to path
+diagnostics_dir = os.path.dirname(os.path.abspath(__file__))
+if diagnostics_dir not in sys.path:
+    sys.path.insert(0, diagnostics_dir)
+
 from all_strategies_pct import (
     # Baselines
     EqualBatchStrategy,
@@ -400,11 +408,12 @@ def run_validation_test(commodity='coffee'):
     print(f"Improvement:      ${improvement:,.0f} ({improvement_pct:+.1f}%)")
 
     # Validation criteria
+    algorithms_valid = improvement > 0 and improvement_pct > 10
     print("\nValidation Criteria:")
     print(f"  1. Predictions must beat baselines: {'✓ PASS' if improvement > 0 else '❌ FAIL'}")
     print(f"  2. Improvement must be >10%: {'✓ PASS' if improvement_pct > 10 else '❌ FAIL (only ' + f'{improvement_pct:.1f}%)'}")
 
-    if improvement > 0 and improvement_pct > 10:
+    if algorithms_valid:
         print("\n" + "=" * 80)
         print("✓✓✓ ALGORITHMS VALIDATED: Strategies work correctly with perfect predictions")
         print("=" * 80)
@@ -413,7 +422,6 @@ def run_validation_test(commodity='coffee'):
         print("  - Prediction accuracy not high enough")
         print("  - Parameter tuning needed")
         print("  - Prediction usage in strategies needs refinement")
-        return True
     else:
         print("\n" + "=" * 80)
         print("❌❌❌ ALGORITHMS BROKEN: Even with PERFECT predictions, strategies lose!")
@@ -425,7 +433,72 @@ def run_validation_test(commodity='coffee'):
         print("  - Cost calculations are wrong")
         print("  - Prediction lookups returning None/wrong data")
         print("\nNEXT STEP: Run diagnostic_17_paradox_analysis.ipynb to find the bug")
-        return False
+
+    # Save results to volume
+    try:
+        import pickle
+        from datetime import datetime
+
+        volume_path = "/Volumes/commodity/trading_agent/files"
+        output_file = f"{volume_path}/diagnostic_100_results.pkl"
+
+        results_data = {
+            'execution_time': datetime.now(),
+            'commodity': commodity,
+            'algorithms_valid': algorithms_valid,
+            'best_baseline': {
+                'name': best_baseline[0],
+                'net_earnings': best_baseline[1]['net_earnings'],
+                'trades': best_baseline[1]['num_trades'],
+                'full_results': best_baseline[1]
+            },
+            'best_prediction': {
+                'name': best_prediction[0],
+                'net_earnings': best_prediction[1]['net_earnings'],
+                'trades': best_prediction[1]['num_trades'],
+                'full_results': best_prediction[1]
+            },
+            'improvement': improvement,
+            'improvement_pct': improvement_pct,
+            'all_baseline_results': baseline_results,
+            'all_prediction_results': prediction_results,
+        }
+
+        with open(output_file, 'wb') as f:
+            pickle.dump(results_data, f)
+
+        print(f"\n✓ Saved results to: {output_file}")
+
+        # Also save CSV summary
+        csv_file = f"{volume_path}/diagnostic_100_summary.csv"
+        summary_rows = []
+        for name, result in baseline_results:
+            summary_rows.append({
+                'strategy_type': 'Baseline',
+                'strategy_name': name,
+                'net_earnings': result['net_earnings'],
+                'num_trades': result['num_trades'],
+                'transaction_costs': result['transaction_costs'],
+                'storage_costs': result['storage_costs']
+            })
+        for name, result in prediction_results:
+            summary_rows.append({
+                'strategy_type': 'Prediction',
+                'strategy_name': name,
+                'net_earnings': result['net_earnings'],
+                'num_trades': result['num_trades'],
+                'transaction_costs': result['transaction_costs'],
+                'storage_costs': result['storage_costs']
+            })
+
+        summary_df = pd.DataFrame(summary_rows)
+        summary_df.to_csv(csv_file, index=False)
+        print(f"✓ Saved summary to: {csv_file}")
+
+    except Exception as e:
+        print(f"\n⚠️  Could not save results: {e}")
+
+    return algorithms_valid
 
 
 if __name__ == "__main__":
