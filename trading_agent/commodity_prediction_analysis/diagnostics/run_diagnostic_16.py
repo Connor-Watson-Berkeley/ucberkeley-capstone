@@ -398,4 +398,7 @@ def main():
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1)
+    # Note: Don't call sys.exit() - Databricks interprets it as failure
+    # Just let the script complete normally if success=True
+    if not success:
+        raise RuntimeError("Diagnostic 16 failed")
