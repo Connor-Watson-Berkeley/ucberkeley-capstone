@@ -11,13 +11,24 @@ from pathlib import Path
 
 # Databricks imports
 from pyspark.sql import SparkSession
-
-# Import strategies
 import sys
-import importlib.util
-spec = importlib.util.spec_from_file_location('all_strategies_pct', 'all_strategies_pct.py')
-strat = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(strat)
+import os
+
+# Add user workspace to Python path for imports
+sys.path.insert(0, '/Workspace/Users/gibbons_tony@berkeley.edu')
+
+# Import strategies from the workspace
+try:
+    import all_strategies_pct as strat
+except ImportError:
+    # Fall back to reading from same directory
+    import importlib.util
+    strategies_path = '/Workspace/Users/gibbons_tony@berkeley.edu/all_strategies_pct.py'
+    if not os.path.exists(strategies_path):
+        strategies_path = 'all_strategies_pct.py'
+    spec = importlib.util.spec_from_file_location('all_strategies_pct', strategies_path)
+    strat = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(strat)
 
 EqualBatchStrategy = strat.EqualBatchStrategy
 PriceThresholdStrategy = strat.PriceThresholdStrategy
