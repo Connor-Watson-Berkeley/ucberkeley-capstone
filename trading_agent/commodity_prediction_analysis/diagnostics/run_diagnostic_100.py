@@ -14,21 +14,31 @@ from pyspark.sql import SparkSession
 import sys
 import os
 
-# Add user workspace to Python path for imports
-sys.path.insert(0, '/Workspace/Users/gibbons_tony@berkeley.edu')
+# Import strategies using importlib to avoid notebook import issues
+import importlib.util
 
-# Import strategies from the workspace
-try:
-    import all_strategies_pct as strat
-except ImportError:
-    # Fall back to reading from same directory
-    import importlib.util
-    strategies_path = '/Workspace/Users/gibbons_tony@berkeley.edu/all_strategies_pct.py'
-    if not os.path.exists(strategies_path):
-        strategies_path = 'all_strategies_pct.py'
-    spec = importlib.util.spec_from_file_location('all_strategies_pct', strategies_path)
-    strat = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(strat)
+# Try multiple paths to find all_strategies_pct.py
+script_dir = os.path.dirname(os.path.abspath(__file__))
+possible_paths = [
+    os.path.join(script_dir, 'all_strategies_pct.py'),  # Same directory as this script
+    '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics/all_strategies_pct.py',
+    '/Workspace/Users/gibbons_tony@berkeley.edu/all_strategies_pct.py',
+    'all_strategies_pct.py'  # Fallback to relative path
+]
+
+strategies_path = None
+for path in possible_paths:
+    if os.path.exists(path):
+        strategies_path = path
+        print(f"Found all_strategies_pct.py at: {path}")
+        break
+
+if strategies_path is None:
+    raise FileNotFoundError(f"Could not find all_strategies_pct.py. Tried: {possible_paths}")
+
+spec = importlib.util.spec_from_file_location('all_strategies_pct', strategies_path)
+strat = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(strat)
 
 EqualBatchStrategy = strat.EqualBatchStrategy
 PriceThresholdStrategy = strat.PriceThresholdStrategy

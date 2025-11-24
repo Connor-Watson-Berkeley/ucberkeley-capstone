@@ -12,26 +12,46 @@ import pickle
 from datetime import datetime
 
 # Handle Databricks path
+# Import strategies using importlib to avoid notebook import issues
+import importlib.util
+
+# Try multiple paths to find all_strategies_pct.py
 try:
-    diagnostics_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 except NameError:
-    diagnostics_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics'
+    script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics'
 
-if diagnostics_dir not in sys.path:
-    sys.path.insert(0, diagnostics_dir)
+possible_paths = [
+    os.path.join(script_dir, 'all_strategies_pct.py'),  # Same directory as this script
+    '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics/all_strategies_pct.py',
+    '/Workspace/Users/gibbons_tony@berkeley.edu/all_strategies_pct.py',
+    'all_strategies_pct.py'  # Fallback to relative path
+]
 
-# Import strategies
-from all_strategies_pct import (
-    ImmediateSaleStrategy,
-    EqualBatchStrategy,
-    PriceThresholdStrategy,
-    MovingAverageStrategy,
-    PriceThresholdPredictive,
-    MovingAveragePredictive,
-    ExpectedValueStrategy,
-    ConsensusStrategy,
-    RiskAdjustedStrategy
-)
+strategies_path = None
+for path in possible_paths:
+    if os.path.exists(path):
+        strategies_path = path
+        print(f"Found all_strategies_pct.py at: {path}")
+        break
+
+if strategies_path is None:
+    raise FileNotFoundError(f"Could not find all_strategies_pct.py. Tried: {possible_paths}")
+
+spec = importlib.util.spec_from_file_location('all_strategies_pct', strategies_path)
+strat = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(strat)
+
+# Import strategy classes from the loaded module
+ImmediateSaleStrategy = strat.ImmediateSaleStrategy
+EqualBatchStrategy = strat.EqualBatchStrategy
+PriceThresholdStrategy = strat.PriceThresholdStrategy
+MovingAverageStrategy = strat.MovingAverageStrategy
+PriceThresholdPredictive = strat.PriceThresholdPredictive
+MovingAveragePredictive = strat.MovingAveragePredictive
+ExpectedValueStrategy = strat.ExpectedValueStrategy
+ConsensusStrategy = strat.ConsensusStrategy
+RiskAdjustedStrategy = strat.RiskAdjustedStrategy
 
 # Import optuna
 try:
