@@ -137,7 +137,7 @@ def main():
         f"lower(commodity) = '{commodity}'"
     ).toPandas()
 
-    market_df['date'] = pd.to_datetime(market_df['date'])
+    market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
     market_df['price'] = market_df['close']
     prices_df = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
     prices_df = prices_df[prices_df['date'] >= '2022-01-01'].reset_index(drop=True)
@@ -168,7 +168,9 @@ def main():
             values='predicted_price',
             aggfunc='first'
         ).values
-        prediction_matrices[timestamp] = matrix
+        # Normalize to date-only for consistent dictionary lookups
+        date_key = pd.Timestamp(timestamp).normalize()
+        prediction_matrices[date_key] = matrix
 
     print(f"✓ Converted to {len(prediction_matrices)} timestamps")
     print(f"  Matrix shape: {matrix.shape[0]} runs × {matrix.shape[1]} horizons")

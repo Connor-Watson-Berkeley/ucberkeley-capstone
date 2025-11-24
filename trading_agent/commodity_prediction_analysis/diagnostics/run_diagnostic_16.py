@@ -276,7 +276,7 @@ def main():
     market_df = spark.table("commodity.bronze.market").filter(
         f"lower(commodity) = '{COMMODITY}'"
     ).toPandas()
-    market_df['date'] = pd.to_datetime(market_df['date'])
+    market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
     market_df['price'] = market_df['close']
     prices = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
     prices = prices[prices['date'] >= '2022-01-01'].reset_index(drop=True)
@@ -301,7 +301,9 @@ def main():
             values='predicted_price',
             aggfunc='first'
         ).values
-        prediction_matrices[timestamp] = matrix
+        # Normalize to date-only for consistent dictionary lookups
+        date_key = pd.Timestamp(timestamp).normalize()
+        prediction_matrices[date_key] = matrix
 
     print(f"✓ Loaded {len(prediction_matrices)} prediction matrices")
 
