@@ -473,14 +473,43 @@ git commit -m "Add executable diagnostic_N script"
 git push
 ```
 
-#### Step 3: Update Databricks Repo
+#### Step 3: Update Databricks Repo ⚠️ CRITICAL - DO NOT SKIP
+
+**This step is MANDATORY after every git push:**
 
 ```bash
 # Update repo to pull latest changes
-databricks repos update <REPO_ID> --branch main
+databricks repos update 1904868124027877 --branch main
 
-# Find repo ID with:
-# databricks repos list --output json | grep ucberkeley-capstone
+# Repo ID: 1904868124027877 (ucberkeley-capstone)
+# Path: /Repos/Project_Git/ucberkeley-capstone
+```
+
+**Why this matters:**
+- ❌ **If you skip this:** Databricks runs OLD code from stale repo
+- ❌ **Result:** Your fixes don't take effect, wasted time re-running with bugs
+- ✅ **Solution:** ALWAYS run `databricks repos update` after `git push`
+
+**Workflow checklist:**
+```bash
+# 1. Make code changes locally
+vim run_diagnostic_100.py
+
+# 2. Commit and push to git
+git add run_diagnostic_100.py
+git commit -m "Fix bug"
+git push
+
+# 3. ⚠️ UPDATE DATABRICKS REPO (DON'T FORGET!)
+databricks repos update 1904868124027877 --branch main
+
+# 4. NOW submit the job
+databricks jobs submit --json @job_config.json
+```
+
+**Find repo ID if needed:**
+```bash
+databricks repos list --output json | grep -A 5 ucberkeley-capstone
 ```
 
 #### Step 4: Submit Job via Databricks CLI
@@ -676,3 +705,303 @@ def main():
 ---
 
 **Recommendation:** For any new diagnostic or production workflow, start with this automated execution pattern rather than interactive notebooks. The upfront investment pays off in reproducibility and automation.
+
+---
+
+## Best Practices and Common Pitfalls
+
+**Created:** 2025-11-24
+**Purpose:** Lessons learned from debugging diagnostic execution failures
+
+### Critical Lesson #1: ALWAYS Update Databricks Repo After Git Push ⚠️
+
+**The Problem:**
+- You fix a bug locally, commit, and push to git ✅
+- You submit a Databricks job expecting the fix to work ✅
+- The job STILL fails with the same bug ❌
+- **Why?** Databricks repo wasn't updated - still running old code!
+
+**The Solution:**
+```bash
+# Mandatory workflow
+git push                                           # Push changes to GitHub
+databricks repos update 1904868124027877 --branch main  # Pull changes in Databricks
+databricks jobs submit --json @job.json           # NOW submit job
+```
+
+**Real Example (Nov 2024):**
+- Fixed date normalization bug in `run_diagnostic_100.py`
+- Committed and pushed to git
+- Re-ran job → STILL FAILED
+- Realized: Forgot to update Databricks repo
+- Updated repo → SUCCESS
+
+**Prevention:**
+- Add repo update to your workflow checklist
+- Consider creating a wrapper script that does both:
+  ```bash
+  #!/bin/bash
+  # deploy_and_run.sh
+  git push && \
+  databricks repos update 1904868124027877 --branch main && \
+  databricks jobs submit --json "$1"
+  ```
+
+---
+
+### Critical Lesson #2: Use importlib for Module Loading
+
+**The Problem:**
+```python
+# This FAILS in Databricks Repos with NotebookImportException
+import all_strategies_pct
+```
+
+**Error:**
+```
+NotebookImportException: Unable to import all_strategies_pct.
+Importing notebooks directly is not supported. Use dbutils.import_notebook() instead.
+```
+
+**Why it fails:**
+- Databricks treats `.py` files in Workspace as potential notebooks
+- Direct imports trigger notebook import restriction
+- Exception type is NOT `ImportError`, so `except ImportError` doesn't catch it
+
+**The Solution:**
+```python
+# Use importlib to load modules explicitly
+import importlib.util
+import os
+
+# Try multiple paths to find the module
+try:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    # __file__ not defined in Databricks jobs - use hardcoded path
+    script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics'
+
+possible_paths = [
+    os.path.join(script_dir, 'all_strategies_pct.py'),
+    '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics/all_strategies_pct.py',
+    'all_strategies_pct.py'
+]
+
+strategies_path = None
+for path in possible_paths:
+    if os.path.exists(path):
+        strategies_path = path
+        print(f"Found module at: {path}")
+        break
+
+if strategies_path is None:
+    raise FileNotFoundError(f"Could not find module. Tried: {possible_paths}")
+
+# Load module using importlib
+spec = importlib.util.spec_from_file_location('all_strategies_pct', strategies_path)
+strat = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(strat)
+
+# Now use the module
+EqualBatchStrategy = strat.EqualBatchStrategy
+```
+
+**Benefits:**
+- ✅ Works in all Databricks execution contexts
+- ✅ Explicit path resolution (easier debugging)
+- ✅ No magic import behavior
+- ✅ Handles multiple possible file locations
+
+**When to use:**
+- Any Databricks job that imports local Python modules
+- Scripts in Repos folder importing other scripts
+- Production workflows that need robust import handling
+
+---
+
+### Critical Lesson #3: Handle `__file__` Being Undefined
+
+**The Problem:**
+```python
+# This FAILS in Databricks Jobs environment
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# NameError: name '__file__' is not defined
+```
+
+**Why it fails:**
+- `__file__` is not defined when Python scripts are executed via Databricks Jobs API
+- Works fine in notebooks and interactive sessions
+- Works fine when running locally
+- **Only fails in Jobs API execution**
+
+**The Solution:**
+```python
+# Always wrap __file__ usage in try/except
+try:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    # Fallback to hardcoded path for Databricks jobs
+    script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics'
+```
+
+**Best practice template:**
+```python
+# Standard pattern for all Databricks job scripts
+import os
+import sys
+
+# Get script directory (works everywhere)
+try:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    script_dir = '/Workspace/Repos/<org>/<repo>/<path>/diagnostics'
+
+# Now use script_dir for relative paths
+config_path = os.path.join(script_dir, 'config.json')
+```
+
+---
+
+### Critical Lesson #4: Date Normalization for Dictionary Lookups
+
+**The Problem:**
+```python
+# Load prices with date column
+market_df['date'] = pd.to_datetime(market_df['date'])
+# Results in: Timestamp('2022-01-03 00:00:00')
+
+# Build prediction dictionary with timestamp keys
+timestamp = row['timestamp']  # Already a Timestamp
+prediction_matrices[timestamp] = matrix
+# Key is: Timestamp('2022-01-03 05:30:00.123456')
+
+# Lookup fails!
+predictions = prediction_matrices.get(current_date, None)
+# current_date: Timestamp('2022-01-03 00:00:00')
+# dictionary keys: Timestamp('2022-01-03 05:30:00.123456')
+# Result: None (always!)
+```
+
+**Why it fails:**
+- Timestamps with different times don't match
+- Even if they're the same date
+- `Timestamp('2022-01-03 00:00:00') != Timestamp('2022-01-03 05:30:00')`
+
+**The Solution:**
+```python
+# Normalize ALL dates to midnight (strip time component)
+
+# When loading price data
+market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
+# Results in: Timestamp('2022-01-03 00:00:00')
+
+# When building prediction dictionary
+date_key = pd.Timestamp(timestamp).normalize()
+prediction_matrices[date_key] = matrix
+# Key is: Timestamp('2022-01-03 00:00:00')
+
+# Lookup succeeds!
+predictions = prediction_matrices.get(current_date, None)
+# Both are: Timestamp('2022-01-03 00:00:00')
+# Result: Matrix found ✓
+```
+
+**Best practice:**
+```python
+# Normalize dates IMMEDIATELY after loading
+def load_prices():
+    market_df = spark.table("commodity.bronze.market").toPandas()
+
+    # Normalize dates first thing
+    market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
+
+    return market_df
+
+def build_prediction_dict(pred_df):
+    prediction_matrices = {}
+
+    for timestamp, group in pred_df.groupby('timestamp'):
+        # Normalize the key
+        date_key = pd.Timestamp(timestamp).normalize()
+        prediction_matrices[date_key] = convert_to_matrix(group)
+
+    return prediction_matrices
+```
+
+**Why this matters:**
+- Predictions not passed → strategies use fallback logic
+- Matched pairs show IDENTICAL results (defeating the purpose)
+- Expected Value shows "no_predictions_fallback" for all trades
+- Diagnostic 100 FAILS because predictions don't improve performance
+
+**Real impact (Nov 2024):**
+- Before fix: All prediction strategies matched baselines (useless)
+- After fix: Consensus strategy beat baseline by +10.1% ($1,085)
+- This was the root cause of diagnostic_100 failure
+
+---
+
+### Summary: Checklist for Databricks Job Scripts
+
+**Before submitting any Databricks job:**
+
+- [ ] ✅ Use `importlib` for loading local modules (not direct imports)
+- [ ] ✅ Wrap `__file__` usage in try/except with fallback path
+- [ ] ✅ Normalize all dates using `.dt.normalize()` for dictionary keys
+- [ ] ✅ Load data from Delta tables (not pickle files)
+- [ ] ✅ Save results to Unity Catalog volumes (for persistence)
+- [ ] ✅ After `git push`, ALWAYS run `databricks repos update`
+- [ ] ✅ Test on small data first before full run
+- [ ] ✅ Set appropriate timeout (3600s = 1 hour default)
+- [ ] ✅ Use existing cluster ID (no need to create new cluster)
+- [ ] ✅ Monitor job status via `databricks jobs get-run`
+
+**Deployment workflow:**
+```bash
+# 1. Make changes locally
+vim run_diagnostic.py
+
+# 2. Test locally if possible
+python run_diagnostic.py  # Quick syntax check
+
+# 3. Commit and push
+git add run_diagnostic.py
+git commit -m "Fix: [description]"
+git push
+
+# 4. ⚠️ UPDATE DATABRICKS REPO
+databricks repos update 1904868124027877 --branch main
+
+# 5. Submit job
+databricks jobs submit --json '{
+  "run_name": "diagnostic_test",
+  "tasks": [{
+    "task_key": "diagnostic",
+    "spark_python_task": {
+      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/.../run_diagnostic.py"
+    },
+    "existing_cluster_id": "1111-041828-yeu2ff2q",
+    "timeout_seconds": 3600
+  }]
+}'
+
+# 6. Monitor and download results
+databricks jobs get-run <RUN_ID>
+databricks fs cp dbfs:/Volumes/.../results.pkl /tmp/
+```
+
+**Common error patterns and solutions:**
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `NotebookImportException` | Direct import of .py file | Use importlib instead |
+| `NameError: name '__file__' is not defined` | Jobs don't define `__file__` | Wrap in try/except |
+| Dictionary lookup returns None | Date/time mismatch | Use `.dt.normalize()` |
+| Job runs old code | Forgot to update repo | Run `databricks repos update` |
+| `FileNotFoundError` | Wrong path | Check multiple possible paths |
+| Job timeout | Default too short | Set `timeout_seconds: 3600` |
+
+---
+
+**Last Updated:** 2025-11-24
+**Lessons from:** Diagnostic 100 debugging session (date normalization, imports, repo sync)
