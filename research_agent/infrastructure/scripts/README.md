@@ -120,6 +120,37 @@ python research_agent/infrastructure/scripts/create_table_simple.py
 
 ---
 
+### 6. `create_fillforward_table.py`
+
+**Purpose:** Create forward-filled GDELT table with continuous daily data
+
+**What it does:**
+1. Reads SQL from `databricks/create_gdelt_fillforward.sql`
+2. Creates `commodity.silver.gdelt_wide_fillforward` table with:
+   - Every date-commodity combination (continuous daily series)
+   - Count columns set to 0 for missing dates
+   - Tone columns forward-filled from previous date
+3. Verifies table creation with row count query
+
+**Usage:**
+```bash
+source venv/bin/activate
+python research_agent/infrastructure/scripts/create_fillforward_table.py
+```
+
+**When to use:**
+- To create forecasting-ready continuous time series
+- When you need gap-free daily data for each commodity
+
+**SQL Location:** `research_agent/infrastructure/databricks/create_gdelt_fillforward.sql`
+
+**Columns:**
+- 2 metadata: article_date, commodity
+- 22 count columns: COALESCE to 0 for missing dates
+- 88 tone columns: Forward-filled using LAST_VALUE window function
+
+---
+
 ## Complete Testing Workflow
 
 **Scenario: Testing silver lambda after code changes**
