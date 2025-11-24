@@ -542,6 +542,33 @@ python analyze_validation.py
 
 ---
 
+### trading_prediction_analysis_original_11_11_25.ipynb
+
+**Purpose:** Original monolithic notebook (historical)
+
+**What it is:**
+- 4.4MB notebook from November 11, 2025
+- Contains full analysis workflow in single file
+- Predates the split into notebooks 00-10
+- Kept for historical reference
+
+**Status:** ARCHIVED - Use numbered notebooks (00-10) instead
+
+**Why it exists:**
+- Original implementation before workflow was modularized
+- Useful for understanding evolution of approach
+- May contain experimental code or earlier strategy versions
+
+**Should you use it?** NO - Use the numbered notebooks (00-10) which are:
+- Better organized
+- More maintainable
+- Properly documented
+- Actively maintained
+
+**Output:** Unknown (historical - not part of current workflow)
+
+---
+
 ## 📄 Documentation Files
 
 ### DATABRICKS_ACCESS_NOTES.md ⭐
