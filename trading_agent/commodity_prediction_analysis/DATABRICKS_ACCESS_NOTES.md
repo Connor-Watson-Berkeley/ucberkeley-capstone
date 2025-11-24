@@ -120,3 +120,19 @@ COMMODITY_CONFIGS = {
 3. **Use databricks CLI** to download files to local machine
 4. **Delta tables** for structured data, **Volume** for binary/images
 5. **spark object** is pre-configured - don't try to create it
+
+## Analyzing Validation Results Locally
+
+If you get pandas version errors when loading pickles:
+
+```bash
+# Downgrade to pandas 1.5.3 which is compatible
+pip install 'pandas==1.5.3'
+```
+
+Then load normally:
+```python
+import pickle
+with open('validation_results_full.pkl', 'rb') as f:
+    data = pickle.load(f)
+```
