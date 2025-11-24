@@ -1,8 +1,10 @@
 # GDELT Pipeline - Active Components
 
-**Last Updated:** 2025-11-22 20:50 UTC
+**Last Updated:** 2025-11-23 23:50 UTC
 
 This document identifies which components are actively used in production vs. legacy/experimental.
+
+**⚠️ CRITICAL:** Only 3 lambdas are active. gdelt-silver-transform is DEPRECATED.
 
 ---
 
@@ -27,35 +29,38 @@ This document identifies which components are actively used in production vs. le
    - **Code:** `lambda_function.py`
    - **Note:** Deployed to AWS function name `gdelt-bronze-transform`
 
-3. **gdelt-silver-transform** ✅ IN USE
-   - **Location:** `lambda/functions/gdelt-silver-transform/`
-   - **Deployed Name:** `gdelt-silver-transform`
-   - **Purpose:** Daily silver aggregation (Bronze → Silver wide format)
-   - **Trigger:** EventBridge schedule (3 AM UTC daily)
-   - **Status:** ✅ PRODUCTION
-   - **Code:** `lambda_function.py`
-   - **Note:** For daily incremental dates (usually <50 files/day)
-
-4. **gdelt-silver-discovery** ✅ IN USE (NEW)
-   - **Location:** `lambda/functions/gdelt-silver-discovery/`
-   - **Deployed Name:** `gdelt-silver-discovery` (needs deployment)
-   - **Purpose:** Scans DynamoDB for bronze files without silver status, queues dates for processing
-   - **Trigger:** Manual or scheduled
-   - **Status:** ✅ CODE READY - Needs deployment
-   - **Code:** `lambda_function.py`
-   - **Note:** Two paths for silver queue loading: (1) Auto from bronze, (2) Manual discovery
-
-### ⚠️ NEEDS FIXING - Silver Backfill Lambda
-
-5. **gdelt-silver-backfill** ⚠️ HAS ISSUES
+3. **gdelt-silver-backfill** ✅ IN USE - ✅ **FIXED**
+   - **Location:** `lambda/functions/gdelt-silver-backfill/`
    - **Deployed Name:** `gdelt-silver-backfill`
-   - **Purpose:** Historical backfill - Bronze → Silver with chunked processing
-   - **Trigger:** SQS queue `groundtruth-gdelt-silver-backfill-queue` (DISABLED)
-   - **Status:** ⚠️  NEEDS FIX - Chunked processing threshold too high (>50 files)
-   - **Code:** Deployed from `/tmp/gdelt_silver_backfill_lambda.py`
-   - **Issue:** Chunked processing only triggers for >50 files, but 49-file dates still cause OOM
-   - **Fix needed:** Lower threshold to ~30 files or use record count instead
-   - **Note:** Event source mapping currently DISABLED
+   - **Purpose:** ALL silver processing (Bronze → Silver wide format)
+   - **Trigger:** SQS queue `groundtruth-gdelt-silver-backfill-queue`
+   - **Status:** ✅ WORKING - Data type bug fixed 2025-11-23 23:45 UTC
+   - **Code:** `lambda_function.py`
+   - **Last Modified:** 2025-11-23 23:45:48 UTC
+   - **Memory:** 3008 MB | **Timeout:** 900s
+   - **Event Source Mapping:** ENABLED (batch_size=1)
+   - **Chunking:** >30 files (lowered from 50)
+   - **Fix Applied:** Changed `.astype('int64')` to `.astype(np.int64)` for numpy types
+   - **Databricks:** Table recreated with BIGINT for counts, DOUBLE for tones
+   - **Helper Scripts:** See `research_agent/infrastructure/scripts/README.md`
+
+### ❌ DEPRECATED - No Longer Used
+
+4. **gdelt-silver-transform** ❌ DEPRECATED
+   - **Location:** `lambda/functions/gdelt-silver-transform/` (moved to legacy)
+   - **Deployed Name:** `gdelt-silver-transform` (still deployed but NOT USED)
+   - **Replaced By:** gdelt-silver-backfill
+   - **Last Modified:** 2025-11-23 19:06 UTC
+   - **Status:** ❌ **DO NOT USE** - Replaced by unified silver lambda
+   - **Can Delete:** After 30-day observation period
+
+5. **gdelt-silver-discovery** ❓ STATUS UNCLEAR
+   - **Location:** `lambda/functions/gdelt-silver-discovery/`
+   - **Deployed Name:** `gdelt-silver-discovery`
+   - **Purpose:** Scans DynamoDB for bronze files without silver status, queues dates
+   - **Last Modified:** 2025-11-22 21:21 UTC
+   - **Status:** ❓ **NOT CURRENTLY USED** - No schedule configured
+   - **Note:** Might be needed for backfill trigger
 
 ### ⏸️ COMPLETED - Historical Backfill
 
@@ -74,7 +79,7 @@ This document identifies which components are actively used in production vs. le
 | Rule Name | Schedule | Target Lambda | Status |
 |-----------|----------|---------------|--------|
 | `gdelt-daily-discovery-schedule` | `cron(0 2 * * ? *)` | gdelt-daily-discovery | ✅ ENABLED |
-| `gdelt-daily-silver-transform` | `cron(0 3 * * ? *)` | gdelt-silver-transform | ✅ ENABLED |
+| `gdelt-daily-silver-transform` | `cron(0 3 * * ? *)` | gdelt-silver-transform | ❌ SHOULD BE DISABLED |
 
 ---
 
@@ -198,17 +203,25 @@ These are the core active components:
 **Lambda Functions:**
 - `lambda/functions/gdelt-daily-discovery/lambda_function.py`
 - `lambda/functions/gdelt-csv-bronze-direct/lambda_function.py`
-- `lambda/functions/gdelt-silver-transform/lambda_function.py`
+- `lambda/functions/gdelt-silver-backfill/lambda_function.py` (ALL silver processing)
 - `lambda/functions/gdelt-bronze-transform/lambda_function.py` (JSONL mode for backfill)
+
+**Helper Scripts:**
+- `scripts/clear_test_environment.py`
+- `scripts/test_lambda.py`
+- `scripts/check_silver_dtypes.py`
+- `scripts/query_databricks_dtypes.py`
+- `scripts/create_table_simple.py`
 
 **Deployment Scripts:**
 - `lambda/deploy_bronze_transform.sh` (for CSV→Bronze)
 - `lambda/deploy_jsonl_bronze_transform.sh` (for historical backfill)
 
 **Documentation:**
-- `/tmp/GDELT_PROJECT_STATUS.md` - Master status file
-- `/tmp/GDELT_CURRENT_STATUS_SUMMARY.md` - Current operational status
-- `/tmp/DAILY_PIPELINE_STATUS.md` - Daily pipeline documentation
+- `docs/GDELT_LAMBDA_REFERENCE_GUIDE.md` - Lambda reference and testing procedures
+- `docs/DATABRICKS_GDELT_QUERY_GUIDE.md` - Databricks query guide
+- `scripts/README.md` - Helper scripts documentation
+- `ACTIVE_COMPONENTS.md` - This file (active vs legacy components)
 
 ---
 
