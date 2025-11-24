@@ -79,7 +79,7 @@ This document identifies which components are actively used in production vs. le
 | Rule Name | Schedule | Target Lambda | Status |
 |-----------|----------|---------------|--------|
 | `gdelt-daily-discovery-schedule` | `cron(0 2 * * ? *)` | gdelt-daily-discovery | ✅ ENABLED |
-| `gdelt-daily-silver-transform` | `cron(0 3 * * ? *)` | gdelt-silver-transform | ❌ SHOULD BE DISABLED |
+| `gdelt-daily-silver-transform` | `cron(0 3 * * ? *)` | gdelt-silver-transform | ✅ DISABLED (deprecated) |
 
 ---
 
