@@ -47,6 +47,8 @@ class SimpleBacktestEngine:
         self.prediction_matrices = prediction_matrices
         self.storage_cost_pct = costs['storage_cost_pct_per_day']
         self.transaction_cost_pct = costs['transaction_cost_pct']
+        self.predictions_found_count = 0
+        self.predictions_missing_count = 0
 
     def run_backtest(self, strategy, initial_inventory=50.0):
         """Run backtest and return final net earnings"""
@@ -60,6 +62,15 @@ class SimpleBacktestEngine:
             current_date = self.prices.iloc[day]['date']
             current_price = self.prices.iloc[day]['price']
             predictions = self.prediction_matrices.get(current_date, None)
+
+            # DEBUG: Track prediction lookups
+            if predictions is not None:
+                self.predictions_found_count += 1
+            else:
+                self.predictions_missing_count += 1
+                if self.predictions_missing_count <= 3:  # Only log first 3 misses
+                    print(f"    DEBUG: No predictions for {current_date} (type: {type(current_date).__name__})")
+
             price_history = self.prices.iloc[:day+1].copy()
 
             decision = strategy.decide(day, inventory, current_price, price_history, predictions)
@@ -105,6 +116,10 @@ class SimpleBacktestEngine:
             })
 
         net_earnings = total_revenue - total_storage_costs
+
+        # DEBUG: Print prediction lookup stats
+        total_days = len(self.prices) - 14
+        print(f"  DEBUG - Prediction lookups: {self.predictions_found_count}/{total_days} found, {self.predictions_missing_count}/{total_days} missing")
 
         return {
             'net_earnings': net_earnings,
@@ -174,6 +189,28 @@ def main():
 
     print(f"✓ Converted to {len(prediction_matrices)} timestamps")
     print(f"  Matrix shape: {matrix.shape[0]} runs × {matrix.shape[1]} horizons")
+
+    # DEBUG: Show actual dictionary keys
+    if len(prediction_matrices) > 0:
+        sample_keys = list(prediction_matrices.keys())[:5]
+        print(f"\n  DEBUG - Sample prediction keys:")
+        for i, key in enumerate(sample_keys):
+            print(f"    {i+1}. {key} (type: {type(key).__name__})")
+
+        sample_prices = prices_df['date'].head()
+        print(f"\n  DEBUG - Sample price dates:")
+        for i, date in enumerate(sample_prices):
+            print(f"    {i+1}. {date} (type: {type(date).__name__})")
+
+        # Check if first price date matches any prediction key
+        first_price_date = prices_df['date'].iloc[0]
+        if first_price_date in prediction_matrices:
+            print(f"\n  ✓ First price date FOUND in prediction_matrices!")
+        else:
+            print(f"\n  ❌ First price date NOT FOUND in prediction_matrices")
+            print(f"     Looking for: {first_price_date} (type: {type(first_price_date).__name__})")
+    else:
+        print("\n  ❌ WARNING: No prediction matrices created!")
 
     # Validate 100% accuracy
     print("\n4. Validating 100% accuracy...")
