@@ -10,6 +10,7 @@ which has a record for every date-commodity combination with:
 
 from databricks import sql
 import sys
+import os
 from pathlib import Path
 
 def create_fillforward_table():
@@ -25,11 +26,22 @@ def create_fillforward_table():
     with open(sql_file, 'r') as f:
         sql_commands = f.read()
 
+    # Get Databricks credentials from environment or use defaults
+    # Note: Set DATABRICKS_TOKEN environment variable before running
+    databricks_host = os.getenv('DATABRICKS_HOST', 'dbc-5e4780f4-fcec.cloud.databricks.com')
+    databricks_path = os.getenv('DATABRICKS_HTTP_PATH', '/sql/1.0/warehouses/d88ad009595327fd')
+    databricks_token = os.getenv('DATABRICKS_TOKEN')
+
+    if not databricks_token:
+        print("❌ DATABRICKS_TOKEN environment variable not set")
+        print("Set it with: export DATABRICKS_TOKEN=dapi...")
+        return False
+
     print("Connecting to Databricks...")
     connection = sql.connect(
-        server_hostname="dbc-5e4780f4-fcec.cloud.databricks.com",
-        http_path="/sql/1.0/warehouses/d88ad009595327fd",
-        access_token="dapi8f0886905a2b080bc5456595a8746b89"
+        server_hostname=databricks_host,
+        http_path=databricks_path,
+        access_token=databricks_token
     )
 
     cursor = connection.cursor()

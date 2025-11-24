@@ -135,6 +135,7 @@ python research_agent/infrastructure/scripts/create_table_simple.py
 **Usage:**
 ```bash
 source venv/bin/activate
+export DATABRICKS_TOKEN=dapi...  # Set your Databricks token
 python research_agent/infrastructure/scripts/create_fillforward_table.py
 ```
 
