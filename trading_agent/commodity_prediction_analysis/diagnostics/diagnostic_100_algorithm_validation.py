@@ -34,7 +34,12 @@ import sys
 import os
 
 # Add diagnostics directory to path
-diagnostics_dir = os.path.dirname(os.path.abspath(__file__))
+try:
+    diagnostics_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    # __file__ not defined in Databricks jobs, use hardcoded path
+    diagnostics_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics'
+
 if diagnostics_dir not in sys.path:
     sys.path.insert(0, diagnostics_dir)
 
