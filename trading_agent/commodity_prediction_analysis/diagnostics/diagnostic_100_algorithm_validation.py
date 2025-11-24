@@ -133,18 +133,82 @@ class SimpleBacktestEngine:
         }
 
 
-def load_100_accuracy_predictions(commodity='coffee'):
-    """Load synthetic_acc100 predictions from v8"""
-    # Try v8 first, fall back to v6
+def load_predictions_from_delta_table(commodity='coffee'):
+    """Load synthetic_acc100 predictions from v8 Delta table"""
+    try:
+        from pyspark.sql import SparkSession
+        spark = SparkSession.builder.getOrCreate()
+
+        # Load from trading_agent.predictions table
+        table_name = f"commodity.trading_agent.predictions_{commodity.lower()}"
+        pred_df = spark.table(table_name).filter(
+            "model_version = 'synthetic_acc100'"
+        ).toPandas()
+
+        if len(pred_df) == 0:
+            raise ValueError(f"No synthetic_acc100 predictions in {table_name}")
+
+        # Convert to prediction_matrices format: dict of timestamp -> (n_runs x 14) matrix
+        pred_df['timestamp'] = pd.to_datetime(pred_df['timestamp'])
+        prediction_matrices = {}
+
+        for timestamp in pred_df['timestamp'].unique():
+            ts_data = pred_df[pred_df['timestamp'] == timestamp]
+
+            # Pivot to get (run_id, day_ahead) -> predicted_price
+            matrix = ts_data.pivot_table(
+                index='run_id',
+                columns='day_ahead',
+                values='predicted_price',
+                aggfunc='first'
+            ).values
+
+            prediction_matrices[timestamp] = matrix
+
+        print(f"✓ Loaded synthetic_acc100 predictions from Delta table")
+        print(f"  {len(prediction_matrices)} timestamps, {matrix.shape[0]} runs × {matrix.shape[1]} horizons")
+        return prediction_matrices
+
+    except Exception as e:
+        return None  # Will try pickle files next
+
+
+def load_100_accuracy_predictions(commodity='coffee', volume_path='/Volumes/commodity/trading_agent/files'):
+    """Load synthetic_acc100 predictions from v8 (tries Delta table first, then pickle files)"""
+
+    # Try Delta table first (v8 format)
+    print("Trying Delta table...")
+    predictions = load_predictions_from_delta_table(commodity)
+    if predictions is not None:
+        return predictions
+
+    # Fall back to pickle files
+    print("Trying pickle files...")
     for version in ['v8', 'v6']:
+        # Try volume path first (Databricks)
+        pred_file = f'{volume_path}/prediction_matrices_{commodity}_synthetic_acc100_{version}.pkl'
+        if Path(pred_file).exists():
+            with open(pred_file, 'rb') as f:
+                data = pickle.load(f)
+            print(f"✓ Loaded {version} synthetic_acc100 predictions from volume")
+            return data['prediction_matrices']
+
+        # Fall back to local path (for local testing)
         pred_file = f'../prediction_matrices_{commodity}_synthetic_acc100_{version}.pkl'
         if Path(pred_file).exists():
             with open(pred_file, 'rb') as f:
                 data = pickle.load(f)
-            print(f"✓ Loaded {version} synthetic_acc100 predictions")
+            print(f"✓ Loaded {version} synthetic_acc100 predictions from local")
             return data['prediction_matrices']
 
-    raise FileNotFoundError("No synthetic_acc100 predictions found (need v6 or v8)")
+    raise FileNotFoundError(
+        f"No synthetic_acc100 predictions found.\n"
+        f"Looked in:\n"
+        f"  Delta table: commodity.trading_agent.predictions_{commodity}\n"
+        f"  {volume_path}/prediction_matrices_{commodity}_synthetic_acc100_*.pkl\n"
+        f"  ../prediction_matrices_{commodity}_synthetic_acc100_*.pkl\n"
+        f"\nRun 01_synthetic_predictions_v8.ipynb first to generate predictions."
+    )
 
 
 def validate_100_accuracy_predictions(predictions, prices):
@@ -172,6 +236,44 @@ def validate_100_accuracy_predictions(predictions, prices):
     return len(errors) == 0
 
 
+def load_prices_from_databricks(commodity='coffee'):
+    """Load price data from Databricks Delta table or volume"""
+    try:
+        # Try to load from Spark (if running in Databricks)
+        from pyspark.sql import SparkSession
+        spark = SparkSession.builder.getOrCreate()
+
+        # Load from bronze.market table
+        market_df = spark.table("commodity.bronze.market").filter(
+            f"lower(commodity) = '{commodity.lower()}'"
+        ).toPandas()
+
+        market_df['date'] = pd.to_datetime(market_df['date'])
+        market_df['price'] = market_df['close']
+        prices_df = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
+
+        # Filter to synthetic start date
+        prices_df = prices_df[prices_df['date'] >= '2022-01-01'].reset_index(drop=True)
+
+        print(f"✓ Loaded {len(prices_df)} days of prices from Delta table")
+        return prices_df
+
+    except Exception as e:
+        # Fall back to local pickle file
+        price_file = f'../{commodity}_prices.pkl'
+        if Path(price_file).exists():
+            with open(price_file, 'rb') as f:
+                prices_df = pickle.load(f)
+            print(f"✓ Loaded {len(prices_df)} days of prices from local file")
+            return prices_df
+        else:
+            raise FileNotFoundError(
+                f"Could not load prices.\n"
+                f"Databricks error: {e}\n"
+                f"Local file not found: {price_file}"
+            )
+
+
 def run_validation_test(commodity='coffee'):
     """Run the 100% accuracy algorithm validation test"""
 
@@ -186,14 +288,11 @@ def run_validation_test(commodity='coffee'):
     print("Loading data...")
 
     # Load prices
-    price_file = f'../{commodity}_prices.pkl'
-    if not Path(price_file).exists():
-        print(f"❌ Price file not found: {price_file}")
+    try:
+        prices = load_prices_from_databricks(commodity)
+    except Exception as e:
+        print(f"❌ Failed to load prices: {e}")
         return False
-
-    with open(price_file, 'rb') as f:
-        prices = pickle.load(f)
-    print(f"✓ Loaded {len(prices)} days of prices")
 
     # Load 100% accuracy predictions
     try:
@@ -201,9 +300,6 @@ def run_validation_test(commodity='coffee'):
         print(f"✓ Loaded predictions for {len(predictions)} dates")
     except FileNotFoundError as e:
         print(f"❌ {e}")
-        print("\nTo run this test:")
-        print("1. Wait for v8 to finish in Databricks")
-        print("2. Download prediction_matrices_{commodity}_synthetic_acc100_v8.pkl")
         return False
 
     # Validate predictions are truly 100% accurate
