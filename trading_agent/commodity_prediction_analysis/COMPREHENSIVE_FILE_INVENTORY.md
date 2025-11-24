@@ -856,7 +856,406 @@ From running this workflow with v8 synthetic predictions:
 
 ---
 
+## 🤖 AUTOMATION MIGRATION PLAN
+
+**Updated:** 2025-11-24
+**Status:** Documentation phase - No changes to notebooks yet
+
+### Overview
+
+Successfully implemented automated remote execution pattern for diagnostics (100, 16, 17). This pattern eliminates manual notebook execution and enables fully automated workflows.
+
+### Current State: Interactive Notebooks
+
+**How it works now:**
+1. User opens notebook in Databricks UI
+2. Manually runs cells one by one
+3. Waits for execution to complete
+4. Results exist only in ephemeral session outputs
+5. Must manually save/export results
+6. Repeat for each commodity, model, and configuration
+
+**Problems:**
+- ❌ Time-consuming (must babysit executions)
+- ❌ Error-prone (easy to skip cells or run out of order)
+- ❌ Not reproducible (hard to track what was run when)
+- ❌ Doesn't scale (can't run 10 configurations overnight)
+- ❌ Results scattered (220+ files in various locations)
+
+### Target State: Automated Execution
+
+**How it will work:**
+1. Convert notebooks to executable Python scripts
+2. Submit jobs via Databricks CLI
+3. Monitor progress automatically
+4. Results auto-saved to volumes
+5. Chain multiple jobs sequentially
+6. Download all results programmatically
+7. Generate consolidated reports automatically
+
+**Benefits:**
+- ✅ Zero manual intervention ("set and forget")
+- ✅ Fully reproducible (scripts in git)
+- ✅ Scalable (run 50+ configurations overnight)
+- ✅ Robust (Jobs API handles failures)
+- ✅ Cost-efficient (uses existing clusters)
+- ✅ Audit trail (all runs logged with IDs)
+
+### Migration Path: Notebook → Script Conversion
+
+**Step-by-step for each notebook:**
+
+#### 1. Read and Understand (5 min)
+```bash
+# Open notebook in Databricks UI
+# Understand: inputs, logic, outputs
+# Note: dependencies on other notebooks
+```
+
+#### 2. Extract to Python Script (15-30 min)
+```python
+"""
+Notebook_NN: Description
+Automated execution script for Databricks
+"""
+
+import pandas as pd
+import numpy as np
+from pyspark.sql import SparkSession
+import sys
+import os
+
+# Databricks path handling
+sys.path.insert(0, '/Workspace/Users/gibbons_tony@berkeley.edu')
+
+def load_data():
+    """Load from Delta tables, not pickle files"""
+    spark = SparkSession.builder.getOrCreate()
+    # Query Delta tables
+    return data
+
+def main():
+    # Main logic from notebook
+    # Save results to volume
+    volume_path = "/Volumes/commodity/trading_agent/files"
+    output_file = f"{volume_path}/notebook_NN_results.pkl"
+    # ...
+    return True
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)
+```
+
+**Key conversions:**
+- `%run 00_setup_and_config` → `from config import *`
+- `spark.table(...)` → Keep as-is
+- `display(df)` → `print(df.head())`
+- `dbutils.fs.cp(...)` → `with open(...)`
+- Magic commands → Pure Python equivalents
+
+#### 3. Test Locally (if possible) (10 min)
+```bash
+# If script doesn't need Spark:
+python run_notebook_NN.py
+
+# Otherwise, skip to step 4
+```
+
+#### 4. Commit and Push (5 min)
+```bash
+git add trading_agent/commodity_prediction_analysis/run_notebook_NN.py
+git commit -m "Convert notebook_NN to automated script"
+git push
+```
+
+#### 5. Update Databricks Repo (2 min)
+```bash
+databricks repos update <REPO_ID> --branch main
+```
+
+#### 6. Submit Test Job (5 min)
+```bash
+cat > /tmp/job_notebook_NN.json << 'EOF'
+{
+  "run_name": "notebook_NN_test",
+  "tasks": [{
+    "task_key": "run_NN",
+    "spark_python_task": {
+      "python_file": "file:///Workspace/Repos/.../run_notebook_NN.py"
+    },
+    "existing_cluster_id": "1111-041828-yeu2ff2q"
+  }]
+}
+EOF
+
+databricks jobs submit --json @/tmp/job_notebook_NN.json
+```
+
+#### 7. Monitor and Verify (10 min)
+```bash
+# Get run ID from submission
+# Monitor: databricks jobs get-run <RUN_ID>
+# Verify outputs saved to volume
+# Check CSV/PKL files created correctly
+```
+
+#### 8. Document (5 min)
+```markdown
+# Add to migration log:
+- [x] Notebook NN converted
+- Run time: ~X minutes
+- Output verified: ✓
+- Ready for production
+```
+
+**Total time per notebook:** ~1-2 hours (faster after first few)
+
+### Conversion Priority
+
+**Phase 1: Core Workflow (Weeks 1-2)**
+High-value, frequently-run notebooks:
+
+1. ✅ **01_synthetic_predictions_v8** → `run_01_synthetic_predictions.py`
+   - Most critical (generates all predictions)
+   - Runtime: ~20 minutes
+   - Priority: URGENT
+
+2. ✅ **05_strategy_comparison** → `run_05_strategy_comparison.py`
+   - Main workflow orchestrator
+   - Runtime: ~60 minutes
+   - Priority: HIGH
+   - Dependencies: 01, 03, 04
+
+3. ✅ **06_statistical_validation** → `run_06_statistical_validation.py`
+   - Key for significance testing
+   - Runtime: ~10 minutes
+   - Priority: HIGH
+   - Dependencies: 05
+
+**Phase 2: Analysis Notebooks (Weeks 3-4)**
+Important but less frequent:
+
+4. **07_feature_importance** → `run_07_feature_importance.py`
+5. **08_sensitivity_analysis** → `run_08_sensitivity_analysis.py`
+6. **09_strategy_results_summary** → `run_09_strategy_results_summary.py`
+7. **10_paired_scenario_analysis** → `run_10_paired_scenario_analysis.py`
+
+**Phase 3: Utilities (Week 5)**
+Can defer:
+
+8. **02_forecast_predictions** → `run_02_forecast_predictions.py`
+9. **00_setup_and_config** → Extract to `shared_config.py`
+
+**Phase 4: Implementation Notebooks (Optional)**
+These define code, don't execute workflows:
+
+- **03_strategy_implementations** → Keep as-is or extract to `strategies.py`
+- **04_backtesting_engine** → Keep as-is or extract to `backtest_engine.py`
+
+### Workflow Orchestration
+
+After conversion, create master automation script:
+
+```python
+# run_full_workflow.py
+"""
+Complete automated trading analysis workflow
+Runs all notebooks in sequence with proper dependencies
+"""
+
+def run_workflow(commodity, model_version):
+    # Phase 1: Generate predictions
+    run_id_01 = submit_job('run_01_synthetic_predictions.py',
+                           params={'commodity': commodity})
+    wait_for_completion(run_id_01)
+
+    # Phase 2: Run strategy comparison
+    run_id_05 = submit_job('run_05_strategy_comparison.py',
+                           params={'commodity': commodity,
+                                   'model': model_version})
+    wait_for_completion(run_id_05)
+
+    # Phase 3: Analysis (can run in parallel)
+    run_ids = []
+    for script in ['run_06', 'run_07', 'run_08', 'run_09', 'run_10']:
+        run_id = submit_job(f'{script}.py',
+                           params={'commodity': commodity,
+                                   'model': model_version})
+        run_ids.append(run_id)
+
+    wait_for_all(run_ids)
+
+    # Phase 4: Download all results
+    download_results(commodity, model_version)
+
+    # Phase 5: Generate consolidated report
+    generate_report(commodity, model_version)
+
+# Run for all configurations
+for commodity in ['coffee', 'sugar']:
+    for model in ['synthetic_acc90', 'synthetic_acc80',
+                  'xgboost_weather_v1']:
+        run_workflow(commodity, model)
+```
+
+**Example overnight run:**
+```bash
+# Submit at 6pm Friday
+python run_full_workflow.py --all-configs
+
+# Returns Monday morning with:
+# - 220+ charts generated
+# - 30+ CSV files created
+# - 25+ pickle files saved
+# - Consolidated report ready
+# Total cost: ~$50 (cluster runtime)
+```
+
+### Integration with Diagnostics
+
+**Before running main workflow:**
+
+```python
+# Step 1: Validate algorithms work
+run_diagnostic_100()  # Check with 100% accuracy
+if not algorithms_valid:
+    raise Error("Fix algorithms first!")
+
+# Step 2: Optimize parameters
+run_diagnostic_16()  # Grid search best params
+best_params = load('diagnostic_16_best_params.pkl')
+
+# Step 3: Update configuration
+update_config_with_params(best_params)
+
+# Step 4: Run main workflow with optimized params
+run_full_workflow()
+
+# Step 5: Verify monotonicity
+run_monotonicity_check()  # 60% < 70% < 80% < 90% < 100%
+
+# Step 6: Deep dive into differences
+run_diagnostic_17()  # Trade-by-trade analysis
+```
+
+### Monitoring and Logging
+
+**Job monitoring dashboard:**
+```python
+# monitor_all_jobs.py
+jobs = get_running_jobs()
+for job in jobs:
+    print(f"{job.name}: {job.status} ({job.elapsed_time})")
+    if job.status == 'FAILED':
+        print(f"  Error: {job.error_message}")
+        send_alert(job)
+```
+
+**Logging structure:**
+```
+/Volumes/commodity/trading_agent/logs/
+├── run_01_synthetic_predictions_2025-11-24_10-30.log
+├── run_05_strategy_comparison_2025-11-24_11-00.log
+├── run_06_statistical_validation_2025-11-24_12-00.log
+└── ...
+```
+
+**Each log contains:**
+- Execution start/end timestamps
+- Parameters used
+- Data loaded (row counts, date ranges)
+- Results produced (file paths, metrics)
+- Errors/warnings
+- Performance stats (runtime, memory)
+
+### Cost Analysis
+
+**Current (manual):**
+- Human time: ~4 hours per configuration
+- Cluster cost: ~$10 per run (interactive cluster)
+- Total: 10 configs × $10 = $100 cluster + 40 hours human time
+
+**Automated:**
+- Human time: ~30 minutes (submit jobs, review results)
+- Cluster cost: ~$50 (batch jobs, can use cheaper instance types)
+- Total: $50 cluster + 0.5 hours human time
+
+**Savings:**
+- **Cost:** Same or lower (can optimize cluster selection)
+- **Time:** 40 hours → 0.5 hours (**98.75% reduction**)
+- **Reproducibility:** Manual → Fully automated
+- **Scalability:** 10 configs → 100+ configs (no extra human time)
+
+### Migration Timeline
+
+**Week 1: Infrastructure**
+- Set up git repo structure for scripts
+- Create shared libraries (config.py, utils.py)
+- Test job submission workflow
+- Document patterns
+
+**Week 2: Core Conversions**
+- Convert notebooks 01, 05, 06
+- Test end-to-end workflow
+- Verify outputs match notebook versions
+- Fix any discrepancies
+
+**Week 3-4: Complete Conversions**
+- Convert remaining notebooks (07-10)
+- Build orchestration script
+- Add monitoring dashboard
+- Documentation
+
+**Week 5: Testing and Validation**
+- Run full workflow automated
+- Compare results to manual runs
+- Performance optimization
+- User acceptance testing
+
+**Week 6: Production**
+- Deprecate manual notebook workflow
+- Schedule regular automated runs
+- Set up alerts and monitoring
+- Train users on new system
+
+### Success Metrics
+
+**Migration successful if:**
+- [ ] All notebooks converted to scripts
+- [ ] Automated runs produce identical results to manual
+- [ ] Runtime < 2x manual execution time
+- [ ] Zero manual intervention required
+- [ ] Logs capture all important events
+- [ ] Failures automatically retry or alert
+- [ ] Results downloadable in batch
+- [ ] Reports generated automatically
+
+### Rollback Plan
+
+**If automation has issues:**
+1. Keep original notebooks in place
+2. Run manual workflow as backup
+3. Debug automated scripts offline
+4. Compare outputs between manual and automated
+5. Fix issues before next automated run
+6. Gradual migration: start with 1 notebook at a time
+
+**Compatibility period:**
+- Maintain both manual and automated for 1 month
+- Parallel runs to verify consistency
+- Deprecate manual only after confidence builds
+
+---
+
+**Status:** DOCUMENTATION PHASE - No notebooks changed yet
+**Next Step:** User approval, then begin Phase 1 conversions
+**Owner:** Claude Code
+**Reference:** See `diagnostics/DATABRICKS_OUTPUT_ACCESS_GUIDE.md` Section 5
+
+---
+
 **Last Updated:** 2025-11-24
 **Owner:** Claude Code
 **Purpose:** Complete inventory for diagnostic integration planning
-**Next Step:** Integrate diagnostic outputs after v8 validation complete
+**Next Step:** Begin automation migration after diagnostic results analyzed
