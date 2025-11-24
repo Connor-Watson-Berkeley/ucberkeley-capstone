@@ -243,10 +243,10 @@ def main():
     else:
         print("✓ All predictions have 0 variance (all runs identical)")
 
-    # Set up costs
+    # Set up costs (Small farmer realistic costs)
     costs = {
-        'storage_cost_pct_per_day': 0.025,
-        'transaction_cost_pct': 0.25
+        'storage_cost_pct_per_day': 0.005,  # 0.005% per day (quality degradation, on-farm storage)
+        'transaction_cost_pct': 0.01         # 1% transaction (local intermediary cash payment)
     }
 
     # Create engine
