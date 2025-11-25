@@ -159,7 +159,8 @@ class ParameterOptimizer:
             # Get parameter suggestions from search space
             params = self.search_space.get_search_space(trial, strategy_name)
 
-            # Add cost parameters for prediction strategies
+            # Add cost parameters for prediction strategies and advanced strategies
+            # (baseline strategies don't use these params)
             if strategy_name not in ['immediate_sale', 'equal_batch', 'price_threshold', 'moving_average']:
                 params['storage_cost_pct_per_day'] = self.config['storage_cost_pct_per_day']
                 params['transaction_cost_pct'] = self.config['transaction_cost_pct']

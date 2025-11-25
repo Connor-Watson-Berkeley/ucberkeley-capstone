@@ -1,7 +1,7 @@
 """
 Parameter Search Space Definitions
 
-Defines the parameter search spaces for all 9 trading strategies.
+Defines the parameter search spaces for all 10 trading strategies.
 
 Extracted from diagnostics/run_diagnostic_16.py with clean, modular structure.
 Each strategy has its own search space function that returns parameter suggestions
@@ -21,7 +21,7 @@ class SearchSpaceRegistry:
     Registry of parameter search spaces for all trading strategies.
 
     Provides centralized, consistent parameter ranges for optimization across
-    all 9 strategies (4 baseline + 5 prediction-based).
+    all 10 strategies (4 baseline + 5 prediction-based + 1 advanced optimization).
     """
 
     @staticmethod
@@ -270,6 +270,31 @@ class SearchSpaceRegistry:
             'cooldown_days': trial.suggest_int('cooldown_days', 5, 7)
         }
 
+    @staticmethod
+    def rolling_horizon_mpc(trial: optuna.Trial) -> Dict[str, Any]:
+        """
+        Search space for Rolling Horizon MPC strategy.
+
+        Parameters:
+            - horizon_days: Forecast horizon window (7-21 days)
+            - terminal_value_decay: Discount factor for terminal inventory (0.85-0.99)
+            - shadow_price_smoothing: Exponential smoothing alpha for shadow prices (0.1-0.5 or None)
+        """
+        # Shadow price smoothing: randomly decide if we use it (50% chance)
+        use_shadow_price = trial.suggest_categorical('use_shadow_price', [True, False])
+
+        params = {
+            'horizon_days': trial.suggest_int('horizon_days', 7, 21),
+            'terminal_value_decay': trial.suggest_float('terminal_value_decay', 0.85, 0.99)
+        }
+
+        if use_shadow_price:
+            params['shadow_price_smoothing'] = trial.suggest_float('shadow_price_smoothing', 0.1, 0.5)
+        else:
+            params['shadow_price_smoothing'] = None
+
+        return params
+
     @classmethod
     def get_search_space(cls, trial: optuna.Trial, strategy_name: str) -> Dict[str, Any]:
         """
@@ -294,7 +319,8 @@ class SearchSpaceRegistry:
             'moving_average_predictive': cls.moving_average_predictive,
             'expected_value': cls.expected_value,
             'consensus': cls.consensus,
-            'risk_adjusted': cls.risk_adjusted
+            'risk_adjusted': cls.risk_adjusted,
+            'rolling_horizon_mpc': cls.rolling_horizon_mpc
         }
 
         if strategy_name not in strategy_map:
@@ -322,5 +348,6 @@ class SearchSpaceRegistry:
             'moving_average_predictive',
             'expected_value',
             'consensus',
-            'risk_adjusted'
+            'risk_adjusted',
+            'rolling_horizon_mpc'
         ]
