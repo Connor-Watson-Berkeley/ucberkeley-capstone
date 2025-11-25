@@ -70,10 +70,14 @@ class DataLoader:
             raise ValueError("Spark session required to load prices from Delta table")
 
         # Load from unified_data and filter by commodity
+        # Note: unified_data has 'close' column, rename to 'price' for consistency
         prices = self.spark.table(data_paths['prices_source']) \
             .filter(f"commodity = '{commodity.title()}'") \
-            .select('date', 'price') \
+            .select('date', 'close') \
             .toPandas()
+
+        # Rename 'close' to 'price' for consistency with backtesting code
+        prices = prices.rename(columns={'close': 'price'})
 
         # CRITICAL: Normalize dates to midnight for dictionary lookup compatibility
         prices['date'] = pd.to_datetime(prices['date']).dt.normalize()
