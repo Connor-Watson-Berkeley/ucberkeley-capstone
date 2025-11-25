@@ -1145,13 +1145,29 @@ def get_strategy_comparison_context(commodity):
    - **Test Results:** Coffee - 3 well-populated forecasts (naive, xgboost, sarimax), 10 sparse forecasts skipped
    - Sparsity checking working correctly (90%+ coverage + 730 day minimum)
    - Matrix format and pickle file output verified ✅
-8. ✅ Test parameter optimizer on Databricks (COMPLETE - 2025-11-25)
-   - Created Jobs API config for optimizer
-   - Tested with production BacktestEngine
-   - **Test Results:** Coffee + synthetic_acc90 + efficiency objective → 314.8% efficiency (consensus strategy)
-   - Optuna optimization with 5 trials completed successfully
-   - Optimal parameters saved to Volume correctly ✅
-   - **Fixed:** Removed sys.exit() calls (Databricks treats any sys.exit as error)
+8. 🔧 Test parameter optimizer on Databricks (IN PROGRESS - 2025-11-25)
+   - **CRITICAL BUG FOUND:** 314.8% efficiency indicates theoretical max calculator was broken
+   - **Root Cause:** Old PerfectForesightStrategy used model predictions instead of actual prices (not true upper bound)
+   - **Solution Implemented:** Replaced with LP-based theoretical maximum using actual prices (research paper validated)
+   - **Added RollingHorizonMPC Strategy:** 14-day limited foresight optimization (Rolling Horizon MPC from academic literature)
+   - **Files Created:**
+     - `production/strategies/lp_optimizer.py` - LP-based Oracle/Clairvoyant algorithm for theoretical max
+     - `production/strategies/rolling_horizon_mpc.py` - 14-day rolling horizon strategy (10th strategy)
+     - `production/test_lp_only.py` - Standalone LP test (separate from Optuna)
+     - `analysis/optimization/search_space.py` - Added RollingHorizonMPC parameter space (horizon_days, terminal_value_decay, shadow_price_smoothing)
+   - **Optuna Updated:** Now optimizes 10 strategies (was 9), RollingHorizonMPC parameters tunable
+   - **Separation:** LP theoretical max calculation now separate from Optuna (not combined)
+   - **BLOCKER FOUND:** Nonsensical coverage validation in run_parameter_optimization.py:149
+     - Current: Checks if overlap covers >50% of ALL price dates (back to 2015)
+     - Predictions only go back to 2022, so will always be ~35% coverage
+     - Result: 951 overlapping dates (perfect!) rejected as "insufficient"
+     - **Correct Standard:** Use same as forecast loader: 90%+ coverage of prediction period + 730 day minimum
+     - See line 1146 for established sparsity standard
+   - **Next Steps:**
+     1. Fix coverage validation to match forecast loader standard (90%+ coverage + 730 day min)
+     2. Fix test_lp_only.py table references (uses wrong table names)
+     3. Rerun both tests (LP standalone + Optuna with RollingHorizonMPC)
+     4. Verify theoretical max < 100% efficiency
 9. 📋 Test orchestrator end-to-end on Databricks
    - Create Jobs API config for run_backtest_workflow.py
    - Test orchestrated workflow (forecast loader → backtests)
