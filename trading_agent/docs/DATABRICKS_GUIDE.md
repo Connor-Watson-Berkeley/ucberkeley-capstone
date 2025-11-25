@@ -1616,6 +1616,13 @@ COMMODITY_CONFIGS = {
 13. **Save results to files** for reliable access after execution
 14. **Query structured data** from Delta tables, not pickle files
 
+**Production Testing Best Practices (from Phase 2 validation):**
+15. **Use absolute imports in production modules** - Change `from strategies import` to `from production.strategies import` for Databricks Jobs compatibility
+16. **Query unified_data correctly** - Use `.filter(f"commodity = '{commodity.title()}'")` and select `'close'` column, rename to `'price'` for consistency
+17. **Match original notebook patterns** - Review notebook implementations before creating production versions to ensure data access patterns match
+18. **Use strategy class defaults** - Don't pass config parameters to strategies unless needed; strategies have sensible defaults (e.g., `ImmediateSaleStrategy()` with no args)
+19. **Verify BacktestEngine result keys** - Production engine returns `net_earnings`, `trades`, `daily_state` NOT `total_earnings`, `transaction_history`, `final_inventory`
+
 ---
 
 **Last Updated:** 2025-11-24
