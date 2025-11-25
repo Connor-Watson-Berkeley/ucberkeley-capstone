@@ -67,10 +67,7 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
     print("LOADING DATA")
     print("=" * 80)
 
-    # Define date range for analysis
-    START_DATE = '2022-01-01'
-
-    # Load price data
+    # Load ALL price data (no hardcoded date filter)
     print(f"\n1. Loading price data for {commodity}...")
     market_df = spark.table("commodity.bronze.market").filter(
         f"lower(commodity) = '{commodity}'"
@@ -78,23 +75,21 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
 
     market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
     market_df['price'] = market_df['close']
-    prices = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
+    all_prices = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
 
-    # Filter to analysis period
-    prices = prices[prices['date'] >= START_DATE].reset_index(drop=True)
-    print(f"   ✓ Loaded {len(prices)} price points")
-    print(f"   Date range: {prices['date'].min()} to {prices['date'].max()}")
+    print(f"   ✓ Loaded {len(all_prices)} total price points")
+    print(f"   Full price range: {all_prices['date'].min()} to {all_prices['date'].max()}")
 
-    # Load predictions - FILTER TO SAME DATE RANGE
+    # Load ALL predictions for this model (no hardcoded date filter)
     print(f"\n2. Loading predictions for {commodity} - {model_version}...")
     pred_table = f"commodity.trading_agent.predictions_{commodity}"
     pred_df = spark.table(pred_table).filter(
-        f"model_version = '{model_version}' AND timestamp >= '{START_DATE}'"
+        f"model_version = '{model_version}'"
     ).toPandas()
 
     # Convert to matrix format
     pred_df['timestamp'] = pd.to_datetime(pred_df['timestamp']).dt.normalize()
-    prediction_matrices = {}
+    all_prediction_matrices = {}
 
     for timestamp in pred_df['timestamp'].unique():
         ts_data = pred_df[pred_df['timestamp'] == timestamp]
@@ -105,35 +100,53 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
             aggfunc='first'
         ).values
         date_key = pd.Timestamp(timestamp).normalize()
-        prediction_matrices[date_key] = matrix
+        all_prediction_matrices[date_key] = matrix
 
-    print(f"   ✓ Loaded {len(prediction_matrices)} prediction matrices")
-    print(f"   Date range: {min(prediction_matrices.keys())} to {max(prediction_matrices.keys())}")
+    print(f"   ✓ Loaded {len(all_prediction_matrices)} total prediction matrices")
+    print(f"   Full prediction range: {min(all_prediction_matrices.keys())} to {max(all_prediction_matrices.keys())}")
 
-    # Validate date overlap
-    price_dates = set(prices['date'])
-    pred_dates = set(prediction_matrices.keys())
-    overlap = price_dates & pred_dates
+    # Find overlap between price dates and prediction dates
+    print(f"\n3. Finding common date range...")
+    all_price_dates = set(all_prices['date'])
+    all_pred_dates = set(all_prediction_matrices.keys())
+    common_dates = all_price_dates & all_pred_dates
 
-    print(f"\n3. Validating date alignment...")
-    print(f"   Price dates: {len(price_dates)}")
-    print(f"   Prediction dates: {len(pred_dates)}")
-    print(f"   Overlap: {len(overlap)} dates ({len(overlap)/len(price_dates)*100:.1f}% coverage)")
+    if len(common_dates) == 0:
+        raise ValueError("No overlapping dates between prices and predictions!")
 
-    # Warnings for mismatches
-    pred_only = pred_dates - price_dates
-    price_only = price_dates - pred_dates
+    # Determine analysis period (intersection of both datasets)
+    start_date = min(common_dates)
+    end_date = max(common_dates)
+
+    print(f"   All price dates: {len(all_price_dates)} ({all_prices['date'].min()} to {all_prices['date'].max()})")
+    print(f"   All prediction dates: {len(all_pred_dates)} ({min(all_prediction_matrices.keys())} to {max(all_prediction_matrices.keys())})")
+    print(f"   ✓ Common date range: {start_date} to {end_date}")
+    print(f"   ✓ Overlap: {len(common_dates)} dates")
+
+    # Filter both datasets to common range
+    prices = all_prices[all_prices['date'].isin(common_dates)].reset_index(drop=True)
+    prediction_matrices = {date: matrix for date, matrix in all_prediction_matrices.items() if date in common_dates}
+
+    # Validate sufficient coverage
+    coverage_pct = len(common_dates) / len(all_price_dates) * 100
+    pred_only = all_pred_dates - all_price_dates
+    price_only = all_price_dates - all_pred_dates
+
+    print(f"\n4. Validating coverage...")
+    print(f"   Final dataset: {len(prices)} price points, {len(prediction_matrices)} prediction matrices")
+    print(f"   Coverage: {coverage_pct:.1f}% of all price dates")
 
     if len(pred_only) > 0:
-        print(f"   ⚠️  Warning: {len(pred_only)} prediction dates without prices (will be ignored)")
+        print(f"   ℹ️  {len(pred_only)} prediction dates excluded (no corresponding prices)")
 
-    if len(price_only) > 10:
-        print(f"   ⚠️  Warning: {len(price_only)} price dates without predictions")
-        print(f"      Strategies will use no-prediction logic on these dates")
+    if len(price_only) > 0:
+        print(f"   ℹ️  {len(price_only)} price dates excluded (no corresponding predictions)")
 
-    if len(overlap) < len(price_dates) * 0.8:
-        print(f"   ❌ ERROR: Less than 80% prediction coverage!")
-        raise ValueError(f"Insufficient prediction coverage: {len(overlap)}/{len(price_dates)}")
+    if len(common_dates) < 100:
+        print(f"   ⚠️  Warning: Only {len(common_dates)} overlapping dates - may be insufficient for optimization")
+
+    if coverage_pct < 50:
+        raise ValueError(f"Insufficient overlap: only {coverage_pct:.1f}% coverage. Check model_version '{model_version}' data availability.")
 
     return prices, prediction_matrices
 
@@ -152,6 +165,7 @@ def calculate_theoretical_max(prices, predictions, config):
     - Same multiple cycles (if data spans multiple years)
     - Same age constraints (365-day max holding)
     - Same cost structure (storage + transaction)
+    - TRUE perfect foresight (uses actual future prices, not model predictions)
 
     Args:
         prices: DataFrame with price data
@@ -162,17 +176,18 @@ def calculate_theoretical_max(prices, predictions, config):
         float: Theoretical maximum net earnings
     """
     print("\n3. Calculating theoretical maximum...")
-    print("   Using PerfectForesightStrategy with production BacktestEngine")
-    print("   (ensures harvest dynamics match actual strategies)")
+    print("   Using PerfectForesightStrategy with ACTUAL future prices")
+    print("   (100% accurate oracle, not model predictions)")
 
     # Import production components
     from production.core.backtest_engine import BacktestEngine
     from production.strategies.perfect_foresight import PerfectForesightStrategy
 
-    # Create perfect foresight strategy
+    # Create perfect foresight strategy with actual prices (100% accurate)
     perfect_strategy = PerfectForesightStrategy(
         storage_cost_pct_per_day=config['storage_cost_pct_per_day'],
         transaction_cost_pct=config['transaction_cost_pct'],
+        actual_prices=prices,  # Pass actual prices for TRUE perfect foresight
         lookback_days=14,  # Match prediction horizon
         sell_threshold_pct=0.98  # Sell if ≥98% of best future value (near-optimal)
     )

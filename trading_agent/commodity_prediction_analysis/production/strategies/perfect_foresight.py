@@ -34,6 +34,7 @@ class PerfectForesightStrategy:
         self,
         storage_cost_pct_per_day: float,
         transaction_cost_pct: float,
+        actual_prices: Any = None,
         lookback_days: int = 14,
         sell_threshold_pct: float = 0.95
     ):
@@ -43,6 +44,8 @@ class PerfectForesightStrategy:
         Args:
             storage_cost_pct_per_day: Daily storage cost as percentage (e.g., 0.005 for 0.005%)
             transaction_cost_pct: Transaction cost as percentage (e.g., 0.01 for 0.01%)
+            actual_prices: DataFrame with actual prices (for TRUE perfect foresight)
+                          If None, will use predictions instead (90% accuracy)
             lookback_days: Days ahead to consider (default: 14, matches prediction horizon)
             sell_threshold_pct: Sell if current value is within this % of best future value
                               (default: 0.95 = sell if today is ≥95% of best future)
@@ -50,6 +53,7 @@ class PerfectForesightStrategy:
         self.name = "perfect_foresight"
         self.storage_cost_pct = storage_cost_pct_per_day
         self.transaction_cost_pct = transaction_cost_pct
+        self.actual_prices = actual_prices  # Full price DataFrame for lookahead
         self.lookback_days = lookback_days
         self.sell_threshold = sell_threshold_pct
 
@@ -76,7 +80,7 @@ class PerfectForesightStrategy:
             day: Current day index
             inventory: Current inventory (tons)
             current_price: Current price (cents/lb)
-            price_history: Historical prices (not used - we have predictions)
+            price_history: Historical prices (DataFrame with columns: date, price)
             predictions: Prediction matrix (n_runs × n_horizons)
                         Shape: (2000 runs, 14 days ahead)
 
@@ -86,17 +90,30 @@ class PerfectForesightStrategy:
         if inventory <= 0:
             return {'action': 'HOLD', 'amount': 0, 'reason': 'no_inventory'}
 
-        if predictions is None or len(predictions) == 0:
-            # No predictions available - sell immediately
+        # Use actual future prices if available (TRUE perfect foresight)
+        if self.actual_prices is not None:
+            # Get actual future prices from the full price DataFrame
+            max_future_day = min(day + self.lookback_days, len(self.actual_prices) - 1)
+            future_prices = self.actual_prices.loc[day+1:max_future_day, 'price'].values
+
+            if len(future_prices) == 0:
+                # At end of data, must sell
+                return {
+                    'action': 'SELL',
+                    'amount': inventory,
+                    'reason': 'end_of_data'
+                }
+        elif predictions is not None and len(predictions) > 0:
+            # Use mean of prediction matrix (90% accurate if using synthetic_acc90)
+            # Shape: (n_runs, n_horizons) -> (n_horizons,)
+            future_prices = predictions.mean(axis=0)
+        else:
+            # No predictions or actual prices - sell immediately
             return {
                 'action': 'SELL',
                 'amount': inventory,
-                'reason': 'no_predictions'
+                'reason': 'no_future_price_data'
             }
-
-        # Use mean of prediction matrix as "perfect foresight"
-        # Shape: (n_runs, n_horizons) -> (n_horizons,)
-        future_prices = predictions.mean(axis=0)
 
         # Limit to lookback window
         future_prices = future_prices[:self.lookback_days]
@@ -165,6 +182,7 @@ class GreedyPerfectForesightStrategy:
         self,
         storage_cost_pct_per_day: float,
         transaction_cost_pct: float,
+        actual_prices: Any = None,
         lookback_days: int = 14
     ):
         """
@@ -173,11 +191,13 @@ class GreedyPerfectForesightStrategy:
         Args:
             storage_cost_pct_per_day: Daily storage cost percentage
             transaction_cost_pct: Transaction cost percentage
+            actual_prices: DataFrame with actual prices (for TRUE perfect foresight)
             lookback_days: Days ahead to consider
         """
         self.name = "greedy_perfect_foresight"
         self.storage_cost_pct = storage_cost_pct_per_day
         self.transaction_cost_pct = transaction_cost_pct
+        self.actual_prices = actual_prices
         self.lookback_days = lookback_days
 
     def reset(self):
@@ -204,11 +224,18 @@ class GreedyPerfectForesightStrategy:
         if inventory <= 0:
             return {'action': 'HOLD', 'amount': 0, 'reason': 'no_inventory'}
 
-        if predictions is None or len(predictions) == 0:
-            return {'action': 'SELL', 'amount': inventory, 'reason': 'no_predictions'}
+        # Use actual future prices if available
+        if self.actual_prices is not None:
+            max_future_day = min(day + self.lookback_days, len(self.actual_prices) - 1)
+            future_prices = self.actual_prices.loc[day+1:max_future_day, 'price'].values
 
-        # Get mean predictions
-        future_prices = predictions.mean(axis=0)[:self.lookback_days]
+            if len(future_prices) == 0:
+                return {'action': 'SELL', 'amount': inventory, 'reason': 'end_of_data'}
+        elif predictions is not None and len(predictions) > 0:
+            # Get mean predictions
+            future_prices = predictions.mean(axis=0)[:self.lookback_days]
+        else:
+            return {'action': 'SELL', 'amount': inventory, 'reason': 'no_future_price_data'}
 
         # Is current price the highest?
         max_future_price = future_prices.max()
