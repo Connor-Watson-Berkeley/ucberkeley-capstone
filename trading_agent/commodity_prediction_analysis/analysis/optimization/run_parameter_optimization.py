@@ -153,56 +153,57 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
 
 def calculate_theoretical_max(prices, predictions, config):
     """
-    Calculate theoretical maximum earnings using production backtest.
+    Calculate theoretical maximum using Linear Programming (Oracle/Clairvoyant Algorithm).
 
-    CRITICAL FIX (2025-11-25):
-    Previous implementation used DP with instant 50-ton inventory, which didn't
-    account for harvest cycles and produced artificially low baselines (314% efficiency!).
+    This implements the "offline optimal solution" from the academic literature on
+    commodity trading with perfect foresight (El-Yaniv et al., "One-Way Trading", 2001).
 
-    New implementation uses production BacktestEngine with PerfectForesightStrategy
-    to ensure apples-to-apples comparison:
-    - Same harvest dynamics (gradual accumulation over harvest windows)
-    - Same multiple cycles (if data spans multiple years)
-    - Same age constraints (365-day max holding)
-    - Same cost structure (storage + transaction)
-    - TRUE perfect foresight (uses actual future prices, not model predictions)
+    Uses Linear Programming to find the globally optimal selling policy:
+    - Full visibility: Sees ALL future prices (perfect foresight)
+    - Optimal decisions: LP solver finds exact optimal sell quantities/timing
+    - Accurate dynamics: Models harvest accumulation, storage costs, transaction costs
+    - Global optimum: Guaranteed to find the best possible solution
+
+    This provides the TRUE theoretical maximum as a benchmark for strategy evaluation.
 
     Args:
-        prices: DataFrame with price data
-        predictions: Dict of prediction matrices
-        config: Commodity config dict (full config with harvest_volume, harvest_windows, etc.)
+        prices: DataFrame with price data (columns: date, price)
+        predictions: Dict of prediction matrices (not used - we use actual prices)
+        config: Commodity config dict (harvest_volume, harvest_windows, costs, etc.)
 
     Returns:
         float: Theoretical maximum net earnings
     """
     print("\n3. Calculating theoretical maximum...")
-    print("   Using PerfectForesightStrategy with ACTUAL future prices")
-    print("   (100% accurate oracle, not model predictions)")
+    print("   Using Linear Programming (Oracle/Clairvoyant Algorithm)")
+    print("   Based on: El-Yaniv et al., One-Way Trading, Algorithmica 2001")
 
-    # Import production components
+    # Import LP optimizer and BacktestEngine (for harvest schedule generation)
+    from production.strategies.lp_optimizer import solve_optimal_liquidation_lp
     from production.core.backtest_engine import BacktestEngine
-    from production.strategies.perfect_foresight import PerfectForesightStrategy
 
-    # Create perfect foresight strategy with actual prices (100% accurate)
-    perfect_strategy = PerfectForesightStrategy(
+    # Generate harvest schedule using BacktestEngine (ensures consistency with actual strategies)
+    dummy_engine = BacktestEngine(prices, predictions, config)
+    harvest_schedule = dummy_engine._generate_harvest_schedule()
+
+    # Solve LP to get globally optimal solution
+    result = solve_optimal_liquidation_lp(
+        prices_df=prices,
+        harvest_schedule=harvest_schedule,
         storage_cost_pct_per_day=config['storage_cost_pct_per_day'],
-        transaction_cost_pct=config['transaction_cost_pct'],
-        actual_prices=prices,  # Pass actual prices for TRUE perfect foresight
-        lookback_days=14,  # Match prediction horizon
-        sell_threshold_pct=0.98  # Sell if ≥98% of best future value (near-optimal)
+        transaction_cost_pct=config['transaction_cost_pct']
     )
 
-    # Run backtest with production engine (same engine used for actual strategies)
-    engine = BacktestEngine(prices, predictions, config)
-    result = engine.run_backtest(perfect_strategy)
-
-    theoretical_max = result['net_earnings']
+    theoretical_max = result['max_net_earnings']
     num_trades = len(result['trades'])
-    num_cycles = len(set(s['harvest_year'] for s in result['daily_state'] if s['harvest_year'] > 0))
 
-    print(f"   ✓ Theoretical maximum: ${theoretical_max:,.2f}")
+    # Count harvest cycles
+    harvest_years = harvest_schedule[harvest_schedule['is_harvest_day']]['harvest_year'].unique()
+    num_cycles = len(harvest_years)
+
+    print(f"   ✓ Theoretical maximum (LP optimal): ${theoretical_max:,.2f}")
     print(f"   Harvest cycles: {num_cycles}")
-    print(f"   Trades: {num_trades}")
+    print(f"   Optimal trades: {num_trades}")
     print(f"   Avg per cycle: ${theoretical_max / num_cycles:,.2f}" if num_cycles > 0 else "")
 
     return theoretical_max

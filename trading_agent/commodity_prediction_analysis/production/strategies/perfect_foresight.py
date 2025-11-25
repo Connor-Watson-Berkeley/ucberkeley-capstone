@@ -3,18 +3,20 @@ Perfect Foresight Strategy
 
 Establishes the TRUE theoretical maximum for production backtesting.
 
-Uses the production BacktestEngine with perfect knowledge of future prices to:
-1. Ensure harvest dynamics match (gradual accumulation, multiple cycles)
-2. Respect age constraints (365-day max holding)
-3. Apply same cost structure (storage + transaction)
-4. Provide apples-to-apples benchmark for statistical validation
+Uses dynamic programming with full price visibility to calculate globally optimal
+selling policy:
+1. Full lookahead: Sees ALL future prices, not just 14 days
+2. Optimal policy: DP finds best sell/hold decisions considering all future states
+3. Partial sales: Can sell any quantity from min_trade to full inventory
+4. Accurate dynamics: Models harvest accumulation, storage costs, transaction costs
 
-This replaces the broken DP-based theoretical max which assumed instant 50-ton
-inventory and didn't account for harvest cycles.
+This provides the TRUE theoretical maximum by solving the optimization problem
+exactly, rather than using a greedy heuristic.
 """
 
 import numpy as np
-from typing import Dict, Any
+import pandas as pd
+from typing import Dict, Any, Optional
 
 
 class PerfectForesightStrategy:
