@@ -70,8 +70,8 @@ def test_lp_optimizer():
         'transaction_cost_pct': 2.0
     }
 
-    # Create dummy prediction matrices
-    dummy_predictions = {date: None for date in prices['date']}
+    # Create dummy prediction matrices (empty dict for LP test - no predictions needed)
+    dummy_predictions = {}
 
     dummy_engine = BacktestEngine(prices, dummy_predictions, config)
     harvest_dict = dummy_engine.harvest_schedule
