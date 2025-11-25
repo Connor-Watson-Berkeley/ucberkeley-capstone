@@ -33,8 +33,12 @@ import pickle
 from datetime import datetime
 
 # Add parent directories to path
-script_dir = Path(__file__).parent
-sys.path.insert(0, str(script_dir.parent.parent))
+try:
+    script_dir = Path(__file__).parent
+    sys.path.insert(0, str(script_dir.parent.parent))
+except NameError:
+    # __file__ not defined in Databricks jobs - use hardcoded path
+    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
 
 # Production imports
 from production.config import COMMODITY_CONFIGS, VOLUME_PATH
