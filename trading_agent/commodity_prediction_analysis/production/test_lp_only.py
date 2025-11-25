@@ -38,6 +38,7 @@ def test_lp_optimizer():
 
     # Load prices
     market_df = spark.table("commodity.bronze.market").toPandas()
+    market_df['price'] = market_df['close']  # Use 'close' price
     prices = market_df[market_df['commodity'] == commodity][['date', 'price']].sort_values('date').reset_index(drop=True)
 
     print(f"  Price data: {len(prices)} days ({prices['date'].min()} to {prices['date'].max()})")
