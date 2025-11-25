@@ -116,9 +116,17 @@ def process_model_version(commodity, model_version, spark):
     print(f"  Forecast dates: {n_forecast_dates} / {expected_days} days ({coverage_pct:.1f}% coverage)")
     print(f"  Runs per date: avg={avg_runs_per_date:.1f}, min={min_runs}, max={max_runs}")
 
-    # Quality threshold: 90%+ date coverage required
-    MIN_COVERAGE_PCT = 90.0
+    # Quality thresholds
+    MIN_DATE_RANGE_DAYS = 730  # Minimum 2 years of data required
+    MIN_COVERAGE_PCT = 90.0    # 90%+ date coverage required
 
+    # Check minimum date range
+    if expected_days < MIN_DATE_RANGE_DAYS:
+        print(f"\n⚠️  SKIPPING: Insufficient date range ({expected_days} days < {MIN_DATE_RANGE_DAYS} days minimum)")
+        print(f"   Need at least 2 years of forecasts for meaningful backtesting")
+        return None
+
+    # Check date coverage
     if coverage_pct < MIN_COVERAGE_PCT:
         print(f"\n⚠️  SKIPPING: Insufficient date coverage ({coverage_pct:.1f}% < {MIN_COVERAGE_PCT}%)")
         print(f"   Too many gaps in the forecast timeline")
