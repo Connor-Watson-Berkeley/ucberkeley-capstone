@@ -188,30 +188,30 @@ def load_forecast_data(commodity, model_version, spark_session=None):
         spark_session = SparkSession.builder.getOrCreate()
 
     # Query to get predictions in wide format
+    # Note: Table already has day_1 through day_14 columns, and uses path_id not run_id
     query = f"""
     SELECT
         forecast_start_date,
-        run_id,
-        MAX(CASE WHEN day_ahead = 1 THEN predicted_price END) as day_1,
-        MAX(CASE WHEN day_ahead = 2 THEN predicted_price END) as day_2,
-        MAX(CASE WHEN day_ahead = 3 THEN predicted_price END) as day_3,
-        MAX(CASE WHEN day_ahead = 4 THEN predicted_price END) as day_4,
-        MAX(CASE WHEN day_ahead = 5 THEN predicted_price END) as day_5,
-        MAX(CASE WHEN day_ahead = 6 THEN predicted_price END) as day_6,
-        MAX(CASE WHEN day_ahead = 7 THEN predicted_price END) as day_7,
-        MAX(CASE WHEN day_ahead = 8 THEN predicted_price END) as day_8,
-        MAX(CASE WHEN day_ahead = 9 THEN predicted_price END) as day_9,
-        MAX(CASE WHEN day_ahead = 10 THEN predicted_price END) as day_10,
-        MAX(CASE WHEN day_ahead = 11 THEN predicted_price END) as day_11,
-        MAX(CASE WHEN day_ahead = 12 THEN predicted_price END) as day_12,
-        MAX(CASE WHEN day_ahead = 13 THEN predicted_price END) as day_13,
-        MAX(CASE WHEN day_ahead = 14 THEN predicted_price END) as day_14
+        path_id as run_id,
+        day_1,
+        day_2,
+        day_3,
+        day_4,
+        day_5,
+        day_6,
+        day_7,
+        day_8,
+        day_9,
+        day_10,
+        day_11,
+        day_12,
+        day_13,
+        day_14
     FROM {FORECAST_TABLE}
     WHERE commodity = '{commodity.capitalize()}'
         AND model_version = '{model_version}'
         AND is_actuals = FALSE
-    GROUP BY forecast_start_date, run_id
-    ORDER BY forecast_start_date, run_id
+    ORDER BY forecast_start_date, path_id
     """
 
     spark_df = spark_session.sql(query)
