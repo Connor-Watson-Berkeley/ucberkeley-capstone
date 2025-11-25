@@ -217,7 +217,7 @@ def get_strategy_classes():
         List of (strategy_class, strategy_name) tuples
     """
     # Import strategies from production
-    from production.strategies import baseline, prediction
+    from production.strategies import baseline, prediction, rolling_horizon_mpc
 
     strategies = [
         (baseline.ImmediateSaleStrategy, 'immediate_sale'),
@@ -228,7 +228,8 @@ def get_strategy_classes():
         (prediction.MovingAveragePredictive, 'moving_average_predictive'),
         (prediction.ExpectedValueStrategy, 'expected_value'),
         (prediction.ConsensusStrategy, 'consensus'),
-        (prediction.RiskAdjustedStrategy, 'risk_adjusted')
+        (prediction.RiskAdjustedStrategy, 'risk_adjusted'),
+        (rolling_horizon_mpc.RollingHorizonMPC, 'rolling_horizon_mpc')
     ]
 
     return strategies
@@ -322,9 +323,9 @@ def run_optimization(
     # Prepare parameters for saving
     best_params = {name: params for name, (params, value) in results.items()}
 
-    # Add cost parameters to predictive strategies
+    # Add cost parameters to predictive and advanced strategies
     for strategy in ['price_threshold_predictive', 'moving_average_predictive',
-                     'expected_value', 'consensus', 'risk_adjusted']:
+                     'expected_value', 'consensus', 'risk_adjusted', 'rolling_horizon_mpc']:
         if strategy in best_params:
             best_params[strategy]['storage_cost_pct_per_day'] = config['storage_cost_pct_per_day']
             best_params[strategy]['transaction_cost_pct'] = config['transaction_cost_pct']
