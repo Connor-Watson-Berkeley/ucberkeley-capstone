@@ -127,14 +127,15 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
     prices = all_prices[all_prices['date'].isin(common_dates)].reset_index(drop=True)
     prediction_matrices = {date: matrix for date, matrix in all_prediction_matrices.items() if date in common_dates}
 
-    # Validate sufficient coverage
-    coverage_pct = len(common_dates) / len(all_price_dates) * 100
+    # Validate sufficient coverage using forecast loader standard
+    # Standard: 90%+ coverage of PREDICTION period (not all price history) + 730 day minimum
+    pred_coverage_pct = len(common_dates) / len(all_pred_dates) * 100
     pred_only = all_pred_dates - all_price_dates
     price_only = all_price_dates - all_pred_dates
 
     print(f"\n4. Validating coverage...")
     print(f"   Final dataset: {len(prices)} price points, {len(prediction_matrices)} prediction matrices")
-    print(f"   Coverage: {coverage_pct:.1f}% of all price dates")
+    print(f"   Coverage: {pred_coverage_pct:.1f}% of prediction period ({len(common_dates)}/{len(all_pred_dates)} days)")
 
     if len(pred_only) > 0:
         print(f"   ℹ️  {len(pred_only)} prediction dates excluded (no corresponding prices)")
@@ -142,11 +143,13 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
     if len(price_only) > 0:
         print(f"   ℹ️  {len(price_only)} price dates excluded (no corresponding predictions)")
 
-    if len(common_dates) < 100:
-        print(f"   ⚠️  Warning: Only {len(common_dates)} overlapping dates - may be insufficient for optimization")
+    # Apply forecast loader standard: 730 day minimum
+    if len(common_dates) < 730:
+        raise ValueError(f"Insufficient data: only {len(common_dates)} overlapping days (need 730+ for 2 year minimum)")
 
-    if coverage_pct < 50:
-        raise ValueError(f"Insufficient overlap: only {coverage_pct:.1f}% coverage. Check model_version '{model_version}' data availability.")
+    # Apply forecast loader standard: 90%+ coverage of prediction period
+    if pred_coverage_pct < 90:
+        raise ValueError(f"Sparse predictions: only {pred_coverage_pct:.1f}% coverage of prediction period (need 90%+). Check model_version '{model_version}' data availability.")
 
     return prices, prediction_matrices
 
