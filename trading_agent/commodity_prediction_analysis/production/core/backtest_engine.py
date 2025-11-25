@@ -226,6 +226,15 @@ class BacktestEngine:
             'harvest_schedule': self.harvest_schedule
         }
 
+    def run_backtest(self, strategy) -> Dict:
+        """
+        Compatibility wrapper for run() method.
+
+        The optimizer calls run_backtest() but the production engine uses run().
+        This wrapper provides backward compatibility.
+        """
+        return self.run(strategy)
+
     def _execute_trade(self, day: int, date, price: float, amount: float, reason: str):
         """
         Execute trade with production formulas.
