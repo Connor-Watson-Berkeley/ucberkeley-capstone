@@ -8,10 +8,10 @@ Tests:
 3. Generating optimized parameters
 4. Saving results
 
-Uses minimal configuration for fast testing:
-- Single strategy (consensus)
-- 5 trials only
-- Coffee + synthetic_acc90 (known good data)
+Full-scale production optimization:
+- All 10 strategies
+- 200 trials per strategy (standard Optuna optimization)
+- Coffee + synthetic_acc90 (validated data)
 """
 import sys
 from pathlib import Path
@@ -42,21 +42,21 @@ def test_optimizer(commodity='coffee', model_version='synthetic_acc90'):
         print(f"❌ ERROR getting Spark session: {e}")
         return False
 
-    # Run optimization with minimal configuration
-    print(f"\nRunning optimization with minimal configuration...")
+    # Run full-scale optimization
+    print(f"\nRunning FULL-SCALE optimization...")
     print(f"  Commodity: {commodity}")
     print(f"  Model: {model_version}")
-    print(f"  Strategy: consensus (single strategy for testing)")
-    print(f"  Trials: 5 (quick test)")
+    print(f"  Strategies: ALL 10 strategies (baseline + prediction + MPC)")
+    print(f"  Trials: 200 per strategy (2000 total)")
     print(f"  Objective: earnings (maximize absolute net earnings)")
 
     try:
         results = run_optimization(
             commodity=commodity,
             model_version=model_version,
-            objective='earnings',  # Simpler than efficiency, equivalent result
-            n_trials=5,  # Minimal for testing
-            strategy_filter=['consensus'],  # Single strategy for speed
+            objective='earnings',  # Production objective
+            n_trials=200,  # Full-scale optimization
+            strategy_filter=None,  # Optimize ALL strategies
             spark=spark
         )
 
