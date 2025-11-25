@@ -248,9 +248,70 @@ ORDER BY article_date DESC
 
 ---
 
+## How to Query the Data
+
+### SQL Editor (Databricks UI)
+
+1. Navigate to: https://dbc-5e4780f4-fcec.cloud.databricks.com
+2. Click "SQL Editor"
+3. Select warehouse: `Serverless Starter Warehouse` (ID: `d88ad009595327fd`)
+4. Run your query:
+   ```sql
+   SELECT * FROM commodity.silver.gdelt_wide_fillforward
+   WHERE commodity = 'coffee' AND article_date >= '2024-01-01'
+   LIMIT 10
+   ```
+
+### Python REST API
+
+```python
+import requests
+import os
+
+def query_databricks(sql):
+    """Execute SQL query against Databricks SQL warehouse."""
+    response = requests.post(
+        "https://dbc-5e4780f4-fcec.cloud.databricks.com/api/2.0/sql/statements/",
+        headers={
+            "Authorization": f"Bearer {os.environ['DATABRICKS_TOKEN']}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "warehouse_id": "d88ad009595327fd",
+            "statement": sql,
+            "wait_timeout": "50s"
+        }
+    )
+    result = response.json()
+    return result.get('result', {}).get('data_array', [])
+
+# Example usage
+data = query_databricks("""
+    SELECT article_date, commodity, group_ALL_count, group_ALL_tone_avg
+    FROM commodity.silver.gdelt_wide_fillforward
+    WHERE commodity = 'coffee' AND article_date >= '2024-11-01'
+    ORDER BY article_date
+""")
+```
+
+### Performance Tips
+
+1. **Always filter on partitions**: `WHERE commodity = 'X' AND article_date >= 'YYYY-MM-DD'`
+2. **Use LIMIT for exploration**: Add `LIMIT 100` when testing queries
+3. **Refresh if data missing**: `REFRESH TABLE commodity.silver.gdelt_wide_fillforward`
+4. **Avoid SELECT ***: Specify only needed columns for better performance
+
+### Common Issues
+
+- **"Table not found"** → Use full name with catalog: `commodity.silver.gdelt_wide_fillforward`
+- **Slow query** → Add partition filters (commodity, article_date)
+- **No results** → Verify data exists: `SELECT COUNT(*) FROM commodity.silver.gdelt_wide_fillforward`
+- **Stale data** → Run `REFRESH TABLE` to update metadata
+
+---
+
 ## Related Documentation
 
-- **Query Examples**: `DATABRICKS_GDELT_QUERY_GUIDE.md`
 - **Lambda Pipeline**: `GDELT_LAMBDA_REFERENCE_GUIDE.md`
 - **Data Sources Overview**: `../DATA_SOURCES.md`
 - **Unified Architecture**: `../UNIFIED_DATA_ARCHITECTURE.md`
