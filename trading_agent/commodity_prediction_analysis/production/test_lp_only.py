@@ -44,12 +44,12 @@ def test_lp_optimizer():
     print(f"  Price data: {len(prices)} days ({prices['date'].min()} to {prices['date'].max()})")
 
     # Load predictions
-    pred_table = f"commodity.forecast.distributions_{commodity}"
+    pred_table = f"commodity.trading_agent.predictions_{commodity}"
     pred_df = spark.table(pred_table).filter(f"model_version = '{model_version}'").toPandas()
 
     # Find overlapping dates
     price_dates = set(prices['date'])
-    pred_dates = set(pred_df['forecast_date'])
+    pred_dates = set(pd.to_datetime(pred_df['timestamp']).dt.normalize())
     common_dates = price_dates & pred_dates
 
     # Filter to common range
