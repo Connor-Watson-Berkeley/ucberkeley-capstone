@@ -1637,6 +1637,73 @@ from cost_config_small_farmer import COMMODITY_CONFIGS
 
 ---
 
+### Databricks Production Testing Scripts
+
+#### production/test_backtest.py
+
+**Purpose:** End-to-end backtest testing on Databricks
+
+**What it tests:**
+1. Loading predictions (synthetic_acc90)
+2. Running production backtest engine
+3. Verifying strategy execution
+4. Results persistence
+
+**Configuration:**
+- Commodity: coffee (test)
+- Model: synthetic_acc90 (known good data)
+- Single strategy for speed
+
+**Status:** ✅ Tested and working (2025-11-25)
+
+---
+
+#### production/test_forecast_loader.py
+
+**Purpose:** Test real forecast loading with sparsity checking
+
+**What it tests:**
+1. Discover available model versions
+2. Load forecasts from commodity.forecast.distributions
+3. Sparsity checking (90%+ date coverage + 730 day minimum)
+4. Matrix format transformation
+5. Pickle file output
+
+**Sparsity Requirements:**
+- Minimum 730 days (2 years) of forecast date range
+- Minimum 90% coverage within that range
+
+**Results (coffee):**
+- 3 well-populated forecasts: naive (2878 days), xgboost (2293 days), sarimax_auto_weather (912 days)
+- 10 sparse/short forecasts skipped
+
+**Status:** ✅ Tested and working (2025-11-25)
+
+---
+
+#### production/test_optimizer.py
+
+**Purpose:** Test parameter optimization on Databricks
+
+**What it tests:**
+1. Loading price data and predictions
+2. Running Optuna optimization
+3. Efficiency-based parameter selection
+4. Results saving
+
+**Configuration:**
+- Commodity: coffee
+- Model: synthetic_acc90
+- Objective: efficiency (optimizes for efficiency ratio)
+- Trials: 5 (minimal for testing)
+- Strategy: consensus (single strategy for speed)
+
+**Based on:** `analysis/optimization/run_parameter_optimization.py`
+
+**Status:** ⏳ Testing in progress (2025-11-25)
+
+---
+
 ### Legacy Directory Scripts
 
 #### Legacy/trading_prediction_analysis.py
