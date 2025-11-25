@@ -19,17 +19,27 @@ except NameError:
     sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
 
 import pandas as pd
-import pickle
-from production.config import COMMODITY_CONFIGS, VOLUME_PATH
+from pyspark.sql import SparkSession
+from production.config import COMMODITY_CONFIGS, VOLUME_PATH, OUTPUT_SCHEMA, get_data_paths
 from production.core.backtest_engine import BacktestEngine
 from production.strategies.baseline import ImmediateSaleStrategy
+from production.runners.data_loader import DataLoader
 
-def test_production_backtest(commodity='coffee'):
-    """Test production backtest with ImmediateSaleStrategy."""
+def test_production_backtest(commodity='coffee', model_version='synthetic_acc90'):
+    """Test production backtest with ImmediateSaleStrategy using production DataLoader."""
 
     print(f"\n{'='*80}")
     print(f"TESTING PRODUCTION BACKTEST - {commodity.upper()}")
+    print(f"Model: {model_version}")
     print(f"{'='*80}\n")
+
+    # Get Spark session
+    try:
+        spark = SparkSession.builder.getOrCreate()
+        print(f"✓ Got Spark session")
+    except Exception as e:
+        print(f"❌ ERROR getting Spark session: {e}")
+        return False
 
     # Get commodity config
     config = COMMODITY_CONFIGS.get(commodity)
@@ -37,38 +47,37 @@ def test_production_backtest(commodity='coffee'):
         print(f"❌ ERROR: No config found for commodity '{commodity}'")
         return False
 
-    print(f"✓ Loaded config for {commodity}")
+    print(f"\n✓ Loaded config for {commodity}")
     print(f"  - Harvest volume: {config['harvest_volume']:,} bags")
     print(f"  - Harvest windows: {len(config['harvest_windows'])}")
     print(f"  - Storage cost: {config['storage_cost_pct_per_day']*100:.4f}%/day")
     print(f"  - Transaction cost: {config['transaction_cost_pct']*100:.2f}%")
 
-    # Load prices
-    try:
-        prices_path = f"{VOLUME_PATH}/{commodity}_prices.pkl"
-        with open(prices_path, 'rb') as f:
-            prices = pickle.load(f)
-        print(f"\n✓ Loaded prices: {len(prices)} rows")
-        print(f"  - Date range: {prices.index.min()} to {prices.index.max()}")
-        print(f"  - Price range: ${prices['price'].min():.2f} - ${prices['price'].max():.2f}")
-    except Exception as e:
-        print(f"❌ ERROR loading prices: {e}")
-        return False
+    # Get data paths
+    data_paths = get_data_paths(commodity, model_version)
 
-    # Load predictions
+    # Load data using production DataLoader
     try:
-        predictions_path = f"{VOLUME_PATH}/{commodity}_arima_v1_predictions.pkl"
-        with open(predictions_path, 'rb') as f:
-            predictions = pickle.load(f)
-        print(f"\n✓ Loaded predictions")
-        print(f"  - Keys: {list(predictions.keys())}")
+        loader = DataLoader(spark=spark)
+        prices, prediction_matrices = loader.load_commodity_data(
+            commodity=commodity,
+            model_version=model_version,
+            data_paths=data_paths
+        )
+        print(f"\n✓ Loaded data via production DataLoader")
+        print(f"  - Prices: {len(prices)} rows")
+        print(f"  - Date range: {prices['date'].min()} to {prices['date'].max()}")
+        print(f"  - Price range: ${prices['price'].min():.2f} - ${prices['price'].max():.2f}")
+        print(f"  - Predictions: {len(prediction_matrices)} matrices")
     except Exception as e:
-        print(f"❌ ERROR loading predictions: {e}")
+        print(f"❌ ERROR loading data: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
     # Initialize BacktestEngine
     try:
-        engine = BacktestEngine(prices, predictions, config)
+        engine = BacktestEngine(prices, prediction_matrices, config)
         print(f"\n✓ Initialized BacktestEngine")
     except Exception as e:
         print(f"❌ ERROR initializing BacktestEngine: {e}")
