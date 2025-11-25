@@ -43,7 +43,7 @@ class DataLoader:
         print(f"\nLoading data for {commodity.upper()} - {model_version}...")
 
         # Load prices
-        prices = self._load_prices(data_paths)
+        prices = self._load_prices(commodity, data_paths)
         print(f"  ✓ Loaded {len(prices)} days of prices")
 
         # Load prediction matrices
@@ -55,12 +55,13 @@ class DataLoader:
 
         return prices, prediction_matrices
 
-    def _load_prices(self, data_paths: Dict[str, str]) -> pd.DataFrame:
+    def _load_prices(self, commodity: str, data_paths: Dict[str, str]) -> pd.DataFrame:
         """
         Load price data from Delta table
 
         Args:
-            data_paths: Dictionary containing 'prices_prepared' key
+            commodity: Commodity name to filter by
+            data_paths: Dictionary containing 'prices_source' key
 
         Returns:
             DataFrame with columns ['date', 'price']
@@ -68,7 +69,12 @@ class DataLoader:
         if self.spark is None:
             raise ValueError("Spark session required to load prices from Delta table")
 
-        prices = self.spark.table(data_paths['prices_prepared']).toPandas()
+        # Load from unified_data and filter by commodity
+        prices = self.spark.table(data_paths['prices_source']) \
+            .filter(f"commodity = '{commodity.title()}'") \
+            .select('date', 'price') \
+            .toPandas()
+
         # CRITICAL: Normalize dates to midnight for dictionary lookup compatibility
         prices['date'] = pd.to_datetime(prices['date']).dt.normalize()
 
