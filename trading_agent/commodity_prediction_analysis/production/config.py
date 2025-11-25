@@ -122,7 +122,7 @@ def get_data_paths(commodity, model_version):
 
     Returns:
         dict: Dictionary of data paths
-            - prices_prepared: Delta table with prepared prices
+            - prices_source: Delta table source for prices (unified_data, filter by commodity)
             - prediction_matrices: Synthetic prediction matrix file
             - prediction_matrices_real: Real prediction matrix file
             - results_detailed: Output file for detailed results
@@ -130,7 +130,7 @@ def get_data_paths(commodity, model_version):
     """
     return {
         # Input paths
-        'prices_prepared': f"{OUTPUT_SCHEMA}.prices_{commodity.lower()}",
+        'prices_source': MARKET_TABLE,  # commodity.silver.unified_data (filter by commodity in loader)
         'prediction_matrices': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_synthetic_acc90.pkl",
         'prediction_matrices_real': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_{model_version}_real.pkl",
 
