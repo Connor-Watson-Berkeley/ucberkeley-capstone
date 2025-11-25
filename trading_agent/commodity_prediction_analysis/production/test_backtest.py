@@ -111,24 +111,34 @@ def test_production_backtest(commodity='coffee', model_version='synthetic_acc90'
         print(f"{'='*80}\n")
 
         print(f"✓ Backtest completed successfully!")
-        print(f"\n  Earnings: ${results['total_earnings']:,.2f}")
-        print(f"  Transactions: {len(results['transaction_history'])}")
-        print(f"  Final inventory: {results['final_inventory']:,.0f} bags")
+        print(f"\n  Net Earnings: ${results['net_earnings']:,.2f}")
+        print(f"  Total Revenue: ${results['total_revenue']:,.2f}")
+        print(f"  Transaction Costs: ${results['total_transaction_costs']:,.2f}")
+        print(f"  Storage Costs: ${results['total_storage_costs']:,.2f}")
+        print(f"  Number of Trades: {len(results['trades'])}")
 
-        if results['transaction_history']:
-            print(f"\n  First transaction:")
-            first_tx = results['transaction_history'][0]
-            print(f"    Date: {first_tx['date']}")
-            print(f"    Volume: {first_tx['volume']:,.0f} bags")
-            print(f"    Price: ${first_tx['price']:.2f}")
-            print(f"    Revenue: ${first_tx['revenue']:,.2f}")
+        # Get final inventory from daily_state
+        final_inventory = results['daily_state']['inventory'].iloc[-1] if len(results['daily_state']) > 0 else 0
+        print(f"  Final Inventory: {final_inventory:,.0f} tons")
 
-            print(f"\n  Last transaction:")
-            last_tx = results['transaction_history'][-1]
-            print(f"    Date: {last_tx['date']}")
-            print(f"    Volume: {last_tx['volume']:,.0f} bags")
-            print(f"    Price: ${last_tx['price']:.2f}")
-            print(f"    Revenue: ${last_tx['revenue']:,.2f}")
+        if results['trades']:
+            print(f"\n  First trade:")
+            first_trade = results['trades'][0]
+            print(f"    Day: {first_trade['day']}")
+            print(f"    Date: {first_trade['date']}")
+            print(f"    Amount: {first_trade['amount']:,.2f} tons")
+            print(f"    Price: ${first_trade['price']:.2f}/lb")
+            print(f"    Revenue: ${first_trade['revenue']:,.2f}")
+            print(f"    Reason: {first_trade['reason']}")
+
+            print(f"\n  Last trade:")
+            last_trade = results['trades'][-1]
+            print(f"    Day: {last_trade['day']}")
+            print(f"    Date: {last_trade['date']}")
+            print(f"    Amount: {last_trade['amount']:,.2f} tons")
+            print(f"    Price: ${last_trade['price']:.2f}/lb")
+            print(f"    Revenue: ${last_trade['revenue']:,.2f}")
+            print(f"    Reason: {last_trade['reason']}")
 
         return True
 
