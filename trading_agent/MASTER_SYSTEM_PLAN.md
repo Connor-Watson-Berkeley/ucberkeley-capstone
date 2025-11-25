@@ -1098,7 +1098,7 @@ def get_strategy_comparison_context(commodity):
 
 | Phase | Status | Progress | Priority | Blockers |
 |-------|--------|----------|----------|----------|
-| **Phase 2: Automation** | 🔧 IN PROGRESS | 65% | **🔴 MAIN BLOCKER** | Testing workflow next |
+| **Phase 2: Automation** | 🔧 IN PROGRESS | 75% | **🔴 MAIN BLOCKER** | Orchestrator testing next |
 | Phase 1: Algorithm Debug | 📋 DEFERRED | 30% | After Phase 2 | Needs automated testing infrastructure |
 | Phase 3: Consolidation | 📋 PLANNED | 0% | After Phase 1+2 | Blocked by Phase 1 + Phase 2 |
 | Phase 4: WhatsApp LLM | 📋 PLANNED | 0% | After Phase 3 | Blocked by Phase 3 |
@@ -1139,14 +1139,19 @@ def get_strategy_comparison_context(commodity):
    - Script: `production/run_backtest_workflow.py`
    - Modes: full, backtest-only, synthetic-test
    - Status: Orchestrates workflow, not tested on Databricks
-7. 🔧 **Test forecast loader on Databricks** - **NEXT IMMEDIATE ACTION**
-   - Create Jobs API config for load_forecast_predictions.py
-   - Test loading real predictions from commodity.forecast.distributions
-   - Verify matrix format and pickle file output
-8. 📋 Test parameter optimizer on Databricks
-   - Create Jobs API config for optimizer
-   - Test with production BacktestEngine
-   - Verify optimal parameters are saved correctly
+7. ✅ **Test forecast loader on Databricks** (COMPLETE - 2025-11-25)
+   - Created Jobs API config for load_forecast_predictions.py
+   - Tested loading real predictions from commodity.forecast.distributions
+   - **Test Results:** Coffee - 3 well-populated forecasts (naive, xgboost, sarimax), 10 sparse forecasts skipped
+   - Sparsity checking working correctly (90%+ coverage + 730 day minimum)
+   - Matrix format and pickle file output verified ✅
+8. ✅ Test parameter optimizer on Databricks (COMPLETE - 2025-11-25)
+   - Created Jobs API config for optimizer
+   - Tested with production BacktestEngine
+   - **Test Results:** Coffee + synthetic_acc90 + efficiency objective → 314.8% efficiency (consensus strategy)
+   - Optuna optimization with 5 trials completed successfully
+   - Optimal parameters saved to Volume correctly ✅
+   - **Fixed:** Removed sys.exit() calls (Databricks treats any sys.exit as error)
 9. 📋 Test orchestrator end-to-end on Databricks
    - Create Jobs API config for run_backtest_workflow.py
    - Test orchestrated workflow (forecast loader → backtests)
