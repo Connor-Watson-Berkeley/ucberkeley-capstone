@@ -1098,7 +1098,7 @@ def get_strategy_comparison_context(commodity):
 
 | Phase | Status | Progress | Priority | Blockers |
 |-------|--------|----------|----------|----------|
-| **Phase 2: Automation** | 🔧 IN PROGRESS | 45% | **🔴 MAIN BLOCKER** | Orchestration next |
+| **Phase 2: Automation** | 🔧 IN PROGRESS | 65% | **🔴 MAIN BLOCKER** | Testing workflow next |
 | Phase 1: Algorithm Debug | 📋 DEFERRED | 30% | After Phase 2 | Needs automated testing infrastructure |
 | Phase 3: Consolidation | 📋 PLANNED | 0% | After Phase 1+2 | Blocked by Phase 1 + Phase 2 |
 | Phase 4: WhatsApp LLM | 📋 PLANNED | 0% | After Phase 3 | Blocked by Phase 3 |
@@ -1114,25 +1114,44 @@ def get_strategy_comparison_context(commodity):
 **⚠️ CORRECTED PRIORITY ORDER (2025-11-24):**
 
 **🔴 PRIORITY 1: Phase 2 (Automation) - MAIN BLOCKER**
-1. ✓ Extract strategies to production/strategies/ (COMPLETE)
+1. ✅ Extract strategies to production/strategies/ (COMPLETE)
    - Import strategies from `production.strategies`
    - When Phase 1 fixes bugs, automation automatically uses fixed version
-2. ✓ Build production runners (COMPLETE)
+2. ✅ Build production runners (COMPLETE)
    - Built production/runners/ to replicate notebook 05
    - 5 modular components: data_loader, strategy_runner, visualization, result_saver, multi_commodity_runner
    - Comprehensive test suite: 6 test files, 2,500+ lines, 150+ test cases
-3. 🔧 **Test production code on Databricks** - **NEXT IMMEDIATE ACTION**
-   - ✓ Fixed date normalization bug in data_loader.py (CRITICAL for prediction lookups)
-   - Update Databricks repo: `databricks repos update 1904868124027877 --branch main`
-   - Run test_backtest.py via Jobs API
-   - Verify against original notebook 05 results
-   - Fix any broken implementations
-   - **See:** docs/AUTOMATION_GUIDE.md and docs/DATABRICKS_GUIDE.md for patterns
-4. 📋 Convert notebook 01 to script (synthetic predictions)
-5. 📋 Build orchestrator (chain 01 → 05 → 06-10)
-6. 📋 Test end-to-end automated workflow
-7. 📋 Run parameter optimization using automated backtesting
-8. 📋 Expand to remaining notebooks (06-10)
+3. ✅ **Test production backtest on Databricks** (COMPLETE - 2025-11-24)
+   - Fixed import errors (absolute imports: `production.strategies`, `production.core`)
+   - Fixed data loading (query unified_data.close, rename to 'price')
+   - Fixed strategy initialization (use class defaults, no config params)
+   - Fixed result keys (use `net_earnings`, `trades`, `daily_state`)
+   - **Test Results:** Coffee + synthetic_acc90 + ImmediateSaleStrategy → $38.5M net earnings, 2,125 trades ✅
+   - **See:** docs/DATABRICKS_GUIDE.md for production testing best practices
+4. ✅ Convert notebook 01 to script (EXISTS but NOT TESTED)
+   - Script: `production/scripts/generate_synthetic_predictions.py`
+   - Status: Converted from v8 notebook, not tested on Databricks
+5. ✅ Build forecast loader script (EXISTS but NOT TESTED)
+   - Script: `production/scripts/load_forecast_predictions.py`
+   - Queries: `commodity.forecast.distributions` table correctly
+   - Status: Code looks correct, not tested on Databricks
+6. ✅ Build orchestrator (EXISTS but NOT TESTED)
+   - Script: `production/run_backtest_workflow.py`
+   - Modes: full, backtest-only, synthetic-test
+   - Status: Orchestrates workflow, not tested on Databricks
+7. 🔧 **Test forecast loader on Databricks** - **NEXT IMMEDIATE ACTION**
+   - Create Jobs API config for load_forecast_predictions.py
+   - Test loading real predictions from commodity.forecast.distributions
+   - Verify matrix format and pickle file output
+8. 📋 Test parameter optimizer on Databricks
+   - Create Jobs API config for optimizer
+   - Test with production BacktestEngine
+   - Verify optimal parameters are saved correctly
+9. 📋 Test orchestrator end-to-end on Databricks
+   - Create Jobs API config for run_backtest_workflow.py
+   - Test orchestrated workflow (forecast loader → backtests)
+10. 📋 Expand to analysis notebooks (06-10)
+11. 📋 Test synthetic generator (deferred to later)
 
 **⚠️ Phase 1 (Algorithm Debugging) - AFTER PHASE 2:**
 1. Wait for Phase 2 completion (automated backtesting infrastructure)
