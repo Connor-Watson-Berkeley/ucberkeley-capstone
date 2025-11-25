@@ -106,30 +106,30 @@ def process_model_version(commodity, model_version, spark):
     min_runs = n_runs_per_date.min()
     max_runs = n_runs_per_date.max()
 
-    print(f"  Forecast dates: {n_forecast_dates}")
+    # Calculate date coverage (% of expected range that has forecasts)
+    min_date = predictions_wide['forecast_start_date'].min()
+    max_date = predictions_wide['forecast_start_date'].max()
+    expected_days = (max_date - min_date).days + 1  # Total calendar days in range
+    coverage_pct = (n_forecast_dates / expected_days) * 100
+
+    print(f"  Date range: {min_date} to {max_date}")
+    print(f"  Forecast dates: {n_forecast_dates} / {expected_days} days ({coverage_pct:.1f}% coverage)")
     print(f"  Runs per date: avg={avg_runs_per_date:.1f}, min={min_runs}, max={max_runs}")
 
-    # Quality thresholds
-    MIN_FORECAST_DATES = 50  # Need at least 50 forecast dates
-    MIN_AVG_RUNS = 50  # Need at least 50 runs per date on average
+    # Quality threshold: 90%+ date coverage required
+    MIN_COVERAGE_PCT = 90.0
 
-    if n_forecast_dates < MIN_FORECAST_DATES:
-        print(f"\n⚠️  SKIPPING: Insufficient forecast dates ({n_forecast_dates} < {MIN_FORECAST_DATES})")
-        print(f"   This forecast is too sparse for reliable backtesting")
+    if coverage_pct < MIN_COVERAGE_PCT:
+        print(f"\n⚠️  SKIPPING: Insufficient date coverage ({coverage_pct:.1f}% < {MIN_COVERAGE_PCT}%)")
+        print(f"   Too many gaps in the forecast timeline")
+        print(f"   Expected {expected_days} dates in range, only have {n_forecast_dates}")
         return None
 
-    if avg_runs_per_date < MIN_AVG_RUNS:
-        print(f"\n⚠️  SKIPPING: Insufficient prediction density ({avg_runs_per_date:.1f} < {MIN_AVG_RUNS} runs/date)")
-        print(f"   This forecast is too sparse for reliable backtesting")
-        return None
-
-    # Assign quality rating
-    if avg_runs_per_date >= 100 and n_forecast_dates >= 100:
+    # Quality rating based on coverage
+    if coverage_pct >= 95:
         quality = "EXCELLENT"
-    elif avg_runs_per_date >= 50 and n_forecast_dates >= 50:
-        quality = "GOOD"
     else:
-        quality = "MARGINAL"
+        quality = "GOOD"
 
     print(f"\n✓ Forecast quality: {quality}")
     print(f"  Suitable for backtesting - proceeding with transformation")
