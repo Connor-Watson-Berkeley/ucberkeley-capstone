@@ -95,6 +95,46 @@ def process_model_version(commodity, model_version, spark):
         return None
 
     # ----------------------------------------------------------------------
+    # Check Forecast Quality (Sparsity)
+    # ----------------------------------------------------------------------
+    print(f"\nChecking forecast quality...")
+
+    # Calculate coverage metrics
+    n_forecast_dates = predictions_wide['forecast_start_date'].nunique()
+    n_runs_per_date = predictions_wide.groupby('forecast_start_date')['run_id'].nunique()
+    avg_runs_per_date = n_runs_per_date.mean()
+    min_runs = n_runs_per_date.min()
+    max_runs = n_runs_per_date.max()
+
+    print(f"  Forecast dates: {n_forecast_dates}")
+    print(f"  Runs per date: avg={avg_runs_per_date:.1f}, min={min_runs}, max={max_runs}")
+
+    # Quality thresholds
+    MIN_FORECAST_DATES = 50  # Need at least 50 forecast dates
+    MIN_AVG_RUNS = 50  # Need at least 50 runs per date on average
+
+    if n_forecast_dates < MIN_FORECAST_DATES:
+        print(f"\n⚠️  SKIPPING: Insufficient forecast dates ({n_forecast_dates} < {MIN_FORECAST_DATES})")
+        print(f"   This forecast is too sparse for reliable backtesting")
+        return None
+
+    if avg_runs_per_date < MIN_AVG_RUNS:
+        print(f"\n⚠️  SKIPPING: Insufficient prediction density ({avg_runs_per_date:.1f} < {MIN_AVG_RUNS} runs/date)")
+        print(f"   This forecast is too sparse for reliable backtesting")
+        return None
+
+    # Assign quality rating
+    if avg_runs_per_date >= 100 and n_forecast_dates >= 100:
+        quality = "EXCELLENT"
+    elif avg_runs_per_date >= 50 and n_forecast_dates >= 50:
+        quality = "GOOD"
+    else:
+        quality = "MARGINAL"
+
+    print(f"\n✓ Forecast quality: {quality}")
+    print(f"  Suitable for backtesting - proceeding with transformation")
+
+    # ----------------------------------------------------------------------
     # Transform to Matrix Format
     # ----------------------------------------------------------------------
     print(f"\nTransforming to matrix format...")
@@ -151,6 +191,8 @@ def process_model_version(commodity, model_version, spark):
         'model_version': model_version,
         'n_matrices': len(prediction_matrices),
         'n_paths': sample_matrix.shape[0] if len(prediction_matrices) > 0 else 0,
+        'quality': quality,
+        'avg_runs_per_date': float(avg_runs_per_date),
         'date_range': {
             'start': str(predictions_wide['forecast_start_date'].min()),
             'end': str(predictions_wide['forecast_start_date'].max())
