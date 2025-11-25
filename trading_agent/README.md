@@ -1,7 +1,9 @@
 # Trading Agent
 
 **Status**: ✅ Production Ready
-**Last Updated**: 2025-11-10
+**Last Updated**: 2025-11-24
+
+> **📋 For complete system overview, execution phases, and master plan:** See [MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md)
 
 ## Overview
 
@@ -186,12 +188,19 @@ Structured JSON output ready for messaging services:
 
 ## Documentation
 
+### Master Plan
+- **[MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md)** - Complete system overview, execution phases, dependencies, and status tracking
+
 ### User Guides
 - **[FORECAST_API_GUIDE.md](FORECAST_API_GUIDE.md)** - How to query forecast data from Unity Catalog
 - **[operations/README.md](operations/README.md)** - Daily recommendations & WhatsApp integration
 
 ### Technical Documentation
 - **[docs/MULTI_MODEL_ANALYSIS.md](docs/MULTI_MODEL_ANALYSIS.md)** - Multi-model framework implementation & accuracy threshold analysis
+- **[commodity_prediction_analysis/FILE_INVENTORY.md](commodity_prediction_analysis/FILE_INVENTORY.md)** - Notebook and script inventory for backtesting
+
+### WhatsApp Integration
+- **[whatsapp/LLM_IMPLEMENTATION_PLAN.md](whatsapp/LLM_IMPLEMENTATION_PLAN.md)** - LLM-powered conversational Q&A plan
 
 ### Project Management
 - **[../collaboration/TRADING_AGENT_TODO.md](../collaboration/TRADING_AGENT_TODO.md)** - Current status & roadmap

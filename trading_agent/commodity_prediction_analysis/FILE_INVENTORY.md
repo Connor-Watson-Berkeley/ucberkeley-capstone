@@ -860,6 +860,208 @@ From `diagnostics/`:
 
 ---
 
+## ## Workflow Analysis & Findings
+
+**Source:** WORKFLOW_ANALYSIS_AND_FINDINGS.md (2025-11-22 Analysis)
+**Analyst:** Claude Code
+**Scope:** Comprehensive review of backtesting workflow architecture and execution patterns
+
+### Workflow Phase Structure
+
+The trading analysis workflow is organized into 5 distinct phases with clear dependencies:
+
+**Phase 1: Setup & Data Preparation**
+- Central configuration (00_setup_and_config)
+- Synthetic predictions at 4 accuracy levels: 60%, 70%, 80%, 90% (01_synthetic_predictions)
+- Real forecast integration (02_forecast_predictions)
+- Cost model: Percentage-based (storage: 0.025%/day, transaction: 0.25%)
+
+**Phase 2: Strategy Implementation**
+- 9 distinct trading strategies: 4 baseline + 5 prediction-based (03_strategy_implementations)
+- Technical indicators: RSI, ADX, Standard Deviation (both historical & predicted)
+- Cost-benefit analysis built into strategy logic
+- Dynamic batch sizing (10-45% based on confidence signals)
+
+**Phase 3: Backtesting**
+- Harvest cycle-aware backtesting engine (04_backtesting_engine)
+- Multi-year support with age tracking (365-day max holding)
+- Pre-harvest liquidation rules
+- Percentage-based costs (realistic, scale with commodity value)
+
+**Phase 4: Comparative Analysis**
+- Master workflow notebook (05_strategy_comparison) runs all 9 strategies
+- Auto-discovers model versions (synthetic + real)
+- Generates 7 PNG charts per commodity-model combination
+- Produces 2 cross-comparison aggregate charts
+
+**Phase 5: Validation & Analysis**
+- Statistical significance testing (06_statistical_validation) - paired t-tests, bootstrap CIs, Cohen's d
+- Feature importance analysis (07_feature_importance)
+- Cost sensitivity testing (08_sensitivity_analysis)
+- Final reporting and dashboards (09_strategy_results_summary)
+- Paired scenario deep-dive (10_paired_scenario_analysis)
+
+### Identified Workflow Gaps
+
+**Critical Gap: Missing Synthetic Accuracy Comparison**
+- No dedicated notebook comparing performance across 4 accuracy levels (60%, 70%, 80%, 90%)
+- This is essential for validation: should see monotonic improvement with accuracy
+- Failure to show advantage at 90% accuracy would indicate trading logic bugs
+- **Recommendation:** Create `11_synthetic_accuracy_comparison.ipynb` to fill this gap
+
+**Known Issues:**
+- Notebook 10 (paired_scenario_analysis) has path errors - references `/Volumes/commodity/silver/trading_agent_volume/` which doesn't match actual paths
+- Real forecast data is sparse with many gaps >30 days - use synthetic predictions for validation
+- 15 notebooks is complex to maintain and execute manually
+
+### Phase Structure Analysis
+
+**Key Design Insight:** Workflow uses **matched pair strategies** for clean A/B testing:
+1. Price Threshold Baseline vs Price Threshold Predictive
+2. Moving Average Baseline vs Moving Average Predictive
+3. Consensus, Expected Value, Risk-Adjusted strategies (prediction-only variants)
+
+This design allows:
+- Isolation of prediction value-add (paired strategy earnings difference)
+- Control for baseline strategy drift
+- Clear measurement of when predictions help vs hurt
+
+**Harvest Cycle Awareness:** Unlike typical backtesting, this system:
+- Tracks inventory accumulation during harvest windows
+- Enforces multi-year constraints (coffee: May-Sep, sugar: Oct-Dec)
+- Liquidates old inventory before new harvest arrivals
+- Prevents unrealistic holding across multiple harvest cycles
+
+### Risk Assessment
+
+**Data Quality Risks (RED - MITIGATE):**
+- Real forecasts sparse with gaps >30 days - not suitable for continuous daily trading
+- **Mitigation:** Use synthetic predictions for validation; real forecasts only where available
+
+**Logic Risks (YELLOW - VALIDATE):**
+- Complex strategies with multiple technical indicators - hard to debug
+- Cost-benefit calculations may mask trading logic issues
+- **Mitigation:** Run diagnostic_100 (100% accuracy test) before trusting results
+- **Action:** Must see clear advantage at 90% accuracy; if not, indicates bugs
+
+**Cost Assumption Risks (YELLOW - VERIFY):**
+- Percentage-based costs (0.025%/day storage, 0.25% transaction) may not match real brokers
+- Small basis points savings may be consumed by transaction/storage costs
+- **Mitigation:** Sensitivity analysis (08_sensitivity_analysis) shows cost impact
+- **Validation:** Verify results robust to ±50% cost multipliers
+
+**Execution Risks (GREEN - DOCUMENTED):**
+- Multiple `%run` dependencies between notebooks
+- Interdependencies could break if notebooks moved/renamed
+- **Current Mitigation:** Clear execution order documented
+- **Future:** Migrate to automated script-based execution (see Automation Migration Plan)
+
+### Strategy Validation Questions
+
+Before trusting workflow results, these questions must be answered:
+
+1. **Does 90% accuracy show clear advantage?**
+   - Expected: Strong earnings improvement over baselines
+   - If not: Indicates trading logic issues that need debugging
+
+2. **Is performance monotonic across accuracy levels?**
+   - Expected: 60% < 70% < 80% < 90% < 100% (in earnings)
+   - If not: Indicates data leakage, strategy issues, or cost structure problems
+
+3. **Are matched pairs effective?**
+   - Expected: Price Threshold Predictive beats Price Threshold Baseline
+   - Expected: MA Predictive beats MA Baseline
+   - If not: Prediction signals may be inverted or poorly calibrated
+
+4. **Are results statistically significant?**
+   - Expected: p < 0.05 for high-accuracy scenarios (90%+)
+   - Expected: Bootstrap confidence intervals exclude zero
+   - If not: Sample size too small or variance too high
+
+5. **Are results robust to cost assumptions?**
+   - Expected: Performance remains positive with ±50% cost multipliers
+   - Expected: Relative strategy rankings don't change dramatically
+   - If not: Margin too thin, real-world execution risky
+
+### Recommendations
+
+**Immediate Actions:**
+
+1. **Create accuracy comparison notebook:**
+   - Run 01_synthetic_predictions for all 4 accuracy levels
+   - Compare earnings/metrics across levels in single dashboard
+   - Generate monotonicity validation plots
+   - **Expected output:** `11_synthetic_accuracy_comparison.ipynb`
+
+2. **Validate core algorithms:**
+   - Run diagnostic_100 (100% accuracy test)
+   - If 100% accuracy doesn't show clear advantage, stop and debug
+   - Fix strategy logic before running full workflow
+
+3. **Add workflow README:**
+   - Document execution order (Setup → Data → Strategies → Backtest → Analysis)
+   - Identify required vs optional notebooks
+   - Expected runtime per phase
+   - Common pitfalls and troubleshooting
+
+4. **Fix Notebook 10 paths:**
+   - Correct file paths to match actual volume structure
+   - Test with real data before running at scale
+
+**Medium-term Actions:**
+
+1. **Automate workflow execution:**
+   - Convert notebooks to executable Python scripts
+   - Submit as Databricks jobs with proper dependencies
+   - Enable overnight/batch execution of full workflow
+   - (See Automation Migration Plan section above)
+
+2. **Consolidate reporting:**
+   - Create FINAL_REPORT/ directory
+   - Aggregate all CSVs and PNGs with clear naming
+   - Generate master summary document
+   - Enable one-click report generation
+
+3. **Implement monotonicity testing:**
+   - Add validation that checks 60% < 70% < 80% < 90%
+   - Block execution if monotonicity fails
+   - Highlight any accuracy levels that violate expectations
+
+### Execution Flow (Recommended)
+
+```
+1. 00_setup_and_config           → Configure parameters
+2. 01_synthetic_predictions      → Generate test predictions (60%-90% accuracy)
+3. 05_strategy_comparison        → Run all strategies on all models
+4. 06_statistical_validation     → Statistical significance testing
+5. 11_synthetic_accuracy_comparison → VALIDATE MONOTONICITY (NEW)
+6. diagnostic_100                → Test with 100% accuracy (if step 5 looks bad)
+7. 08_sensitivity_analysis       → Cost robustness testing
+8. 09_strategy_results_summary   → Generate final reports
+9. 10_paired_scenario_analysis   → Deep-dive paired comparison (if paths fixed)
+```
+
+### Key Findings Summary
+
+**Strengths:**
+- Sophisticated strategy design with matched pairs for clean A/B testing
+- Robust harvest cycle awareness (realistic constraints)
+- Comprehensive statistical validation
+- Multiple visualization formats for different audiences
+- Percentage-based costs (more realistic than fixed dollar amounts)
+
+**Weaknesses:**
+- Missing accuracy comparison notebook (critical validation gap)
+- Real forecast data too sparse for continuous daily trading
+- Complex workflow (15 notebooks) - hard to maintain
+- Limited automation (manual notebook execution)
+- Some path errors in notebook 10
+
+**Critical Success Factor:**
+90% accuracy synthetic predictions MUST show clear advantage over baselines. If not, trading algorithms have fundamental issues that need debugging before running real forecasts.
+
+---
+
 ## 📋 Execution Checklist (Current Workflow)
 
 ### One-Time Setup
@@ -1303,6 +1505,820 @@ for job in jobs:
 **Reference:** See `diagnostics/DATABRICKS_OUTPUT_ACCESS_GUIDE.md` Section 5
 
 ---
+
+---
+
+## 🐍 Python Scripts Inventory
+
+### Root Directory Scripts
+
+#### analyze_validation.py
+
+**Purpose:** Analyze validation results from synthetic prediction generation
+
+**Inputs:**
+- `/Volumes/commodity/trading_agent/files/validation_results_v*.pkl` - Validation metrics from 01_synthetic_predictions
+
+**Outputs:**
+- Console output only (no files created)
+- Displays MAPE, MAE, coverage, directional accuracy by accuracy level
+- Verifies 100% accuracy shows 0% MAPE (bug verification)
+
+**Usage:**
+```bash
+python analyze_validation.py
+```
+
+**Status:** Active - Used for quick validation checks
+
+---
+
+### Diagnostics Directory Scripts
+
+#### diagnostics/run_diagnostic_16.py
+
+**Purpose:** Optuna-based Bayesian optimization of all 9 strategy parameters
+
+**Inputs:**
+- `commodity.bronze.market` - Price data
+- `commodity.trading_agent.predictions_{commodity}` - Prediction matrices
+- `all_strategies_pct.py` - Strategy implementations
+
+**Outputs:**
+- `diagnostic_16_best_params.pkl` - Optimized parameters for all 9 strategies
+- `diagnostic_16_summary.csv` - Summary of optimization results
+- `diagnostic_16_trials.csv` - All Optuna trial results
+
+**Usage:**
+```bash
+# Run on Databricks
+databricks jobs submit --json @job_diagnostic_16.json
+```
+
+**Key Features:**
+- 200 trials per strategy
+- Bayesian optimization (smarter than grid search)
+- Spark parallelization for faster execution
+- Saves best parameters for use by diagnostic_17
+
+**Status:** Active - Core optimization tool
+
+---
+
+#### diagnostics/run_diagnostic_17.py
+
+**Purpose:** Trade-by-trade analysis using optimized parameters from diagnostic_16
+
+**Inputs:**
+- `diagnostic_16_best_params.pkl` - Optimized parameters (REQUIRED - run diagnostic_16 first)
+- `commodity.bronze.market` - Price data
+- `commodity.trading_agent.predictions_{commodity}` - Predictions
+
+**Outputs:**
+- `diagnostic_17_trade_analysis.pkl` - Detailed trade-by-trade comparison
+- `diagnostic_17_summary.csv` - Performance metrics with optimized params
+- `diagnostic_17_paradox_analysis.csv` - Why predictions underperform (if they do)
+
+**Usage:**
+```bash
+# Must run diagnostic_16 first!
+databricks jobs submit --json @job_diagnostic_17.json
+```
+
+**Key Questions Answered:**
+- Where do prediction strategies diverge from baselines?
+- Is underperformance from revenue, transaction costs, or storage costs?
+- Which trades are different between matched pairs?
+
+**Status:** Active - Dependent on diagnostic_16
+
+---
+
+#### diagnostics/run_diagnostic_100.py
+
+**Purpose:** Algorithm validation with 100% accurate predictions (perfect foresight test)
+
+**Inputs:**
+- `commodity.bronze.market` - Price data
+- `commodity.trading_agent.predictions_coffee` (filtered for `model_version = 'synthetic_acc100'`)
+
+**Outputs:**
+- `diagnostic_100_summary.csv` - Performance with perfect accuracy
+- `diagnostic_100_results.pkl` - Full backtest results
+- Console validation output
+
+**Usage:**
+```bash
+databricks jobs submit --json @job_diagnostic_100.json
+```
+
+**Validation Logic:**
+- If 100% accuracy doesn't show >6% advantage over baselines → Algorithms are broken
+- Updated 2025-11-24: Lowered threshold from 10% to 6% for realistic validation
+- This is a SANITY CHECK that must pass before trusting any results
+
+**Status:** Active - Critical validation step
+
+---
+
+#### diagnostics/run_diagnostic_theoretical_max.py
+
+**Purpose:** Calculate theoretical maximum performance using dynamic programming
+
+**Inputs:**
+- `commodity.bronze.market` - Price data
+- Perfect 14-day foresight (simulated)
+
+**Outputs:**
+- `diagnostic_theoretical_max_results.pkl` - Best possible performance
+- `diagnostic_theoretical_max_efficiency.csv` - Strategy efficiency ratios
+- Console output: Actual / Theoretical Max
+
+**Key Questions:**
+1. With 100% accuracy, what's the absolute best we could do?
+2. How efficient are current strategies? (Actual / Theoretical Max)
+3. Where are we leaving money on the table?
+
+**Usage:**
+```bash
+databricks jobs submit --json @job_diagnostic_theoretical_max.json
+```
+
+**Status:** Active - Benchmarking tool
+
+---
+
+#### diagnostics/run_diagnostic_accuracy_threshold.py
+
+**Purpose:** Comprehensive accuracy analysis - determine minimum prediction accuracy for statistically significant benefit
+
+**Inputs:**
+- `commodity.bronze.market` - Price data
+- `commodity.trading_agent.predictions_{commodity}` - ALL accuracy levels (60%, 70%, 80%, 90%, 100%)
+
+**Outputs:**
+- `diagnostic_accuracy_threshold_results.pkl` - Full results with daily state tracking
+- `diagnostic_accuracy_threshold_summary.csv` - Earnings and improvements by accuracy
+- `diagnostic_accuracy_threshold_stats.csv` - Statistical test results (t-stat, p-value, Cohen's d, 95% CIs)
+
+**Statistical Methods:**
+- Paired t-test on daily portfolio value changes
+- Cohen's d effect size calculation
+- Bootstrap confidence intervals (1000 iterations, 95% CI)
+- Statistical significance at p < 0.05
+
+**Key Questions Answered:**
+1. What accuracy level provides statistically significant benefit?
+2. How does improvement scale with accuracy?
+3. At what accuracy does each strategy become viable?
+4. What is the confidence-based performance degradation curve?
+
+**Usage:**
+```bash
+databricks jobs submit --json @job_diagnostic_accuracy_threshold.json
+```
+
+**Status:** Active - Key statistical validation (COMPREHENSIVE)
+
+---
+
+#### diagnostics/run_diagnostic_confidence_test.py
+
+**Purpose:** Test 3-tier confidence system (HIGH/MEDIUM/LOW based on CV)
+
+**Inputs:**
+- Multiple accuracy levels (100%, 90%, 80%, 70%)
+- `commodity.trading_agent.predictions_{commodity}`
+
+**Outputs:**
+- `diagnostic_confidence_test_results.pkl` - Results for each confidence tier
+- `diagnostic_confidence_test_summary.csv` - Performance by tier
+
+**Confidence Tiers:**
+- HIGH (CV < 5%): Override baseline completely
+- MEDIUM (CV 5-15%): Blend baseline + predictions
+- LOW (CV > 15%): Follow baseline exactly
+
+**Usage:**
+```bash
+databricks jobs submit --json @job_diagnostic_confidence_test.json
+```
+
+**Status:** Active - Tests redesigned matched pair strategies (updated 2025-11-24)
+
+---
+
+#### diagnostics/all_strategies_pct.py
+
+**Purpose:** Complete strategy suite with percentage-based framework (CORE IMPLEMENTATION)
+
+**Inputs:** None (pure implementation - imported by other scripts)
+
+**Outputs:** None (provides classes and functions)
+
+**What it provides:**
+- All 9 strategy classes:
+  1. ImmediateSaleStrategy (baseline)
+  2. EqualBatchStrategy (baseline)
+  3. PriceThresholdStrategy (baseline)
+  4. MovingAverageStrategy (baseline)
+  5. PriceThresholdPredictive (matched pair)
+  6. MovingAveragePredictive (matched pair)
+  7. ExpectedValueStrategy (prediction-only)
+  8. ConsensusStrategy (prediction-only)
+  9. RiskAdjustedStrategy (prediction-only)
+
+- Technical indicators:
+  - RSI (Relative Strength Index)
+  - ADX (Average Directional Index)
+  - Standard Deviation (historical and predicted)
+
+- Confidence calculation:
+  - Coefficient of Variation (CV) from prediction ensembles
+  - 3-tier system (HIGH/MEDIUM/LOW)
+
+**Key Design Features:**
+- ALL thresholds as percentages (scale-invariant)
+- Matched pairs MIRROR baselines exactly (clean A/B testing)
+- Full parameterization for grid search
+- Batch sizes 0.0 to 0.40 (realistic batch sizing)
+
+**Usage:**
+```python
+from all_strategies_pct import *
+
+# Baselines
+strategy = PriceThresholdStrategy(threshold_pct=0.05, batch_baseline=0.25)
+
+# Matched pair (same params)
+strategy_pred = PriceThresholdPredictive(threshold_pct=0.05, batch_baseline=0.25)
+
+# Standalone
+strategy_ev = ExpectedValueStrategy(
+    storage_cost_pct_per_day=0.025,
+    transaction_cost_pct=0.25,
+    min_net_benefit_pct=0.5
+)
+```
+
+**Status:** Active - Core strategy implementation (imported by all diagnostics)
+
+**Updated:** 2025-11-24 - Redesigned matched pair strategies with 3-tier confidence system
+
+---
+
+#### diagnostics/check_prediction_models.py
+
+**Purpose:** Quick exploration of available prediction models in Delta table
+
+**Inputs:**
+- `commodity.trading_agent.predictions_coffee` - Predictions table
+
+**Outputs:**
+- Console output only (no files)
+- Lists all model_version values
+- Calculates CV (Coefficient of Variation) for each model
+- Shows date ranges and row counts
+
+**Usage:**
+```bash
+# Run in Databricks notebook or as script
+python check_prediction_models.py
+```
+
+**Status:** Active - Quick exploration tool
+
+---
+
+#### diagnostics/verify_predictions.py
+
+**Purpose:** Quick verification that predictions exist and are structured correctly
+
+**Inputs:**
+- `commodity.trading_agent.predictions_coffee`
+
+**Outputs:**
+- Console output only
+- Checks table exists
+- Shows available model versions
+- Displays date ranges
+- Sample predictions
+
+**Usage:**
+```bash
+python verify_predictions.py
+```
+
+**Status:** Active - Quick data validation
+
+---
+
+#### diagnostics/test_all_strategies.py
+
+**Purpose:** Unit test that all 9 strategies can be instantiated and run
+
+**Inputs:** None (synthetic test data)
+
+**Outputs:**
+- Console output (pass/fail for each strategy)
+- Tests basic decision-making for each strategy
+
+**Usage:**
+```bash
+python test_all_strategies.py
+```
+
+**Status:** Active - Unit testing
+
+---
+
+#### diagnostics/rebuild_notebook.py
+
+**Purpose:** Programmatically rebuild diagnostic_16 notebook with proper Jupyter formatting
+
+**Inputs:** None (generates from scratch)
+
+**Outputs:**
+- `diagnostic_16_optuna_with_params.ipynb` - Rebuilt notebook
+
+**Usage:**
+```bash
+python rebuild_notebook.py
+```
+
+**Status:** Utility - Used when notebook gets corrupted
+
+---
+
+#### diagnostics/diagnostic_100_algorithm_validation.py
+
+**Purpose:** DUPLICATE of diagnostic_100_algorithm_validation.ipynb as a Python script
+
+**Note:** This is the notebook content extracted to .py format for reference
+
+**Status:** Obsolete - Use `run_diagnostic_100.py` instead (proper automation script)
+
+---
+
+#### diagnostics/cost_config_small_farmer.py
+
+**Purpose:** Alternative cost configuration for small farmer scenario
+
+**Inputs:** None (config only)
+
+**Outputs:** None (provides COMMODITY_CONFIGS dict)
+
+**Usage:**
+```python
+from cost_config_small_farmer import COMMODITY_CONFIGS
+```
+
+**Status:** Experimental - Alternative cost assumptions
+
+---
+
+### Production Directory Scripts
+
+#### production/config.py
+
+**Purpose:** Production configuration with updated costs from diagnostic research
+
+**Key Values:**
+- Storage cost: 0.005% per day (updated from 0.025%)
+- Transaction cost: 0.01% (updated from 0.25%)
+
+**Status:** Production-ready configuration
+
+---
+
+#### production/core/backtest_engine.py
+
+**Purpose:** Production backtesting engine extracted from 04_backtesting_engine.ipynb
+
+**Inputs:**
+- prices DataFrame
+- prediction_matrices dict
+- producer_config dict
+
+**Outputs:** Results dict with trades, daily_state, metrics
+
+**Key Features:**
+- Harvest-based inventory (starts at 0, accumulates during harvest)
+- Multi-cycle support (handles multiple harvest seasons)
+- Force liquidation (365-day max holding)
+- Percentage-based costs
+
+**Status:** Production-ready - Extracted from notebook for reuse
+
+---
+
+#### production/core/test_backtest_engine.py
+
+**Purpose:** Unit tests for production backtest engine
+
+**Status:** Active - Testing framework
+
+---
+
+#### production/core/test_with_correct_costs.py
+
+**Purpose:** Validation tests using updated cost assumptions
+
+**Status:** Active - Cost validation
+
+---
+
+#### production/strategies/ (4 modules, 1,900 lines)
+
+**Purpose:** All 9 trading strategies extracted from diagnostics/all_strategies_pct.py
+
+**Modules:**
+- `base.py` (76 lines) - Strategy base class
+- `indicators.py` (175 lines) - RSI, ADX, CV calculations
+- `baseline.py` (423 lines) - 4 baseline strategies
+- `prediction.py` (1,174 lines) - 5 prediction strategies
+- `__init__.py` (52 lines) - Module exports
+
+**Strategies Implemented:**
+- Baseline: Immediate Sale, Equal Batch, Price Threshold, Moving Average
+- Prediction: Consensus, Expected Value, Risk-Adjusted, Price Threshold (Predictive), Moving Average (Predictive)
+
+**Key Features:**
+- Percentage-based framework (dynamic batch sizing 8-40%)
+- 3-tier confidence system (high/medium/low)
+- Forced liquidation logic
+- Matched pairs design (baseline strategies have predictive equivalents)
+
+**Status:** Production-ready (Completed 2025-11-24)
+
+---
+
+#### production/runners/ (5 modules, 1,446 lines)
+
+**Purpose:** Modular backtest execution system that replicates notebook 05 workflow
+
+**Modules:**
+- `data_loader.py` (268 lines) - Load prices from Delta, predictions from pickle
+- `strategy_runner.py` (368 lines) - Execute all 9 strategies, analyze results
+- `visualization.py` (508 lines) - Generate all 5 chart types
+- `result_saver.py` (302 lines) - Save metrics to Delta, detailed results to pickle
+- `multi_commodity_runner.py` (393 lines) - Main orchestrator for multi-commodity execution
+- `__init__.py` - Module exports
+- `README.md` - Complete usage guide and API documentation
+
+**Workflow:**
+1. DataLoader: Load prices and prediction matrices
+2. StrategyRunner: Execute strategies and calculate metrics
+3. VisualizationGenerator: Create 5 chart types
+4. ResultSaver: Persist to Delta tables and pickle files
+5. MultiCommodityRunner: Orchestrate entire pipeline
+
+**Outputs:**
+- Delta tables: Metrics DataFrames in Unity Catalog
+- Pickle files: Detailed results dictionaries
+- PNG charts: 5 visualization types per commodity-model pair
+- CSV files: Cross-commodity comparisons
+
+**Status:** Production-ready with comprehensive test suite (Completed 2025-11-24)
+
+**Documentation:** See `production/runners/README.md` for usage guide
+
+---
+
+#### production/runners/tests/ (6 test files, 2,500+ lines)
+
+**Purpose:** Comprehensive test suite for runners module
+
+**Test Files:**
+- `conftest.py` (280 lines) - Shared fixtures and test utilities
+- `test_data_loader.py` (500+ lines) - Data loading and validation tests
+- `test_strategy_runner.py` (550+ lines) - Strategy execution and metrics tests
+- `test_visualization.py` (500+ lines) - Chart generation tests
+- `test_result_saver.py` (500+ lines) - Result persistence tests
+- `test_integration.py` (450+ lines) - End-to-end workflow tests
+- `__init__.py` - Test suite metadata
+- `README.md` - Test execution guide
+
+**Coverage:**
+- 150+ test cases
+- Expected coverage: 93%+
+- Execution time: ~30-40 seconds
+- Mock-based testing for Spark/Delta operations
+
+**Test Types:**
+- Unit tests (80%) - Individual functions with mocked dependencies
+- Integration tests (15%) - End-to-end workflows
+- Smoke tests (5%) - Databricks deployment validation
+
+**Status:** Complete test suite (Completed 2025-11-24)
+
+**Documentation:** See `production/runners/tests/README.md` for test execution guide
+
+**Note:** For production system phase tracking and status, see `../../MASTER_SYSTEM_PLAN.md` (Phase 2 section)
+
+---
+
+### Legacy Directory Scripts
+
+#### Legacy/trading_prediction_analysis.py
+
+**Purpose:** Original monolithic script (historical)
+
+**What it is:**
+- Pre-dates the split into notebooks 00-10
+- Contains full analysis workflow in single Python file
+- Uses old data paths and cost assumptions
+
+**Status:** ARCHIVED - Use numbered notebooks (00-10) instead
+
+**Why it exists:**
+- Historical reference for original implementation
+- Shows evolution of approach
+- May contain experimental code
+
+**Should you use it?** NO - Use the numbered notebooks which are:
+- Better organized
+- More maintainable
+- Properly documented
+- Actively maintained
+
+---
+
+## 📓 Legacy & Archived Notebooks
+
+### 01_synthetic_predictions_v6.ipynb
+
+**Purpose:** Synthetic prediction generation (6th iteration)
+
+**Key Fix:** Fixed day alignment (100% accuracy = 0% MAPE)
+
+**Status:** SUPERSEDED by v8
+
+**Why superseded:**
+- v8 fixes log-normal centering for accurate MAPE targeting
+- v8 stores actual future_date to avoid calendar misalignment
+- v8 is more accurate and reliable
+
+**Should you use it?** NO - Use `01_synthetic_predictions_v8.ipynb`
+
+---
+
+### 01_synthetic_predictions_v7.ipynb
+
+**Purpose:** Synthetic prediction generation (7th iteration)
+
+**Key Feature:** Saves predictions to volume for download
+
+**Status:** SUPERSEDED by v8
+
+**Why superseded:**
+- v8 improves MAPE calibration
+- v8 is the current production version
+
+**Should you use it?** NO - Use `01_synthetic_predictions_v8.ipynb`
+
+---
+
+### 01_synthetic_predictions_calibrated.ipynb
+
+**Purpose:** Early attempt at calibrated synthetic predictions
+
+**Status:** SUPERSEDED by v8
+
+**Why superseded:**
+- Early version, less sophisticated calibration
+- MAPE targeting not as accurate
+- v8 incorporates all improvements
+
+**Should you use it?** NO - Use `01_synthetic_predictions_v8.ipynb`
+
+---
+
+### 01_synthetic_predictions.ipynb (Original)
+
+**Purpose:** First version of synthetic prediction generation
+
+**Status:** SUPERSEDED by v8
+
+**Should you use it?** NO - Use `01_synthetic_predictions_v8.ipynb`
+
+---
+
+### trading_prediction_analysis_original_11_11_25.ipynb
+
+**Purpose:** Original monolithic notebook from November 11, 2025
+
+**What it is:**
+- 4.4MB notebook containing full analysis workflow in single file
+- Predates the split into notebooks 00-10
+- Historical snapshot of workflow before modularization
+
+**Status:** ARCHIVED - Use numbered notebooks (00-10) instead
+
+**Why it exists:**
+- Original implementation before workflow was modularized
+- Useful for understanding evolution of approach
+- May contain experimental code or earlier strategy versions
+- Historical reference
+
+**Key Differences from Current Workflow:**
+- Single monolithic file vs modular notebooks
+- May use different cost assumptions
+- May have different strategy implementations
+- Older prediction generation methods
+
+**Should you use it?** NO - Use the numbered notebooks (00-10) which are:
+- Better organized
+- More maintainable
+- Properly documented
+- Actively maintained
+- Easier to debug
+
+---
+
+### Legacy/trading_prediction_analysis_multi_model.ipynb
+
+**Purpose:** Multi-model version of trading analysis (historical)
+
+**Status:** ARCHIVED
+
+**What it is:**
+- Intermediate version that added multi-model support
+- Predates current workflow organization
+
+**Should you use it?** NO - Use current numbered notebooks
+
+---
+
+### diagnostics/diagnostic_16_optuna_with_params.ipynb
+
+**Purpose:** Notebook version of diagnostic_16
+
+**Status:** Active but prefer Python script
+
+**Note:** Use `run_diagnostic_16.py` for automated execution instead of manual notebook
+
+---
+
+### diagnostics/diagnostic_17_paradox_analysis.ipynb
+
+**Purpose:** Notebook version of diagnostic_17
+
+**Status:** Active but prefer Python script
+
+**Note:** Use `run_diagnostic_17.py` for automated execution
+
+---
+
+### diagnostics/diagnostic_100_algorithm_validation.ipynb
+
+**Purpose:** Notebook version of diagnostic_100
+
+**Status:** Active but prefer Python script
+
+**Note:** Use `run_diagnostic_100.py` for automated execution
+
+**Duplicate Note:** Also exists as `diagnostic_100_algorithm_validation.py` (extracted content)
+
+---
+
+## 🔍 Missing Files (Identified Gaps)
+
+### 11_synthetic_accuracy_comparison.ipynb
+
+**Status:** NEEDED but not yet created
+
+**Purpose:** Validate monotonicity of performance across accuracy levels
+
+**What it should do:**
+1. Run all strategies on all accuracy levels (60%, 70%, 80%, 90%, 100%)
+2. Compare earnings across accuracy levels in single dashboard
+3. Generate monotonicity validation plots
+4. Verify: 60% < 70% < 80% < 90% < 100% (in earnings)
+5. Identify any accuracy levels that violate expectations
+
+**Why it's critical:**
+- Failure to show improvement with accuracy indicates fundamental issues
+- Could reveal data leakage, strategy bugs, or cost structure problems
+- Essential validation step before trusting workflow results
+
+**Expected output:**
+- Monotonicity validation charts
+- Accuracy-performance curves
+- Statistical significance of accuracy improvements
+- Console warnings if monotonicity fails
+
+**Recommendation:** CREATE URGENTLY - This is a critical validation gap
+
+---
+
+### Shared Config Module
+
+**Status:** PARTIALLY EXISTS (multiple config files, not consolidated)
+
+**Current State:**
+- `00_setup_and_config.ipynb` - Notebook-based config
+- `production/config.py` - Production config (different costs)
+- `diagnostics/cost_config_small_farmer.py` - Alternative config
+
+**Problem:**
+- Different configs across different components
+- Hard to maintain consistency
+- Cost assumptions differ (0.025% vs 0.005% storage)
+
+**What's needed:**
+- Single source of truth: `shared_config.py`
+- Import by all notebooks and scripts
+- Versioned configurations (baseline, production, small_farmer)
+
+**Recommendation:** Consolidate configs into single module
+
+---
+
+### Automated Workflow Orchestration
+
+**Status:** NOT YET CREATED
+
+**What's needed:**
+- `run_full_workflow.py` - Master automation script
+- Runs all notebooks in sequence with proper dependencies
+- Handles errors and retries
+- Downloads all results
+- Generates consolidated report
+
+**Why it's needed:**
+- Current workflow requires manual execution of 10+ notebooks
+- Error-prone (easy to skip steps)
+- Time-consuming (40+ hours of human time)
+- Not reproducible
+
+**See:** AUTOMATION MIGRATION PLAN section in this document for details
+
+---
+
+## 📋 Documentation Files Inventory
+
+### DATABRICKS_ACCESS_NOTES.md
+
+**Purpose:** How to access Databricks and avoid common mistakes
+
+**Key Topics:**
+- Notebooks run IN Databricks (not locally)
+- Volume vs ephemeral directory risk
+- Using databricks CLI to download files
+- Pandas version compatibility issues
+
+**Status:** Active - Essential reference
+
+---
+
+### EXECUTIVE_SUMMARY.md
+
+**Purpose:** High-level summary of findings (historical)
+
+**Status:** May be outdated - created early in project
+
+**Recommendation:** Review and update or archive
+
+---
+
+### RESULTS_ANALYSIS_CRITICAL_FINDINGS.md
+
+**Purpose:** Key findings from analysis (historical)
+
+**Status:** May be outdated - created during initial analysis
+
+**Recommendation:** Review and update or archive
+
+---
+
+### WORKFLOW_ANALYSIS_AND_FINDINGS.md
+
+**Purpose:** Workflow documentation and findings (historical)
+
+**Status:** May be outdated - created during workflow development
+
+**Note:** Much of this content has been incorporated into FILE_INVENTORY.md
+
+**Recommendation:** Archive or consolidate into FILE_INVENTORY.md
+
+---
+
+### CONSOLIDATED_REVIEW_PROPOSAL.md
+
+**Purpose:** Unknown (need to inspect)
+
+**Status:** Unknown
+
+**Recommendation:** Review and document or remove
+
+---
+
+### FILE_INVENTORY.md (This File)
+
+**Purpose:** Complete inventory of all notebooks, scripts, and outputs for integration with diagnostics
+
+**Status:** CURRENT (updated 2025-11-24)
 
 **Last Updated:** 2025-11-24
 **Owner:** Claude Code

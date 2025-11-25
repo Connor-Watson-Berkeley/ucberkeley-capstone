@@ -24,6 +24,13 @@
 - Before research work → Read [research_agent/README.md](research_agent/README.md) for navigation
 - Before any task → Check [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) if unsure about doc organization
 
+**Trading Agent - Read X Before Doing Y:**
+- **After context auto-compacting** → Re-read [trading_agent/MASTER_SYSTEM_PLAN.md](trading_agent/MASTER_SYSTEM_PLAN.md) to refresh system context
+- **After context auto-compacting** → Re-read [trading_agent/commodity_prediction_analysis/FILE_INVENTORY.md](trading_agent/commodity_prediction_analysis/FILE_INVENTORY.md) for notebook/script details
+- **After context auto-compacting** → Re-read [trading_agent/whatsapp/LLM_IMPLEMENTATION_PLAN.md](trading_agent/whatsapp/LLM_IMPLEMENTATION_PLAN.md) for LLM implementation status
+- **When user explicitly says "check the docs"** → Read relevant documentation
+- **Otherwise** → Use information already in conversation context/summary
+
 **Forecast Agent - Read X Before Doing Y:**
 - **Before training models** → Read [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md) sections on "Train-Once Pattern" and "Model Persistence"
 - **Before running Spark backfills** → Read [forecast_agent/docs/SPARK_BACKFILL_GUIDE.md](forecast_agent/docs/SPARK_BACKFILL_GUIDE.md) for cluster sizing and cost optimization
