@@ -5,8 +5,11 @@ Extracted from diagnostics/all_strategies_pct.py (improved version)
 **Complete Strategy Suite:**
 - 4 Baseline strategies
 - 5 Prediction strategies
-- 2 Perfect foresight strategies (for theoretical maximum calculation)
+- 1 Advanced optimization strategy (Rolling Horizon MPC)
 - Technical indicators
+
+Note: Theoretical maximum calculation done via LP optimizer
+(see strategies/lp_optimizer.py, not a Strategy class)
 """
 
 from .base import Strategy
@@ -23,10 +26,7 @@ from .prediction import (
     ConsensusStrategy,
     RiskAdjustedStrategy
 )
-from .perfect_foresight import (
-    PerfectForesightStrategy,
-    GreedyPerfectForesightStrategy
-)
+from .rolling_horizon_mpc import RollingHorizonMPC
 from .indicators import (
     calculate_rsi,
     calculate_adx,
@@ -50,9 +50,8 @@ __all__ = [
     'ConsensusStrategy',
     'RiskAdjustedStrategy',
 
-    # Perfect foresight strategies (2) - for theoretical max
-    'PerfectForesightStrategy',
-    'GreedyPerfectForesightStrategy',
+    # Advanced strategies (limited foresight optimization)
+    'RollingHorizonMPC',
 
     # Indicators
     'calculate_rsi',
