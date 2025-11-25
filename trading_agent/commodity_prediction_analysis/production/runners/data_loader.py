@@ -69,7 +69,8 @@ class DataLoader:
             raise ValueError("Spark session required to load prices from Delta table")
 
         prices = self.spark.table(data_paths['prices_prepared']).toPandas()
-        prices['date'] = pd.to_datetime(prices['date'])
+        # CRITICAL: Normalize dates to midnight for dictionary lookup compatibility
+        prices['date'] = pd.to_datetime(prices['date']).dt.normalize()
 
         return prices
 

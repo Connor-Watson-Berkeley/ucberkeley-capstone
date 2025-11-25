@@ -4,11 +4,24 @@
 **Status:** 🚨 **CRITICAL BUGS IDENTIFIED**
 **Recommendation:** **DO NOT USE RESULTS - FIX BUGS FIRST**
 
+**⚠️ PRIORITY CORRECTION (2025-11-24):**
+While these algorithm issues are real and critical, **Phase 2 (Automation) must be completed FIRST** before these issues can be meaningfully debugged. The correct sequence is:
+1. **Complete Phase 2 (Automation)** → enables correct backtesting functionality
+2. **Use automated backtesting** → optimize parameters with reliable infrastructure
+3. **Optimized parameters** → produce salient testing results
+4. **THEN debug algorithms** (this document) with reliable test data
+
+**Rationale:** Cannot effectively isolate and fix algorithm bugs without automated testing infrastructure that enables proper parameter optimization. Debugging with unoptimized parameters produces results that are not salient enough to identify root causes.
+
+See [MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md) for complete context and phase dependencies.
+
 ---
 
 ## Executive Summary (TL;DR)
 
 Your suspicion was **100% correct**. Even at **90% prediction accuracy**, the trading strategies **underperform baselines by 2-3%**. This definitively indicates logic bugs or implementation issues in the trading algorithms.
+
+**However, these bugs should be debugged AFTER completing Phase 2 (Automation)** to ensure testing infrastructure is reliable and parameters are properly optimized.
 
 ### The Critical Test: 90% Accuracy Results
 
@@ -331,18 +344,25 @@ After implementing fixes, verify:
 
 ## Recommendations
 
-### Immediate Actions:
+**⚠️ UPDATED PRIORITY (2025-11-24):**
 
-1. ✅ **DO NOT trust current results** - Known bugs invalidate findings
-2. ⚠️ **Debug strategy implementations** - Focus on prediction usage
-3. 🔍 **Add extensive logging** - Trace prediction flow
-4. 🧪 **Run 99% accuracy test** - Quick validation after fixes
+### Immediate Actions (CORRECTED SEQUENCE):
 
-### After Fixes:
+1. ✅ **Complete Phase 2 (Automation) FIRST** - Build orchestrator and automated testing infrastructure
+2. ✅ **Use automation for parameter optimization** - Run grid searches with reliable backtesting
+3. ✅ **Generate salient test results** - Optimized parameters produce meaningful comparison data
+4. ⚠️ **THEN debug strategy implementations** - Focus on prediction usage with reliable test data
+5. 🔍 **Add extensive logging** - Trace prediction flow
+6. 🧪 **Run 99% accuracy test** - Quick validation after fixes
 
-1. Re-run notebooks 01-05 with fixes
-2. Run notebook 11 (synthetic accuracy comparison)
-3. Verify all items in Validation Plan above
+### After Phase 2 Complete:
+
+1. Run automated workflow with multiple parameter combinations
+2. Identify optimal parameter sets
+3. Re-run notebooks 01-05 with optimized parameters
+4. Debug strategy implementations using salient test results
+5. Run notebook 11 (synthetic accuracy comparison)
+6. Verify all items in Validation Plan above
 
 ### Long-term:
 
@@ -350,6 +370,8 @@ After implementing fixes, verify:
 2. Create validation suite
 3. Document expected behaviors
 4. Add automated checks for monotonicity
+
+**Key Change:** Focus on Phase 2 (Automation) first to create reliable testing infrastructure. Algorithm debugging is more effective with automated backtesting and optimized parameters.
 
 ---
 
@@ -378,25 +400,34 @@ After implementing fixes, verify:
 
 **Your intuition was spot-on.** The 90% accuracy scenario **should** show obvious predictive advantage, and it doesn't. This confirms there are bugs in how predictions are used by the trading strategies.
 
+**⚠️ CORRECTED PRIORITY (2025-11-24):**
+However, these algorithm bugs should be debugged **AFTER** completing Phase 2 (Automation). The correct sequence is:
+1. Complete automation infrastructure (Phase 2)
+2. Optimize parameters using automated backtesting
+3. Generate salient test results
+4. THEN debug algorithms with reliable data
+
 The good news:
 - ✅ Workflow is well-designed
 - ✅ Bugs are identifiable
 - ✅ Fixes are straightforward
+- ✅ **Priority corrected:** Focus on automation first
 
 The bad news:
 - ❌ Current results are invalid
-- ❌ Need debugging before decision-making
+- ❌ Need automation before debugging
 - ❌ Will require re-running all analyses
 
-**Next Step:** Focus on Step 1 of the debugging roadmap (add logging) to trace exactly where predictions are lost or misused.
+**Next Step:** Complete Phase 2 (Automation) - build orchestrator to enable automated workflow with parameter optimization. THEN focus on debugging roadmap with reliable test infrastructure.
 
 ---
 
 **Confidence in Diagnosis:** 95%
-**Estimated Fix Time:** 2-4 hours of debugging
-**Priority:** CRITICAL - Core functionality is broken
+**Estimated Fix Time:** 2-4 hours of debugging (AFTER Phase 2 complete)
+**Priority:** HIGH - But blocked by Phase 2 (Automation) which is CRITICAL
 
 ---
 
 **Document created:** 2025-11-22
-**Status:** CRITICAL ISSUES IDENTIFIED - REQUIRES IMMEDIATE ATTENTION
+**Last Updated:** 2025-11-24 (Priority correction)
+**Status:** CRITICAL ISSUES IDENTIFIED - BUT DEFER UNTIL PHASE 2 COMPLETE
