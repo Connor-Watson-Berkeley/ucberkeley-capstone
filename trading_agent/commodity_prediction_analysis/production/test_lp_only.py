@@ -36,8 +36,8 @@ def test_lp_optimizer():
     print(f"  Commodity: {commodity}")
     print(f"  Model: {model_version}")
 
-    # Load prices
-    market_df = spark.table("commodity.bronze.market").filter(
+    # Load prices from unified_data (continuous daily coverage, forward-filled)
+    market_df = spark.table("commodity.silver.unified_data").filter(
         f"lower(commodity) = '{commodity}'"
     ).toPandas()
 
