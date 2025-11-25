@@ -86,13 +86,9 @@ def test_production_backtest(commodity='coffee', model_version='synthetic_acc90'
         return False
 
     # Initialize ImmediateSaleStrategy (simplest baseline)
+    # Use default parameters from strategy class (like original notebook 05)
     try:
-        strategy = ImmediateSaleStrategy(
-            min_batch_size=config.get('min_batch_size', 50),
-            sale_frequency_days=config.get('sale_frequency_days', 7),
-            storage_cost_pct_per_day=config['storage_cost_pct_per_day'],
-            transaction_cost_pct=config['transaction_cost_pct']
-        )
+        strategy = ImmediateSaleStrategy()
         print(f"\n✓ Initialized ImmediateSaleStrategy")
         print(f"  - Min batch size: {strategy.min_batch_size} bags")
         print(f"  - Sale frequency: {strategy.sale_frequency_days} days")
