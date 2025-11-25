@@ -47,14 +47,14 @@ from analysis.optimization.optimizer import ParameterOptimizer
 from analysis.optimization.search_space import SearchSpaceRegistry
 
 
-def load_data(spark, commodity, model_version='arima_v1'):
+def load_data(spark, commodity, model_version='synthetic_acc90'):
     """
     Load price data and predictions.
 
     Args:
         spark: SparkSession
         commodity: str (e.g., 'coffee')
-        model_version: str (default: 'arima_v1')
+        model_version: str (default: 'synthetic_acc90')
 
     Returns:
         Tuple of (prices_df, prediction_matrices)
@@ -346,8 +346,8 @@ def main():
     parser.add_argument(
         '--model',
         type=str,
-        default='arima_v1',
-        help='Model version (default: arima_v1)'
+        default='synthetic_acc90',
+        help='Model version (default: synthetic_acc90)'
     )
     parser.add_argument(
         '--objective',
