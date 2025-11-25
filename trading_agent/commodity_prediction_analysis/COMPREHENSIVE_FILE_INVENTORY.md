@@ -776,12 +776,61 @@ python analyze_validation.py
 ### What Diagnostics Provide
 
 From `diagnostics/`:
-- **diagnostic_16**: Grid search optimized parameters
-  - Output: `diagnostic_16_best_params.pkl`
-- **diagnostic_17**: Trade-by-trade analysis with optimized params
-  - Uses: `diagnostic_16_best_params.pkl`
-- **diagnostic_100**: Algorithm validation with perfect foresight
+
+**Core Strategy Implementation:**
 - **all_strategies_pct.py**: 9 strategies with percentage-based framework
+  - 3 baseline strategies (Equal Batches, Price Threshold, Moving Average)
+  - 5 prediction strategies (Expected Value, Consensus, Risk-Adjusted, Price Threshold Pred, Moving Average Pred)
+  - **UPDATED (2025-11-24)**: Redesigned matched pair strategies with 3-tier confidence system
+  - HIGH confidence (CV < 5%): Override baseline completely
+  - MEDIUM confidence (5-15%): Blend baseline + predictions
+  - LOW confidence (CV > 15%): Follow baseline exactly
+
+**Validation Diagnostics:**
+- **diagnostic_100** (`run_diagnostic_100.py`): Algorithm validation with perfect foresight
+  - Tests with 100% accurate predictions (synthetic_acc100)
+  - **UPDATED (2025-11-24)**: Lowered threshold from 10% to 6% for realistic validation
+  - Output: `diagnostic_100_summary.csv`, `diagnostic_100_results.pkl`
+
+- **diagnostic_16** (`run_diagnostic_16.py`): Grid search optimized parameters
+  - Optuna-based Bayesian optimization
+  - Output: `diagnostic_16_best_params.pkl`, `diagnostic_16_summary.csv`
+
+- **diagnostic_17** (`run_diagnostic_17.py`): Trade-by-trade analysis with optimized params
+  - Uses: `diagnostic_16_best_params.pkl`
+  - Output: Trade-level analysis
+
+**New Accuracy Analysis Diagnostics (2025-11-24):**
+- **check_prediction_models.py**: Explores available prediction models
+  - Lists all model_version values in predictions table
+  - Calculates CV (Coefficient of Variation) for each model
+  - Helps identify confidence tiers for each accuracy level
+  - Output: Console only (quick exploration)
+
+- **run_diagnostic_accuracy_threshold.py**: **⭐ COMPREHENSIVE ACCURACY ANALYSIS**
+  - **Purpose**: Determine minimum prediction accuracy for statistically significant benefit
+  - Tests ALL accuracy levels: 60%, 70%, 80%, 90%, 100%
+  - Compares ALL prediction strategies vs ALL baseline strategies
+  - **Statistical Methods** (from 06_statistical_validation.ipynb):
+    - Paired t-test on daily portfolio value changes
+    - Cohen's d effect size calculation
+    - Bootstrap confidence intervals (1000 iterations, 95% CI)
+    - Statistical significance at p < 0.05
+  - **Key Questions Answered**:
+    1. What accuracy level provides statistically significant benefit?
+    2. How does improvement scale with accuracy?
+    3. At what accuracy does each strategy become viable?
+    4. What is the confidence-based performance degradation curve?
+  - **Outputs**:
+    - `diagnostic_accuracy_threshold_results.pkl` - Full results with daily state tracking
+    - `diagnostic_accuracy_threshold_summary.csv` - Earnings and improvements by accuracy
+    - `diagnostic_accuracy_threshold_stats.csv` - Statistical test results (t-stat, p-value, Cohen's d, CIs)
+
+- **run_diagnostic_confidence_test.py**: Tests 3-tier confidence system
+  - Validates that HIGH/MEDIUM/LOW confidence tiers work as expected
+  - Tests with multiple accuracy levels (100%, 90%, 80%, 70%)
+  - Verifies graceful degradation as accuracy decreases
+  - Output: `diagnostic_confidence_test_results.pkl`, `diagnostic_confidence_test_summary.csv`
 
 ### Integration Plan (Future Work)
 
