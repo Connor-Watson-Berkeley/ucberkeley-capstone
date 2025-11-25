@@ -68,9 +68,9 @@ def load_data(spark, commodity, model_version):
     print("LOADING DATA")
     print("=" * 80)
 
-    # Load price data
+    # Load price data from unified_data (continuous daily coverage, forward-filled)
     print(f"\n1. Loading price data for {commodity}...")
-    market_df = spark.table("commodity.bronze.market").filter(
+    market_df = spark.table("commodity.silver.unified_data").filter(
         f"lower(commodity) = '{commodity}'"
     ).toPandas()
 
