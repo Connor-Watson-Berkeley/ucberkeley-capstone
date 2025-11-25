@@ -247,14 +247,23 @@ WhatsApp Delivery (Dual Path)
 
 ## EXECUTION PHASES
 
-### PHASE 1: Fix Algorithm Bugs & Validate (CRITICAL PATH)
-**Status:** 🔧 IN PROGRESS (User working separately)
+### PHASE 1: Fix Algorithm Bugs & Validate
+**Status:** 📋 DEFERRED (Waiting for Phase 2)
 **Objective:** Get prediction strategies working correctly
+**Dependencies:** Phase 2 (Automation) must complete first
+
+**⚠️ PRIORITY CORRECTION (2025-11-24):**
+This phase was previously considered the critical blocker. However, the correct sequence is:
+1. Complete Phase 2 (Automation) → enables correct backtesting
+2. Use automated backtesting → optimize parameters
+3. Optimized parameters → salient testing results
+4. THEN debug algorithms with reliable test infrastructure
 
 **Critical Issue:**
 - At 90% synthetic accuracy, prediction strategies LOSE to baselines by 2-3%
 - Expected: Should WIN by 10-20%
 - Indicates: Logic bug in prediction usage OR cost issues OR data leakage
+- **Cannot effectively debug without automated testing infrastructure from Phase 2**
 
 **Tasks:**
 1. ✅ Run diagnostic_100 (100% accuracy test)
@@ -288,19 +297,31 @@ WhatsApp Delivery (Dual Path)
 - [ ] 90% synthetic predictions beat baselines by 10-20%
 - [ ] Matched pairs show clear divergence
 
-**Blocks:** Everything else (cannot trust results until algorithms validated)
+**Blocks:** Daily Operations, Phase 3 (Consolidation), Phase 4 (WhatsApp LLM)
+
+**Blocked By:** Phase 2 (Automation) - need automated testing infrastructure before effective debugging
 
 **Reference:** `trading_agent/commodity_prediction_analysis/EXECUTIVE_SUMMARY.md` (bug documentation)
 
 ---
 
-### PHASE 2: Automate Workflow (ENABLE RAPID ITERATION)
+### PHASE 2: Automate Workflow (CRITICAL BLOCKER 🔴)
 **Status:** 🔧 IN PROGRESS (Runners complete, orchestration next)
 **Objective:** One-command execution of entire backtesting workflow
+**Priority:** **MAIN BLOCKER - COMPLETE THIS FIRST**
 
-**Dependencies:** None (can run in parallel with Phase 1)
+**Dependencies:** None
 
-**Key Principle:** Strategies are modular (`production/strategies/`), so automation can import from this module. When bugs are fixed in the strategy file, automated scripts automatically use the corrected version. No need to wait.
+**⚠️ PRIORITY CORRECTION (2025-11-24):**
+This phase is the **MAIN BLOCKER** for the entire project. The correct sequence is:
+1. **Complete Phase 2 (Automation)** → enables correct backtesting functionality
+2. **Use automated backtesting** → optimize parameters with reliable infrastructure
+3. **Optimized parameters** → produce salient testing results
+4. **THEN Phase 1** → debug algorithms with reliable test data
+
+**Rationale:** Cannot meaningfully debug algorithms (Phase 1) without automated testing infrastructure that enables proper parameter optimization. Algorithm bugs cannot be effectively isolated and fixed without salient test results from optimized parameters.
+
+**Key Principle:** Strategies are modular (`production/strategies/`), so automation can import from this module. When bugs are fixed in the strategy file, automated scripts automatically use the corrected version.
 
 **Completed 2025-11-24:**
 - ✓ Strategy extraction from diagnostics to production
@@ -345,39 +366,16 @@ WhatsApp Delivery (Dual Path)
 
 #### 2.2 Convert Notebooks to Scripts
 
-**Pattern (proven with diagnostics):**
-```python
-# Template for each notebook:
-def run_analysis(commodity, model_version, config):
-    """
-    Run [notebook] logic
-
-    Inputs: Delta tables, config
-    Outputs: Delta tables, /Volumes/ files
-    Returns: status, summary
-    """
-    # Load data
-    # Run analysis
-    # Save outputs
-    # Log summary
-    return status_code, summary_dict
-
-# Databricks job script:
-if __name__ == "__main__":
-    config = load_config()
-    status, summary = run_analysis(config)
-    print(json.dumps(summary))
-    sys.exit(status)
-```
+**See [docs/AUTOMATION_GUIDE.md](docs/AUTOMATION_GUIDE.md) for complete automation patterns and examples.**
 
 **Notebooks to Convert:**
 1. 01_synthetic_predictions → `run_01_synthetic_predictions.py`
-2. 05_strategy_comparison → `run_05_strategy_comparison.py`
+2. 05_strategy_comparison → `run_05_strategy_comparison.py` ✅ COMPLETE (via production/runners/)
 3. 06_statistical_validation → `run_06_statistical_validation.py`
 4. 07_feature_importance → `run_07_feature_importance.py`
 5. 08_sensitivity_analysis → `run_08_sensitivity_analysis.py`
 6. 09_strategy_results_summary → `run_09_results_summary.py`
-7. 10_paired_scenario_analysis → `run_10_paired_analysis.py` (fix path errors first)
+7. 10_paired_scenario_analysis → `run_10_paired_analysis.py`
 
 **Note:** 00, 03, 04 are imported by others, don't need separate scripts
 
@@ -427,47 +425,17 @@ if __name__ == "__main__":
 
 **Result:** Single command runs entire workflow soup-to-nuts
 
-**Pattern (proven with diagnostics):**
-```python
-# Template for each notebook:
-def run_analysis(commodity, model_version, config):
-    """
-    Run [notebook] logic
+**Success Criteria:**
+- [ ] Single command runs entire workflow
+- [ ] All outputs saved to /Volumes/
+- [ ] Summary report generated automatically
+- [ ] Can run overnight without manual intervention
+- [ ] Enables rapid parameter optimization
+- [ ] **Unblocks Phase 1:** Provides reliable testing infrastructure for algorithm debugging
 
-    Inputs: Delta tables, config
-    Outputs: Delta tables, /Volumes/ files
-    Returns: status, summary
-    """
-    # Load data
-    # Run analysis
-    # Save outputs
-    # Log summary
-    return status_code, summary_dict
+**Blocks:** Phase 1 (Algorithm Debugging) - cannot effectively debug without this infrastructure
 
-# Databricks job script:
-if __name__ == "__main__":
-    config = load_config()
-    status, summary = run_analysis(config)
-    print(json.dumps(summary))
-    sys.exit(status)
-```
-
-**Notebooks to Convert:**
-1. 01_synthetic_predictions → `run_01_synthetic_predictions.py`
-2. 05_strategy_comparison → `run_05_strategy_comparison.py`
-3. 06_statistical_validation → `run_06_statistical_validation.py`
-4. 07_feature_importance → `run_07_feature_importance.py`
-5. 08_sensitivity_analysis → `run_08_sensitivity_analysis.py`
-6. 09_strategy_results_summary → `run_09_results_summary.py`
-7. 10_paired_scenario_analysis → `run_10_paired_analysis.py` (fix path errors first)
-
-**Note:** 00, 03, 04 are imported by others, don't need separate scripts
-
-**Order of conversion:**
-1. Start with 01 (predictions) - foundation
-2. Then 05 (comparison) - core workflow
-3. Then 06-10 (analysis) - can run in parallel
-4. Finally 00 (config) - integrate into orchestrator
+**For automation patterns, job submission, and monitoring:** See [docs/AUTOMATION_GUIDE.md](docs/AUTOMATION_GUIDE.md)
 
 **Tasks:**
 - [ ] Audit current notebooks (identify essential vs obsolete)
@@ -484,16 +452,12 @@ if __name__ == "__main__":
 - ✓ Created comprehensive test suite (6 files, 2,500+ lines, 150+ test cases)
 - ✓ Documented with README.md and test execution guides
 
-**Success Criteria:**
-- [ ] Single command runs entire workflow
-- [ ] All outputs saved to /Volumes/
-- [ ] Summary report generated automatically
-- [ ] Can run overnight without manual intervention
-
 **Benefits:**
 - Rapid iteration during debugging (just re-run)
 - Consistent results (no manual errors)
 - Scalable (can run multiple commodities/models in parallel)
+- **Enables Phase 1:** Provides reliable testing infrastructure for algorithm debugging
+- **Enables parameter optimization:** Can rapidly test different parameter combinations
 
 **Reference:** `trading_agent/commodity_prediction_analysis/diagnostics/DATABRICKS_OUTPUT_ACCESS_GUIDE.md` (Section 5)
 
@@ -831,16 +795,22 @@ CREATE TABLE commodity.whatsapp_llm.active_strategy (
 
 ## PARALLEL WORKSTREAM COORDINATION
 
-**Phase 1 (Algorithm Fixes) - MUST COMPLETE FIRST**
-- Diagnostic 100 → Debug → Fix → Validate
-- Blocks everything else
+**⚠️ CORRECTED PRIORITY ORDER (2025-11-24):**
 
-**Phase 2 (Automation) - START AFTER PHASE 1**
-- Can begin converting notebooks while waiting for final validation
-- But don't run automated workflow until strategies confirmed working
-- Parallel work: Convert notebooks 01, 05, 06-10 simultaneously
+**Phase 2 (Automation) - MAIN BLOCKER - COMPLETE FIRST** 🔴
+- Must finish automation to enable correct backtesting functionality
+- Correct backtesting enables proper parameter optimization
+- Optimized parameters produce salient testing results
+- THEN can meaningfully debug algorithms
+- **Rationale:** Need reliable automated testing infrastructure before algorithm debugging can be effective
 
-**Phase 3 (Consolidation) - PARALLEL WITH PHASE 2**
+**Phase 1 (Algorithm Debugging) - AFTER PHASE 2** ⚠️
+- Cannot meaningfully debug without automated backtesting
+- Cannot validate fixes without reliable parameter optimization
+- Diagnostic 100 → Debug → Fix → Validate (AFTER automation complete)
+- **Previous assumption was incorrect:** This is NOT the critical path blocker
+
+**Phase 3 (Consolidation) - AFTER PHASES 1 & 2**
 - Can design output structure while automation is being built
 - Can implement consolidation scripts in parallel
 - But don't generate final reports until strategies confirmed working
@@ -1124,22 +1094,26 @@ def get_strategy_comparison_context(commodity):
 
 ### Phase Progress
 
-| Phase | Status | Progress | Blockers |
-|-------|--------|----------|----------|
-| Phase 1: Algorithm Fix | 🔧 IN PROGRESS | 30% | Debugging prediction logic |
-| Phase 2: Automation | 🔧 IN PROGRESS | 45% | Strategies + Runners complete, Orchestration next |
-| Phase 3: Consolidation | 📋 PLANNED | 0% | Blocked by Phase 1 + Phase 2 |
-| Phase 4: WhatsApp LLM | 📋 PLANNED | 0% | Blocked by Phase 3 |
+**⚠️ CORRECTED PRIORITIES (2025-11-24):**
+
+| Phase | Status | Progress | Priority | Blockers |
+|-------|--------|----------|----------|----------|
+| **Phase 2: Automation** | 🔧 IN PROGRESS | 45% | **🔴 MAIN BLOCKER** | Orchestration next |
+| Phase 1: Algorithm Debug | 📋 DEFERRED | 30% | After Phase 2 | Needs automated testing infrastructure |
+| Phase 3: Consolidation | 📋 PLANNED | 0% | After Phase 1+2 | Blocked by Phase 1 + Phase 2 |
+| Phase 4: WhatsApp LLM | 📋 PLANNED | 0% | After Phase 3 | Blocked by Phase 3 |
+
+**Rationale for Priority Change:**
+- Previously assumed Phase 1 (Algorithm Debugging) was the main blocker
+- **Corrected understanding:** Phase 2 (Automation) must complete first to enable proper parameter optimization
+- Algorithm debugging requires reliable automated testing infrastructure with optimized parameters
+- Without automation, testing results are not salient enough for effective debugging
 
 ### Next Immediate Actions
 
-**Phase 1 (User working separately):**
-1. Run diagnostic_100
-2. Debug strategy implementations in `all_strategies_pct.py`
-3. Validate fixes with monotonicity test
-4. Confirm 90% synthetic beats baselines
+**⚠️ CORRECTED PRIORITY ORDER (2025-11-24):**
 
-**Phase 2 (IN PROGRESS - 2025-11-24):**
+**🔴 PRIORITY 1: Phase 2 (Automation) - MAIN BLOCKER**
 1. ✓ Extract strategies to production/strategies/ (COMPLETE)
    - Import strategies from `production.strategies`
    - When Phase 1 fixes bugs, automation automatically uses fixed version
@@ -1147,12 +1121,28 @@ def get_strategy_comparison_context(commodity):
    - Built production/runners/ to replicate notebook 05
    - 5 modular components: data_loader, strategy_runner, visualization, result_saver, multi_commodity_runner
    - Comprehensive test suite: 6 test files, 2,500+ lines, 150+ test cases
-3. 📋 Convert notebook 01 to script (synthetic predictions) - NEXT
-4. 📋 Build orchestrator (chain 01 → 05)
-5. 📋 Test end-to-end
-6. 📋 Expand to remaining notebooks (06-10)
+3. 🔧 **Test production code on Databricks** - **NEXT IMMEDIATE ACTION**
+   - ✓ Fixed date normalization bug in data_loader.py (CRITICAL for prediction lookups)
+   - Update Databricks repo: `databricks repos update 1904868124027877 --branch main`
+   - Run test_backtest.py via Jobs API
+   - Verify against original notebook 05 results
+   - Fix any broken implementations
+   - **See:** docs/AUTOMATION_GUIDE.md and docs/DATABRICKS_GUIDE.md for patterns
+4. 📋 Convert notebook 01 to script (synthetic predictions)
+5. 📋 Build orchestrator (chain 01 → 05 → 06-10)
+6. 📋 Test end-to-end automated workflow
+7. 📋 Run parameter optimization using automated backtesting
+8. 📋 Expand to remaining notebooks (06-10)
 
-**Phase 3 (After Phase 2):**
+**⚠️ Phase 1 (Algorithm Debugging) - AFTER PHASE 2:**
+1. Wait for Phase 2 completion (automated backtesting infrastructure)
+2. Use automated workflow to run parameter optimization
+3. Run diagnostic_100 with optimized parameters
+4. Debug strategy implementations in `all_strategies_pct.py` using salient test results
+5. Validate fixes with monotonicity test
+6. Confirm 90% synthetic beats baselines
+
+**Phase 3 (After Phase 1+2):**
 1. Design final output structure
 2. Build consolidation scripts
 3. Generate 4-tier reports
@@ -1165,19 +1155,26 @@ def get_strategy_comparison_context(commodity):
 3. Deploy to Lambda
 4. Test in production
 
+**Key Change:** Focus on completing Phase 2 (Automation) FIRST, as this is the critical blocker for effective algorithm debugging.
+
 ---
 
 ## DEPENDENCIES & CRITICAL PATH
 
+**⚠️ CORRECTED CRITICAL PATH (2025-11-24):**
+
 ```
-Phase 1 (Algorithm Fix) ─────────────┐
-    ↓                                │
-Daily Operations                     │
-(needs validated strategies)         │
-                                     │
-Phase 2 (Automation) ────────────────┤ (PARALLEL - strategies are modular)
-    ↓                                │
-Phase 3 (Consolidation) ─────────────┘
+Phase 2 (Automation) ─────────────── MAIN BLOCKER 🔴
+    ↓
+Parameter Optimization (using automated backtesting)
+    ↓
+Phase 1 (Algorithm Debug) ─────────── DEPENDS ON PHASE 2
+(needs reliable testing infrastructure)
+    ↓
+Daily Operations
+(needs validated strategies)
+    ↓
+Phase 3 (Consolidation)
 (needs automated workflow + working algorithms)
     ↓
 Phase 4 (WhatsApp LLM)
@@ -1185,20 +1182,32 @@ Phase 4 (WhatsApp LLM)
 ```
 
 **Critical Path:**
-1. Phase 1 + Phase 2 **can run in parallel** (strategies are modular)
-   - Phase 1 fixes bugs in `all_strategies_pct.py`
-   - Phase 2 builds automation that imports from `all_strategies_pct.py`
-   - When bugs fixed, automation automatically uses corrected version
-2. Phase 3 requires BOTH Phase 1 and Phase 2 complete
+1. **Phase 2 MUST complete first** (MAIN BLOCKER)
+   - Build orchestrator to automate entire workflow
+   - Enable correct backtesting functionality
+   - Allow rapid parameter optimization
+   - Create reliable testing infrastructure
+
+2. **Phase 1 AFTER Phase 2** (CORRECTED)
+   - Cannot meaningfully debug without automated backtesting
+   - Need optimized parameters to produce salient test results
+   - Automation enables rapid iteration on bug fixes
+   - **Previous assumption was incorrect:** Algorithm debugging depends on automation
+
+3. Phase 3 requires BOTH Phase 1 and Phase 2 complete
    - Need working algorithms (Phase 1)
    - Need automated workflow (Phase 2)
-3. Phase 4 requires Phase 3 complete (need consolidated data in tables)
+
+4. Phase 4 requires Phase 3 complete (need consolidated data in tables)
 
 **Why This Order:**
-- Phase 1 & 2 parallel: Modularity allows independent work, fixes propagate automatically
+- **Phase 2 first:** Without automated backtesting, cannot reliably test algorithm fixes or optimize parameters
+- **Phase 1 after Phase 2:** Debugging requires reliable testing infrastructure with optimized parameters
 - Phase 3 waits for both: Can't consolidate broken results, can't consolidate without automation
 - Phase 4 waits for Phase 3: Can't deploy LLM until data is structured (no tables to query)
 - Daily Operations waits for Phase 1: Can't deploy broken strategies to production
+
+**Key Insight:** The sequence is Automation → Parameter Optimization → Algorithm Debugging, NOT Algorithm Debugging → Automation
 
 ---
 
@@ -1366,6 +1375,18 @@ Phase 4 (WhatsApp LLM)
 - FastAPI + EC2 migration path (Section 4.5) - productionization option
 - Lambda vs FastAPI comparison (Key Design Decision #6)
 - Rationale: Lambda appropriate for demo, document alternatives for production scaling
+
+**2025-11-24 (Update 3):** CRITICAL PRIORITY CORRECTION
+- **Corrected understanding:** Phase 2 (Automation) is the MAIN BLOCKER, not Phase 1 (Algorithm Debugging)
+- **Rationale:** Automation must complete first to enable correct backtesting functionality → parameter optimization → salient testing results → THEN effective algorithm debugging
+- **Updated sections:**
+  - Phase 1 status changed to "DEFERRED (Waiting for Phase 2)"
+  - Phase 2 priority elevated to "CRITICAL BLOCKER 🔴"
+  - Phase Progress table updated with corrected priorities
+  - Next Immediate Actions reordered to prioritize Phase 2
+  - Dependencies & Critical Path rewritten to show Phase 2 → Phase 1 sequence
+  - Parallel Workstream Coordination corrected
+- **Key insight:** Cannot meaningfully debug algorithms without automated testing infrastructure that enables proper parameter optimization
 
 ---
 

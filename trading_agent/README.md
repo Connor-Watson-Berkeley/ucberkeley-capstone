@@ -1,9 +1,15 @@
 # Trading Agent
 
-**Status**: ✅ Production Ready
+**Status**: 🔧 Phase 2 (Automation) - 45% Complete
 **Last Updated**: 2025-11-24
 
-> **📋 For complete system overview, execution phases, and master plan:** See [MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md)
+> **📋 Complete System Plan:** [MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md) - Priorities, phases, dependencies, status
+>
+> **🤖 Automation Guide:** [docs/AUTOMATION_GUIDE.md](docs/AUTOMATION_GUIDE.md) - Job submission, orchestration, monitoring
+>
+> **📊 Technical Reference:** [commodity_prediction_analysis/TECHNICAL_REFERENCE.md](commodity_prediction_analysis/TECHNICAL_REFERENCE.md) - File inventory
+
+---
 
 ## Overview
 
@@ -299,17 +305,21 @@ All prices and financial metrics automatically calculated in all available curre
 
 ---
 
-## Status Summary
+## Current Status
 
-✅ **Production Ready**
-- Real-time daily recommendations
-- Multi-model backtesting
-- WhatsApp/messaging integration
-- Multi-currency support
-- Complete Databricks integration
+**Main Blocker:** Phase 2 (Automation) - 45% complete
 
-⏸️ **Pending**
-- Interactive dashboard
-- Production deployment automation
+**For complete status, priorities, and phase dependencies:** See [MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md)
 
-Last Updated: 2025-11-10 (Session 3)
+**What's Working:**
+- ✅ Real-time daily recommendations
+- ✅ Multi-model backtesting
+- ✅ WhatsApp/messaging integration
+- ✅ Multi-currency support
+- ✅ Complete Databricks integration
+
+**What's In Progress:**
+- 🔧 Phase 2: Automation (orchestrator for automated workflow)
+- 📋 Phase 1: Algorithm debugging (deferred until Phase 2 complete)
+
+Last Updated: 2025-11-24
