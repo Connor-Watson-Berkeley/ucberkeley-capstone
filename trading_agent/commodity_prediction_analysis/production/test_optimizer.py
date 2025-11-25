@@ -84,9 +84,9 @@ if __name__ == '__main__':
         print(f"\n{'='*80}")
         print("✅ OPTIMIZER TEST COMPLETE")
         print(f"{'='*80}\n")
-        sys.exit(0)
+        # Note: Don't use sys.exit() in Databricks jobs - just let script complete
     else:
         print(f"\n{'='*80}")
         print("❌ OPTIMIZER TEST FAILED")
         print(f"{'='*80}\n")
-        sys.exit(1)
+        raise RuntimeError("Optimizer test failed")
