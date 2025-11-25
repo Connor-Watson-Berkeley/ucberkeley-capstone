@@ -118,16 +118,25 @@ def get_data_paths(commodity, model_version):
 
     Args:
         commodity: Commodity name (e.g., 'coffee')
-        model_version: Model version (e.g., 'arima_v1')
+        model_version: Model version (e.g., 'arima_v1', 'synthetic_acc90')
 
     Returns:
         dict: Dictionary of data paths
+            - prices_prepared: Delta table with prepared prices
+            - prediction_matrices: Synthetic prediction matrix file
+            - prediction_matrices_real: Real prediction matrix file
+            - results_detailed: Output file for detailed results
+            - charts_dir: Directory for output charts
     """
     return {
-        'prediction_matrices_real': f"{VOLUME_PATH}/prediction_matrices_{commodity}_{model_version}_real.pkl",
-        'prediction_matrices_synthetic': f"{VOLUME_PATH}/prediction_matrices_{commodity}_{model_version}_synthetic_{{accuracy}}.pkl",
-        'results_detailed': f"{VOLUME_PATH}/results_detailed_{commodity}_{model_version}.pkl",
-        'charts_dir': f"{VOLUME_PATH}/charts/{commodity}/{model_version}/"
+        # Input paths
+        'prices_prepared': f"{OUTPUT_SCHEMA}.prices_{commodity.lower()}",
+        'prediction_matrices': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_synthetic_acc90.pkl",
+        'prediction_matrices_real': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_{model_version}_real.pkl",
+
+        # Output paths
+        'results_detailed': f"{VOLUME_PATH}/results_detailed_{commodity.lower()}_{model_version}.pkl",
+        'charts_dir': f"{VOLUME_PATH}/charts/{commodity.lower()}/{model_version}/"
     }
 
 
