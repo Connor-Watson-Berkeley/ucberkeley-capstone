@@ -50,7 +50,10 @@ from analysis.optimization.search_space import SearchSpaceRegistry
 
 def load_data(spark, commodity, model_version='synthetic_acc90'):
     """
-    Load price data and predictions.
+    Load price data and predictions with matched date ranges.
+
+    CRITICAL: Ensures price dates and prediction dates align for valid backtesting.
+    Both theoretical max and actual strategies must use the same time period.
 
     Args:
         spark: SparkSession
@@ -64,6 +67,9 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
     print("LOADING DATA")
     print("=" * 80)
 
+    # Define date range for analysis
+    START_DATE = '2022-01-01'
+
     # Load price data
     print(f"\n1. Loading price data for {commodity}...")
     market_df = spark.table("commodity.bronze.market").filter(
@@ -73,19 +79,21 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
     market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
     market_df['price'] = market_df['close']
     prices = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
-    prices = prices[prices['date'] >= '2022-01-01'].reset_index(drop=True)
 
-    print(f"   ✓ Loaded {len(prices)} price points from {prices['date'].min()} to {prices['date'].max()}")
+    # Filter to analysis period
+    prices = prices[prices['date'] >= START_DATE].reset_index(drop=True)
+    print(f"   ✓ Loaded {len(prices)} price points")
+    print(f"   Date range: {prices['date'].min()} to {prices['date'].max()}")
 
-    # Load predictions
+    # Load predictions - FILTER TO SAME DATE RANGE
     print(f"\n2. Loading predictions for {commodity} - {model_version}...")
     pred_table = f"commodity.trading_agent.predictions_{commodity}"
     pred_df = spark.table(pred_table).filter(
-        f"model_version = '{model_version}'"
+        f"model_version = '{model_version}' AND timestamp >= '{START_DATE}'"
     ).toPandas()
 
     # Convert to matrix format
-    pred_df['timestamp'] = pd.to_datetime(pred_df['timestamp'])
+    pred_df['timestamp'] = pd.to_datetime(pred_df['timestamp']).dt.normalize()
     prediction_matrices = {}
 
     for timestamp in pred_df['timestamp'].unique():
@@ -100,6 +108,32 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
         prediction_matrices[date_key] = matrix
 
     print(f"   ✓ Loaded {len(prediction_matrices)} prediction matrices")
+    print(f"   Date range: {min(prediction_matrices.keys())} to {max(prediction_matrices.keys())}")
+
+    # Validate date overlap
+    price_dates = set(prices['date'])
+    pred_dates = set(prediction_matrices.keys())
+    overlap = price_dates & pred_dates
+
+    print(f"\n3. Validating date alignment...")
+    print(f"   Price dates: {len(price_dates)}")
+    print(f"   Prediction dates: {len(pred_dates)}")
+    print(f"   Overlap: {len(overlap)} dates ({len(overlap)/len(price_dates)*100:.1f}% coverage)")
+
+    # Warnings for mismatches
+    pred_only = pred_dates - price_dates
+    price_only = price_dates - pred_dates
+
+    if len(pred_only) > 0:
+        print(f"   ⚠️  Warning: {len(pred_only)} prediction dates without prices (will be ignored)")
+
+    if len(price_only) > 10:
+        print(f"   ⚠️  Warning: {len(price_only)} price dates without predictions")
+        print(f"      Strategies will use no-prediction logic on these dates")
+
+    if len(overlap) < len(price_dates) * 0.8:
+        print(f"   ❌ ERROR: Less than 80% prediction coverage!")
+        raise ValueError(f"Insufficient prediction coverage: {len(overlap)}/{len(price_dates)}")
 
     return prices, prediction_matrices
 
