@@ -5,6 +5,7 @@ Extracted from diagnostics/all_strategies_pct.py (improved version)
 **Complete Strategy Suite:**
 - 4 Baseline strategies
 - 5 Prediction strategies
+- 2 Perfect foresight strategies (for theoretical maximum calculation)
 - Technical indicators
 """
 
@@ -21,6 +22,10 @@ from .prediction import (
     ExpectedValueStrategy,
     ConsensusStrategy,
     RiskAdjustedStrategy
+)
+from .perfect_foresight import (
+    PerfectForesightStrategy,
+    GreedyPerfectForesightStrategy
 )
 from .indicators import (
     calculate_rsi,
@@ -44,6 +49,10 @@ __all__ = [
     'ExpectedValueStrategy',
     'ConsensusStrategy',
     'RiskAdjustedStrategy',
+
+    # Perfect foresight strategies (2) - for theoretical max
+    'PerfectForesightStrategy',
+    'GreedyPerfectForesightStrategy',
 
     # Indicators
     'calculate_rsi',

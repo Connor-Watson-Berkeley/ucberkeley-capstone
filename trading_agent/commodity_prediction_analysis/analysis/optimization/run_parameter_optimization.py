@@ -42,7 +42,8 @@ except NameError:
 
 # Production imports
 from production.config import COMMODITY_CONFIGS, VOLUME_PATH
-from analysis.theoretical_max import TheoreticalMaxCalculator
+# NOTE: TheoreticalMaxCalculator removed - using PerfectForesightStrategy instead
+# (old DP calculator didn't account for harvest cycles, produced wrong baselines)
 from analysis.optimization.optimizer import ParameterOptimizer
 from analysis.optimization.search_space import SearchSpaceRegistry
 
@@ -105,33 +106,55 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
 
 def calculate_theoretical_max(prices, predictions, config):
     """
-    Calculate theoretical maximum earnings.
+    Calculate theoretical maximum earnings using production backtest.
+
+    CRITICAL FIX (2025-11-25):
+    Previous implementation used DP with instant 50-ton inventory, which didn't
+    account for harvest cycles and produced artificially low baselines (314% efficiency!).
+
+    New implementation uses production BacktestEngine with PerfectForesightStrategy
+    to ensure apples-to-apples comparison:
+    - Same harvest dynamics (gradual accumulation over harvest windows)
+    - Same multiple cycles (if data spans multiple years)
+    - Same age constraints (365-day max holding)
+    - Same cost structure (storage + transaction)
 
     Args:
         prices: DataFrame with price data
         predictions: Dict of prediction matrices
-        config: Commodity config dict
+        config: Commodity config dict (full config with harvest_volume, harvest_windows, etc.)
 
     Returns:
         float: Theoretical maximum net earnings
     """
     print("\n3. Calculating theoretical maximum...")
+    print("   Using PerfectForesightStrategy with production BacktestEngine")
+    print("   (ensures harvest dynamics match actual strategies)")
 
-    calculator = TheoreticalMaxCalculator(
-        prices_df=prices,
-        predictions=predictions,
-        config={
-            'storage_cost_pct_per_day': config['storage_cost_pct_per_day'],
-            'transaction_cost_pct': config['transaction_cost_pct']
-        }
+    # Import production components
+    from production.core.backtest_engine import BacktestEngine
+    from production.strategies.perfect_foresight import PerfectForesightStrategy
+
+    # Create perfect foresight strategy
+    perfect_strategy = PerfectForesightStrategy(
+        storage_cost_pct_per_day=config['storage_cost_pct_per_day'],
+        transaction_cost_pct=config['transaction_cost_pct'],
+        lookback_days=14,  # Match prediction horizon
+        sell_threshold_pct=0.98  # Sell if ≥98% of best future value (near-optimal)
     )
 
-    optimal_result = calculator.calculate_optimal_policy(
-        initial_inventory=config['harvest_volume']
-    )
+    # Run backtest with production engine (same engine used for actual strategies)
+    engine = BacktestEngine(prices, predictions, config)
+    result = engine.run_backtest(perfect_strategy)
 
-    theoretical_max = optimal_result['total_net_earnings']
+    theoretical_max = result['net_earnings']
+    num_trades = len(result['trades'])
+    num_cycles = len(set(s['harvest_year'] for s in result['daily_state'] if s['harvest_year'] > 0))
+
     print(f"   ✓ Theoretical maximum: ${theoretical_max:,.2f}")
+    print(f"   Harvest cycles: {num_cycles}")
+    print(f"   Trades: {num_trades}")
+    print(f"   Avg per cycle: ${theoretical_max / num_cycles:,.2f}" if num_cycles > 0 else "")
 
     return theoretical_max
 
