@@ -1989,8 +1989,6 @@ available = registry.get_available_strategies()
 - Model: synthetic_acc90 (known good data)
 - Single strategy for speed
 
-**Status:** ✅ Tested and working (2025-11-25)
-
 ---
 
 #### production/test_forecast_loader.py
@@ -2007,12 +2005,6 @@ available = registry.get_available_strategies()
 **Sparsity Requirements:**
 - Minimum 730 days (2 years) of forecast date range
 - Minimum 90% coverage within that range
-
-**Results (coffee):**
-- 3 well-populated forecasts: naive (2878 days), xgboost (2293 days), sarimax_auto_weather (912 days)
-- 10 sparse/short forecasts skipped
-
-**Status:** ✅ Tested and working (2025-11-25)
 
 ---
 
@@ -2033,17 +2025,9 @@ available = registry.get_available_strategies()
 - Trials: 5 (minimal for testing)
 - Strategy: consensus (single strategy for speed)
 
-**Test Results (2025-11-25):**
-- ✅ Data loading: 965 price points, 951 prediction matrices
-- ✅ Theoretical max: $226,508.33
-- ✅ Optuna optimization: 5 trials completed successfully
-- ✅ Best efficiency: 314.8% (consensus strategy)
-- ✅ Files saved to Volume successfully
-- 🔧 Fixed: Removed sys.exit() calls (Databricks treats any sys.exit as error)
-
 **Based on:** `analysis/optimization/run_parameter_optimization.py`
 
-**Status:** ✅ Tested and working (2025-11-25)
+**Note:** Don't use sys.exit() in Databricks jobs - let scripts complete naturally or raise exceptions
 
 ---
 
