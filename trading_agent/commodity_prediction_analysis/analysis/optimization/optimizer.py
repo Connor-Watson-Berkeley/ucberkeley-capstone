@@ -14,10 +14,20 @@ Migrated from diagnostics/run_diagnostic_16.py with modern enhancements.
 
 import pandas as pd
 import numpy as np
+import sys
 from typing import Dict, List, Optional, Callable, Tuple
 from datetime import datetime
-import optuna
-from optuna.samplers import TPESampler
+
+# Auto-install optuna if needed (for Databricks)
+try:
+    import optuna
+    from optuna.samplers import TPESampler
+except ImportError:
+    print("Installing optuna...")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "optuna", "--quiet"])
+    import optuna
+    from optuna.samplers import TPESampler
 
 from .search_space import SearchSpaceRegistry
 
