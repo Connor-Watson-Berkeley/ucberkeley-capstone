@@ -48,13 +48,13 @@ def test_optimizer(commodity='coffee', model_version='synthetic_acc90'):
     print(f"  Model: {model_version}")
     print(f"  Strategy: consensus (single strategy for testing)")
     print(f"  Trials: 5 (quick test)")
-    print(f"  Objective: efficiency")
+    print(f"  Objective: earnings (maximize absolute net earnings)")
 
     try:
         results = run_optimization(
             commodity=commodity,
             model_version=model_version,
-            objective='efficiency',
+            objective='earnings',  # Simpler than efficiency, equivalent result
             n_trials=5,  # Minimal for testing
             strategy_filter=['consensus'],  # Single strategy for speed
             spark=spark
