@@ -7,9 +7,7 @@ import pandas as pd
 from typing import Dict, List, Tuple, Any
 
 # Import production infrastructure
-import sys
-sys.path.append('..')
-from strategies import (
+from production.strategies import (
     ImmediateSaleStrategy,
     EqualBatchStrategy,
     PriceThresholdStrategy,
@@ -20,7 +18,7 @@ from strategies import (
     ConsensusStrategy,
     RiskAdjustedStrategy
 )
-from core.backtest_engine import BacktestEngine, calculate_metrics
+from production.core.backtest_engine import BacktestEngine, calculate_metrics
 
 
 class StrategyRunner:
