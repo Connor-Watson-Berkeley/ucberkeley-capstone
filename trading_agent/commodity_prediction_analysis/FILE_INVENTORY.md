@@ -49,6 +49,23 @@ commodity_prediction_analysis/
 │   ├── RESULTS_ANALYSIS_CRITICAL_FINDINGS.md
 │   └── WORKFLOW_ANALYSIS_AND_FINDINGS.md
 │
+├── analysis/ ⭐ NEW
+│   ├── run_strategy_analysis.py (Efficiency analysis orchestrator)
+│   ├── theoretical_max/ (DP-based upper bound calculation)
+│   ├── efficiency/ (Efficiency ratio analysis)
+│   └── optimization/ (Optuna parameter optimization)
+│       ├── run_parameter_optimization.py
+│       ├── optimizer.py
+│       └── search_space.py
+│
+├── production/
+│   ├── config.py (Production configuration)
+│   ├── core/ (Backtest engine & tests)
+│   ├── strategies/ (All 9 trading strategies)
+│   ├── runners/ (Modular execution)
+│   ├── scripts/ (Production workflow scripts)
+│   └── test_*.py (Databricks test scripts)
+│
 └── diagnostics/
     └── [See diagnostics/MASTER_DIAGNOSTIC_PLAN.md]
 ```
@@ -1493,6 +1510,324 @@ from cost_config_small_farmer import COMMODITY_CONFIGS
 ```
 
 **Status:** Experimental - Alternative cost assumptions
+
+---
+
+### Analysis Directory Scripts
+
+Modern analysis infrastructure separate from old diagnostics approach.
+
+**Purpose:** Efficiency-aware strategy analysis using theoretical maximum benchmarking
+**vs Diagnostics:** Diagnostics uses paired t-tests; Analysis uses efficiency ratio (Actual/Theoretical Max)
+
+**Documentation:** See [analysis/README.md](analysis/README.md) and [analysis/optimization/README.md](analysis/optimization/README.md)
+
+---
+
+#### analysis/run_strategy_analysis.py
+
+**Purpose:** Orchestrator for comprehensive strategy analysis with theoretical maximum benchmark
+
+**Inputs:**
+- Delta table: `commodity.bronze.market` (price data)
+- Pickle: prediction matrices from production
+- Unity table: `commodity.trading_agent.results_{commodity}_{model}` (actual strategy results)
+
+**Outputs:**
+- CSV: `{VOLUME}/analysis/theoretical_max_decisions_{commodity}_{model}.csv`
+- CSV: `{VOLUME}/analysis/efficiency_analysis_{commodity}_{model}.csv`
+- Pickle: `{VOLUME}/analysis/analysis_summary_{commodity}_{model}.pkl`
+
+**What it does:**
+1. Loads price data and predictions
+2. Calculates theoretical maximum earnings using DP
+3. Loads actual strategy results from backtest
+4. Calculates efficiency ratios (Actual / Theoretical Max)
+5. Generates decision-by-decision comparisons
+6. Produces summary reports and visualizations
+
+**Usage:**
+```bash
+# Analyze single commodity-model combination
+python analysis/run_strategy_analysis.py --commodity coffee --model arima_v1
+
+# Compare all strategies
+python analysis/run_strategy_analysis.py --commodity coffee --compare-all
+
+# Custom results location
+python analysis/run_strategy_analysis.py --commodity coffee --model arima_v1 \
+    --results-table commodity.trading_agent.results_coffee_arima_v1
+```
+
+**Key Features:**
+- NEW analysis approach (efficiency-based, not paired t-tests)
+- Perfect foresight benchmark
+- Identifies where money is left on table
+- Decision quality analysis
+
+**Status:** Production-ready - Modern analysis framework
+
+---
+
+#### analysis/theoretical_max/calculator.py
+
+**Purpose:** Calculate theoretical maximum performance with perfect 14-day foresight using dynamic programming
+
+**Algorithm:**
+- Dynamic programming with discretized inventory levels
+- Works backwards from last day to first day
+- At each state (day, inventory), tries all possible sell amounts
+- Considers storage costs, transaction costs, and future value
+- Returns optimal policy and maximum achievable earnings
+
+**Key Parameters:**
+- `inventory_granularity`: float (default 2.5) - Step size for inventory discretization
+- Inventory levels: 0 to 50 tons in steps
+
+**DP Table Structure:**
+```python
+dp[day][inventory_idx] = max net earnings from day onwards
+decisions[day][inventory_idx] = amount_to_sell
+```
+
+**Base Case:** Last day forces liquidation of all remaining inventory
+
+**Returns:**
+```python
+{
+    'optimal_decisions': List[Dict],  # Day-by-day optimal actions
+    'total_net_earnings': float,      # Maximum achievable earnings
+    'total_revenue': float,           # Gross revenue
+    'total_transaction_costs': float, # Transaction costs
+    'total_storage_costs': float,     # Storage costs
+    'num_trades': int                 # Number of non-zero sales
+}
+```
+
+**Usage:**
+```python
+from analysis.theoretical_max import TheoreticalMaxCalculator
+
+calculator = TheoreticalMaxCalculator(
+    prices_df=prices,
+    predictions=pred_matrices,
+    config={'storage_cost_pct_per_day': 0.005, 'transaction_cost_pct': 0.01}
+)
+
+result = calculator.calculate_optimal_policy(initial_inventory=50.0)
+```
+
+**Status:** Production-ready - Upper bound benchmark
+
+---
+
+#### analysis/efficiency/analyzer.py
+
+**Purpose:** Compare actual strategy performance to theoretical maximum to measure efficiency
+
+**Key Questions:**
+1. How efficiently are we exploiting available predictions?
+2. Where are we leaving money on the table?
+3. Which strategies get closest to optimal?
+
+**Metrics:**
+- **Efficiency Ratio:** (Actual / Theoretical Max) × 100%
+- **Opportunity Gap:** Theoretical Max - Actual (dollars left on table)
+- **Decision Quality:** Day-by-day comparison
+
+**Efficiency Categories:**
+- EXCELLENT: ≥80% efficiency
+- GOOD: 70-80% efficiency
+- MODERATE: 60-70% efficiency
+- POOR: <60% efficiency
+
+**Key Methods:**
+- `calculate_efficiency_ratios()` - Compute efficiency for all strategies
+- `compare_decisions()` - Day-by-day comparison of actual vs optimal
+- `get_summary_report()` - Summary statistics and insights
+- `get_interpretation()` - Human-readable recommendations
+- `identify_critical_decisions()` - Find most impactful suboptimal decisions
+
+**Usage:**
+```python
+from analysis.efficiency import EfficiencyAnalyzer
+
+analyzer = EfficiencyAnalyzer(theoretical_max_result)
+efficiency_df = analyzer.calculate_efficiency_ratios(actual_results)
+summary = analyzer.get_summary_report(efficiency_df)
+interpretation = analyzer.get_interpretation(summary)
+```
+
+**Status:** Production-ready - Efficiency analysis framework
+
+---
+
+#### analysis/optimization/run_parameter_optimization.py
+
+**Purpose:** Modern parameter optimization orchestrator using Optuna
+
+**Migrated from:** diagnostics/run_diagnostic_16.py with enhancements:
+- Efficiency-aware optimization (optimize for efficiency ratio, not just earnings)
+- Integration with theoretical maximum benchmark
+- Uses production config and data loaders
+- Multi-objective optimization support
+- Clean, modular architecture
+
+**Inputs:**
+- Delta table: `commodity.bronze.market` (prices)
+- Unity table: `commodity.trading_agent.predictions_{commodity}` (predictions)
+- model_version to optimize
+
+**Outputs:**
+- Pickle: `{VOLUME}/optimization/optimized_params_{commodity}_{model}_{objective}.pkl`
+- Pickle: `{VOLUME}/optimization/optimization_results_{commodity}_{model}_{objective}.pkl`
+- CSV: `{VOLUME}/optimization/optimization_summary_{commodity}_{model}_{objective}.csv`
+
+**Optimization Objectives:**
+1. **'earnings'**: Maximize raw net earnings (original approach)
+2. **'efficiency'**: Maximize efficiency ratio (Actual / Theoretical Max)
+3. **'multi'**: Multi-objective optimization (Pareto frontier of earnings + Sharpe ratio)
+
+**Usage:**
+```bash
+# Optimize all strategies for efficiency
+python analysis/optimization/run_parameter_optimization.py \
+    --commodity coffee --objective efficiency --trials 200
+
+# Optimize single strategy for raw earnings
+python analysis/optimization/run_parameter_optimization.py \
+    --commodity coffee --strategy consensus --objective earnings --trials 200
+
+# Multi-objective optimization
+python analysis/optimization/run_parameter_optimization.py \
+    --commodity coffee --objective multi --trials 500
+```
+
+**Key Functions:**
+- `load_data()` - Load prices and predictions from tables
+- `calculate_theoretical_max()` - Calculate upper bound for efficiency objective
+- `get_strategy_classes()` - Import all 9 strategy classes
+- `run_optimization()` - Main workflow
+
+**Status:** Production-ready - Optuna-based optimization with efficiency awareness
+
+---
+
+#### analysis/optimization/optimizer.py
+
+**Purpose:** ParameterOptimizer class that runs Optuna trials
+
+**Key Features:**
+- Multiple optimization objectives (earnings, efficiency, multi-objective)
+- Integration with theoretical maximum benchmark
+- Uses production BacktestEngine for accuracy
+- Full logging and result tracking
+
+**Engine Options:**
+1. **Production BacktestEngine** (default, recommended):
+   - More accurate, harvest-aware
+   - Required for final optimization
+   - From `production.core.backtest_engine`
+
+2. **SimpleBacktestEngine** (optional):
+   - Faster for prototyping
+   - Simplified logic
+   - Included in optimizer.py
+
+**Key Methods:**
+- `optimize_strategy()` - Optimize single strategy
+- `optimize_all_strategies()` - Optimize all provided strategies
+- Returns: (best_params, best_value, study) tuple
+
+**Usage:**
+```python
+from analysis.optimization.optimizer import ParameterOptimizer
+
+optimizer = ParameterOptimizer(
+    prices_df=prices,
+    prediction_matrices=predictions,
+    config=config,  # Full commodity config
+    theoretical_max_earnings=theoretical_max,
+    use_production_engine=True  # Recommended
+)
+
+best_params, best_value, study = optimizer.optimize_strategy(
+    strategy_class=ConsensusStrategy,
+    strategy_name='consensus',
+    n_trials=200,
+    objective='efficiency'
+)
+```
+
+**Auto-Install:** Auto-installs Optuna if not available (for Databricks compatibility)
+
+**Status:** Production-ready - Core optimization engine
+
+---
+
+#### analysis/optimization/search_space.py
+
+**Purpose:** Parameter search space definitions for all 9 trading strategies
+
+**Extracted from:** diagnostics/run_diagnostic_16.py with clean, modular structure
+
+**Strategies Covered:**
+1. **immediate_sale**: 2 parameters (min_batch_size, sale_frequency_days)
+2. **equal_batch**: 2 parameters (batch_size, frequency_days)
+3. **price_threshold**: 10 parameters (threshold_pct, batch sizes, RSI/ADX thresholds, cooldown, max_days)
+4. **moving_average**: 11 parameters (ma_period, batch sizes, RSI/ADX thresholds, cooldown, max_days)
+5. **price_threshold_predictive**: Inherits price_threshold + 4 prediction params
+6. **moving_average_predictive**: Inherits moving_average + 4 prediction params
+7. **expected_value**: 12 parameters (net_benefit, CV thresholds, batch sizes, cooldown, baseline)
+8. **consensus**: 12 parameters (consensus thresholds, min_return, net_benefit, CV, batch sizes, eval_day, cooldown)
+9. **risk_adjusted**: 12 parameters (min_return, net_benefit, CV thresholds, ADX, batch sizes, eval_day, cooldown)
+
+**Total Parameters:** 70 parameters across 9 strategies
+
+**Prediction Parameters (strategies 5-9):**
+- `min_net_benefit_pct`: 0.3-1.0% (minimum benefit to act)
+- `high_confidence_cv`: 0.03-0.08 (CV threshold for high confidence)
+- `scenario_shift_aggressive`: 1-2 (shift for aggressive scenarios)
+- `scenario_shift_conservative`: 1-2 (shift for conservative scenarios)
+
+**Usage:**
+```python
+from analysis.optimization.search_space import SearchSpaceRegistry
+
+registry = SearchSpaceRegistry()
+params = registry.get_search_space(trial, 'consensus')
+available = registry.get_available_strategies()
+```
+
+**Status:** Production-ready - Centralized search space registry
+
+---
+
+#### analysis/README.md
+
+**Purpose:** Documentation for modern analysis framework
+
+**Content:**
+- Analysis approach overview
+- Theoretical maximum methodology
+- Efficiency ratio explanation
+- Usage examples
+
+**Status:** Documentation
+
+---
+
+#### analysis/optimization/README.md
+
+**Purpose:** Documentation for parameter optimization system
+
+**Content:**
+- Optuna optimization workflow
+- Objective function details
+- Search space design
+- Best practices
+
+**Status:** Documentation
 
 ---
 
