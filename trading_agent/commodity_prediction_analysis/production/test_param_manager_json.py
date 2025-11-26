@@ -6,10 +6,7 @@ Tests the new JSON loading functionality added for orchestration.
 import sys
 import os
 
-# Add paths
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+# On Databricks, repo is already in Python path - no need for manual path setup
 from production.parameter_manager import ParameterManager
 
 def test_parameter_manager():
