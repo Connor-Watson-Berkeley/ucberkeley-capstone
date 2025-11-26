@@ -40,18 +40,17 @@ COMMODITY_CONFIGS = {
 BASELINE_PARAMS = {
     'immediate_sale': {},  # No parameters
 
-    'equal_batches': {
-        'n_batches': 4,  # Sell in 4 equal batches
-        'days_between': 30  # 30 days between batches
+    'equal_batch': {
+        'batch_size': 0.25,  # Sell in 4 equal batches (25% each)
+        'frequency_days': 30  # 30 days between batches
     },
 
     'price_threshold': {
-        'ma_window': 30,  # 30-day moving average
-        'threshold_pct': 0.02  # Sell when price > MA + 2%
+        'threshold_pct': 0.05  # Sell when price > current + 5%
     },
 
     'moving_average': {
-        'ma_window': 30  # 30-day moving average for crossover
+        'ma_period': 30  # 30-day moving average for crossover
     }
 }
 
