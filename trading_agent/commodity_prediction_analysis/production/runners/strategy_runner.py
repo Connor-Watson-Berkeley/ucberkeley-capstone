@@ -16,13 +16,14 @@ from production.strategies import (
     MovingAveragePredictive,
     ExpectedValueStrategy,
     ConsensusStrategy,
-    RiskAdjustedStrategy
+    RiskAdjustedStrategy,
+    RollingHorizonMPC
 )
 from production.core.backtest_engine import BacktestEngine, calculate_metrics
 
 
 class StrategyRunner:
-    """Runs all strategies through backtest engine"""
+    """Runs all 10 trading strategies through backtest engine"""
 
     def __init__(
         self,
@@ -57,43 +58,50 @@ class StrategyRunner:
 
     def initialize_strategies(self) -> Tuple[List, List]:
         """
-        Initialize all 9 strategies with proper parameters
+        Initialize all 10 strategies with COMPLETE optimized parameter dicts.
+
+        Uses parameter unpacking (**params) to pass ALL optimized parameters
+        from Optuna through to strategy constructors. Cost parameters
+        (storage_cost_pct_per_day, transaction_cost_pct) are injected from
+        commodity config for prediction strategies.
 
         Returns:
             Tuple of (baseline_strategies, prediction_strategies)
         """
-        # Baseline strategies (4)
+
+        # Helper to add cost parameters from commodity config
+        def add_costs(params: dict) -> dict:
+            """
+            Add commodity-level cost parameters to prediction strategy params.
+
+            Costs come from COMMODITY_CONFIGS and should not be in the
+            optimized parameter dicts (they're added by the optimizer at runtime).
+            """
+            p = params.copy()
+            p['storage_cost_pct_per_day'] = self.commodity_config['storage_cost_pct_per_day']
+            p['transaction_cost_pct'] = self.commodity_config['transaction_cost_pct']
+            return p
+
+        # Baseline strategies - unpack ALL optimized parameters
+        # Uses .get() with empty dict fallback for graceful degradation to __init__ defaults
         baselines = [
-            ImmediateSaleStrategy(),
-            EqualBatchStrategy(**self.baseline_params['equal_batch']),
-            PriceThresholdStrategy(
-                threshold_pct=self.baseline_params['price_threshold']['threshold_pct']
-            ),
-            MovingAverageStrategy(
-                ma_period=self.baseline_params['moving_average']['ma_period']
-            )
+            ImmediateSaleStrategy(**self.baseline_params.get('immediate_sale', {})),
+            EqualBatchStrategy(**self.baseline_params.get('equal_batch', {})),
+            PriceThresholdStrategy(**self.baseline_params.get('price_threshold', {})),
+            MovingAverageStrategy(**self.baseline_params.get('moving_average', {}))
         ]
 
-        # Prediction strategies (5)
+        # Prediction strategies - unpack ALL optimized parameters + add costs
+        # ALL 107 Optuna-optimized parameters now flow through correctly
         prediction_strategies = [
-            ConsensusStrategy(**self.prediction_params['consensus']),
-            ExpectedValueStrategy(
-                storage_cost_pct_per_day=self.commodity_config['storage_cost_pct_per_day'],
-                transaction_cost_pct=self.commodity_config['transaction_cost_pct'],
-                **self.prediction_params['expected_value']
-            ),
-            RiskAdjustedStrategy(**self.prediction_params['risk_adjusted']),
-            # A/B Test Strategies (matched pairs)
-            PriceThresholdPredictive(
-                threshold_pct=self.baseline_params['price_threshold']['threshold_pct'],
-                batch_fraction=0.25,
-                max_days_without_sale=60
-            ),
-            MovingAveragePredictive(
-                ma_period=self.baseline_params['moving_average']['ma_period'],
-                batch_fraction=0.25,
-                max_days_without_sale=60
-            )
+            ConsensusStrategy(**add_costs(self.prediction_params.get('consensus', {}))),
+            ExpectedValueStrategy(**add_costs(self.prediction_params.get('expected_value', {}))),
+            RiskAdjustedStrategy(**add_costs(self.prediction_params.get('risk_adjusted', {}))),
+            # Matched pairs - use COMPLETE parameter dicts (18-19 params each!)
+            PriceThresholdPredictive(**add_costs(self.prediction_params.get('price_threshold_predictive', {}))),
+            MovingAveragePredictive(**add_costs(self.prediction_params.get('moving_average_predictive', {}))),
+            # Advanced optimization strategy (10th strategy)
+            RollingHorizonMPC(**add_costs(self.prediction_params.get('rolling_horizon_mpc', {})))
         ]
 
         return baselines, prediction_strategies

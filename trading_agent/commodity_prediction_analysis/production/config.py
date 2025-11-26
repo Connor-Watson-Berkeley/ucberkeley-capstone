@@ -88,6 +88,14 @@ PREDICTION_PARAMS = {
         'ma_period': 30,                    # Match MovingAverage baseline
         'storage_cost_pct_per_day': 0.005,
         'transaction_cost_pct': 0.01
+    },
+
+    'rolling_horizon_mpc': {
+        'storage_cost_pct_per_day': 0.005,
+        'transaction_cost_pct': 0.01,
+        'horizon_days': 14,                 # 14-day forecast horizon
+        'terminal_value_decay': 0.95,       # Discount factor for terminal inventory
+        'shadow_price_smoothing': None      # None = simple terminal value (or float 0.1-0.5 for smoothing)
     }
 }
 

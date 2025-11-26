@@ -4,7 +4,7 @@ Modular backtest execution system - replicates notebook 05 workflow
 
 **Architecture:**
 - DataLoader: Load prices and prediction matrices
-- StrategyRunner: Execute all 9 strategies
+- StrategyRunner: Execute all 10 strategies (4 baseline + 6 prediction)
 - VisualizationGenerator: Generate all 5 chart types
 - ResultSaver: Persist to Delta tables and pickle files
 - MultiCommodityRunner: Main orchestrator
