@@ -109,7 +109,46 @@ if pred_coverage < 0.90:
 
 **Result:** Now have 10 tunable strategies (4 baseline + 5 prediction + 1 advanced optimization)
 
-### 3. LP and Optuna Separation
+### 3. Strategy Runner Parameter Flow (FIXED 2025-11-25)
+
+**Problem:** Production `strategy_runner.py` was NOT using Optuna-optimized parameters
+- Cherry-picked only 1-2 parameters per strategy
+- Hardcoded values like `batch_fraction=0.25`
+- Missing parameters fell back to `__init__` defaults (unoptimized)
+
+**Root Cause:**
+```python
+# BEFORE (BROKEN):
+PriceThresholdStrategy(
+    threshold_pct=self.baseline_params['price_threshold']['threshold_pct']  # Only 1 of 10 params!
+)
+PriceThresholdPredictive(
+    threshold_pct=...,
+    batch_fraction=0.25,  # HARDCODED! Not from Optuna!
+    max_days_without_sale=60
+)
+```
+
+**Solution Implemented:**
+- Complete rewrite of `initialize_strategies()` method
+- Uses `**params` dict unpacking to pass ALL parameters
+- Helper function `add_costs()` injects commodity-level cost parameters
+- All 102 Optuna-optimized strategy decision parameters now flow through
+
+```python
+# AFTER (FIXED):
+PriceThresholdStrategy(**self.baseline_params.get('price_threshold', {}))  # All 10 params!
+PriceThresholdPredictive(**add_costs(self.prediction_params.get('price_threshold_predictive', {})))  # All 18 params!
+```
+
+**Files Changed:**
+- `production/runners/strategy_runner.py` - Fixed parameter unpacking
+- `production/config.py` - Added rolling_horizon_mpc defaults
+- `production/runners/__init__.py` - Updated documentation
+
+**Status:** ✅ COMPLETED - Commit f1d0739 pushed 2025-11-25
+
+### 4. LP and Optuna Separation
 
 **Previous (Wrong):** Combined theoretical max calculation with Optuna optimization
 
@@ -291,16 +330,20 @@ ValueError: Insufficient overlap: only 34.9% coverage (951/2726 days)
 
 ### Immediate (Before Next Test Run)
 
-1. **Fix coverage validation** in `run_parameter_optimization.py:149`
+1. ✅ **COMPLETED (2025-11-25):** Fixed strategy_runner parameter flow
+   - All 102 Optuna parameters now flow through correctly
+   - See "Strategy Runner Parameter Flow" section above
+
+2. **Fix coverage validation** in `run_parameter_optimization.py:149` ⚠️ BLOCKER
    - Remove percentage check against all prices
    - Apply forecast loader standard (90%+ of predictions + 730 day minimum)
 
-2. **Push test_lp_only.py fixes**
+3. **Push test_lp_only.py fixes**
    - Table name: `commodity.trading_agent.predictions_coffee`
    - Price column: `market_df['price'] = market_df['close']`
    - Timestamp column: `pd.to_datetime(pred_df['timestamp']).dt.normalize()`
 
-3. **Commit changes with detailed message**
+4. **Commit changes with detailed message**
    ```
    Fix theoretical max calculator and add RollingHorizonMPC
 

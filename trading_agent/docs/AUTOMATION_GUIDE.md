@@ -211,7 +211,7 @@ for run in jobs:
 - diagnostic_100: Algorithm validation
 
 **Production Modules:**
-- `production/strategies/` - All 9 strategies
+- `production/strategies/` - All 10 strategies (4 baseline + 6 prediction)
 - `production/runners/` - Workflow execution system
 - `production/core/` - Backtest engine
 

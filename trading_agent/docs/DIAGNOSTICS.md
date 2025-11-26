@@ -20,7 +20,7 @@
 
 | File | Purpose | Used By |
 |------|---------|---------|
-| `all_strategies_pct.py` | All 9 strategy implementations | diagnostic_16, diagnostic_17, diagnostic_100 |
+| `all_strategies_pct.py` | All 10 strategy implementations | diagnostic_16, diagnostic_17, diagnostic_100 |
 | `test_all_strategies.py` | Quick smoke tests | Manual testing |
 | `cost_config_small_farmer.py` | Cost configurations | Strategies |
 | `diagnostic_16_best_params.pkl` | **OUTPUT** from diagnostic_16 | **INPUT** to diagnostic_17 |
@@ -61,7 +61,7 @@ Previously scattered across multiple files - now consolidated here.
 
 **What it does:**
 1. Loads one accuracy level (default: synthetic_acc90)
-2. Loads all 9 strategies from `all_strategies_pct.py`
+2. Loads all 10 strategies from `all_strategies_pct.py`
 3. Runs 200 trials of Optuna optimization for EACH strategy
 4. Finds best parameters for each strategy
 5. **SAVES OUTPUT:** `diagnostic_16_best_params.pkl`
@@ -95,7 +95,7 @@ print(f'  Diagnostic 17 will automatically load these parameters')
 - `all_strategies_pct.py`
 - Price data from main notebooks
 
-**Runtime:** ~30-60 minutes (200 trials × 9 strategies)
+**Runtime:** ~30-60 minutes (200 trials × 10 strategies)
 
 ---
 
@@ -210,7 +210,7 @@ python diagnostic_100_algorithm_validation.py
 ┌──────────────────────────────────────────────────────────────┐
 │ 2. Run diagnostic_16_optuna_with_params.ipynb               │
 │    └─ With 90% accuracy predictions                         │
-│    └─ Optimizes parameters for all 9 strategies             │
+│    └─ Optimizes parameters for all 10 strategies            │
 │    └─ SAVES: diagnostic_16_best_params.pkl                  │
 └──────────────────────────────────────────────────────────────┘
                               ↓
@@ -434,7 +434,7 @@ These docs reference non-existent diagnostics or may be outdated:
 
 - [ ] **90% accuracy (diagnostic_16+17):** Predictions beat baseline by >$30k
 - [ ] **Monotonicity (notebooks 05+11):** 60% < 70% < 80% < 90% < 100%
-- [ ] **Parameter optimization (diagnostic_16):** All 9 strategies optimize successfully
+- [ ] **Parameter optimization (diagnostic_16):** All 10 strategies optimize successfully
 
 ### Nice to Have (Analysis)
 

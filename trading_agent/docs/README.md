@@ -26,7 +26,7 @@ Comprehensive guide to the multi-model backtesting framework:
 
 Complete guide to optimizing trading strategy parameters via grid search:
 - **Grid search framework**: Test 100s-1000s of parameter combinations automatically
-- **Parameter grids**: Defined ranges for all 9 trading strategies
+- **Parameter grids**: Defined ranges for all 10 trading strategies
 - **Matched pair enforcement**: Ensures baseline/predictive pairs share same parameters
 - **Two-stage optimization**: Coarse search → fine-grained refinement
 - **Results analysis**: Interpreting optimal values, sensitivity analysis, validation
