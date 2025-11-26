@@ -52,7 +52,7 @@ class StrategyRunner:
         self.engine = BacktestEngine(
             prices=prices,
             prediction_matrices=prediction_matrices,
-            commodity_config=commodity_config
+            producer_config=commodity_config  # BacktestEngine expects 'producer_config' parameter name
         )
 
     def initialize_strategies(self) -> Tuple[List, List]:
