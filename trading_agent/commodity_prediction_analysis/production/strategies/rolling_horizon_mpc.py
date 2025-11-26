@@ -101,17 +101,25 @@ class RollingHorizonMPC(Strategy):
         harvest_schedule = np.zeros(self.horizon_days)
 
         # Determine forecast window
-        window_end = min(day + self.horizon_days, len(predictions))
-        window_len = window_end - day
+        # predictions is ALREADY the matrix for current day (n_runs × n_horizons)
+        # NOT indexed by day number, so we use indices 0 to available_horizon
+        if len(predictions.shape) == 2:
+            # predictions is (n_runs, n_horizons) matrix
+            available_horizon = predictions.shape[1]
+        else:
+            # predictions is 1D array (single path)
+            available_horizon = len(predictions)
 
-        if window_len == 0:
-            # End of data, sell all
-            return {'action': 'SELL', 'amount': inventory, 'reason': 'end_of_horizon'}
+        window_len = min(self.horizon_days, available_horizon)
+
+        if window_len <= 0:
+            # No predictions available, sell all
+            return {'action': 'SELL', 'amount': inventory, 'reason': 'no_forecast_horizon'}
 
         # Get predicted prices for the window (use mean of ensemble)
         if len(predictions.shape) == 2:
-            # predictions is (T, S) matrix
-            future_prices_cents = predictions[:window_len].mean(axis=1)
+            # predictions is (n_runs, n_horizons) matrix - average across runs
+            future_prices_cents = predictions[:, :window_len].mean(axis=0)
         else:
             # predictions is 1D array
             future_prices_cents = predictions[:window_len]
