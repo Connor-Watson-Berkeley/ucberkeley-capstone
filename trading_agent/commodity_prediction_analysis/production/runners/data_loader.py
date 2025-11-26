@@ -106,6 +106,14 @@ class DataLoader:
             with open(matrix_path, 'rb') as f:
                 prediction_matrices = pickle.load(f)
 
+            # CRITICAL: Normalize dictionary keys to midnight for price alignment
+            # Prices are normalized with .dt.normalize(), so matrices must match
+            normalized_matrices = {}
+            for key, value in prediction_matrices.items():
+                normalized_key = pd.to_datetime(key).normalize()
+                normalized_matrices[normalized_key] = value
+            prediction_matrices = normalized_matrices
+
             # Inspect structure
             if len(prediction_matrices) > 0:
                 sample_matrix = list(prediction_matrices.values())[0]
