@@ -42,7 +42,7 @@ Complete guide to optimizing trading strategy parameters via grid search:
 If you're looking for user-facing documentation:
 - **Quick Start & Overview**: [`../README.md`](../README.md)
 - **Daily Recommendations**: [`../operations/README.md`](../operations/README.md)
-- **Unity Catalog Queries**: [`../FORECAST_API_GUIDE.md`](../FORECAST_API_GUIDE.md)
+- **Unity Catalog Queries & Data Access**: [DATABRICKS_GUIDE.md](DATABRICKS_GUIDE.md)
 
 ---
 
