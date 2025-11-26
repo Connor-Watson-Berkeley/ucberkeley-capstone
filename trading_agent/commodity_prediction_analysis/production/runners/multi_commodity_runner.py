@@ -52,7 +52,7 @@ class MultiCommodityRunner:
         self.optimization_objective = optimization_objective
 
         # Initialize sub-modules
-        self.data_loader = DataLoader(spark=spark)
+        self.data_loader = DataLoader(spark=spark, volume_path=volume_path)
         self.viz_generator = VisualizationGenerator(volume_path=volume_path)
         self.result_saver = ResultSaver(spark=spark)
 
