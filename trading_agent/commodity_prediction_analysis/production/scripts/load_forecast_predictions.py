@@ -194,19 +194,84 @@ def process_model_version(commodity, model_version, spark):
     print(f"\n✓ Saved prediction matrices: {matrices_path}")
     print(f"\n✓ {model_version} complete")
 
+    # Calculate years span and years available
+    years_span = expected_days / 365.25
+    pred_dates = sorted(prediction_matrices.keys())
+    years_available = sorted(set(d.year for d in pred_dates))
+
+    # Return comprehensive metadata for manifest
     return {
         'commodity': commodity,
         'model_version': model_version,
+        'type': 'real',
         'n_matrices': len(prediction_matrices),
         'n_paths': sample_matrix.shape[0] if len(prediction_matrices) > 0 else 0,
         'quality': quality,
         'avg_runs_per_date': float(avg_runs_per_date),
         'date_range': {
-            'start': str(predictions_wide['forecast_start_date'].min()),
-            'end': str(predictions_wide['forecast_start_date'].max())
+            'start': str(min_date),
+            'end': str(max_date)
         },
+        'years_span': float(years_span),
+        'expected_days': int(expected_days),
+        'prediction_dates': int(n_forecast_dates),
+        'coverage_pct': float(coverage_pct),
+        'years_available': years_available,
+        'meets_criteria': True,  # Already validated before reaching here
+        'validation_thresholds': {
+            'min_years': 2.0,
+            'min_coverage_pct': 90.0
+        },
+        'pickle_file': os.path.basename(matrices_path),
         'output_path': matrices_path
     }
+
+
+def create_forecast_manifest(commodity, results_list, volume_path):
+    """
+    Create manifest file with metadata for all loaded forecast models
+
+    Args:
+        commodity: Commodity name
+        results_list: List of result dicts from process_model_version
+        volume_path: Base path for volume storage
+
+    Returns:
+        str: Path to manifest file
+    """
+    manifest = {
+        'commodity': commodity,
+        'generated_at': datetime.now().isoformat(),
+        'models': {}
+    }
+
+    # Add each model's metadata
+    for result in results_list:
+        model_version = result['model_version']
+        manifest['models'][model_version] = {
+            'type': result['type'],
+            'date_range': result['date_range'],
+            'years_span': result['years_span'],
+            'expected_days': result['expected_days'],
+            'prediction_dates': result['prediction_dates'],
+            'coverage_pct': result['coverage_pct'],
+            'years_available': result['years_available'],
+            'meets_criteria': result['meets_criteria'],
+            'validation_thresholds': result['validation_thresholds'],
+            'quality': result['quality'],
+            'n_paths': result['n_paths'],
+            'pickle_file': result['pickle_file']
+        }
+
+    # Save manifest
+    manifest_path = os.path.join(volume_path, f'forecast_manifest_{commodity}.json')
+    with open(manifest_path, 'w') as f:
+        json.dump(manifest, f, indent=2)
+
+    print(f"\n✓ Created forecast manifest: {manifest_path}")
+    print(f"  Models included: {len(manifest['models'])}")
+
+    return manifest_path
 
 
 def run_forecast_predictions(commodities=None, model_versions_filter=None):
@@ -246,6 +311,10 @@ def run_forecast_predictions(commodities=None, model_versions_filter=None):
     # Track results
     all_results = []
     failed_processes = []
+    manifests_created = []
+
+    # Get volume path from config
+    from production.config import VOLUME_PATH
 
     # Loop through all commodities
     for CURRENT_COMMODITY in commodities:
@@ -283,11 +352,14 @@ def run_forecast_predictions(commodities=None, model_versions_filter=None):
         # --------------------------------------------------------------------------
         # Process Each Model Version
         # --------------------------------------------------------------------------
+        commodity_results = []  # Track results for this commodity only
+
         for MODEL_VERSION in model_versions:
             try:
                 result = process_model_version(CURRENT_COMMODITY, MODEL_VERSION, spark)
                 if result:
                     all_results.append(result)
+                    commodity_results.append(result)
                 else:
                     failed_processes.append({
                         'commodity': CURRENT_COMMODITY,
@@ -301,6 +373,20 @@ def run_forecast_predictions(commodities=None, model_versions_filter=None):
                     'model_version': MODEL_VERSION,
                     'error': str(e)
                 })
+
+        # --------------------------------------------------------------------------
+        # Create Forecast Manifest for This Commodity
+        # --------------------------------------------------------------------------
+        if commodity_results:
+            try:
+                manifest_path = create_forecast_manifest(
+                    CURRENT_COMMODITY,
+                    commodity_results,
+                    VOLUME_PATH
+                )
+                manifests_created.append(manifest_path)
+            except Exception as e:
+                print(f"\n⚠️  Warning: Could not create manifest for {CURRENT_COMMODITY}: {e}")
 
         print(f"\n{'=' * 80}")
         print(f"✓ {CURRENT_COMMODITY.upper()} COMPLETE")
@@ -317,6 +403,7 @@ def run_forecast_predictions(commodities=None, model_versions_filter=None):
     print(f"Duration: {duration:.1f} seconds")
     print(f"Successful processes: {len(all_results)}")
     print(f"Failed processes: {len(failed_processes)}")
+    print(f"Manifests created: {len(manifests_created)}")
 
     if failed_processes:
         print("\nFailed processes:")
@@ -325,7 +412,7 @@ def run_forecast_predictions(commodities=None, model_versions_filter=None):
 
     # Prepare summary for orchestrator
     summary = {
-        'script': 'run_02_forecast_predictions.py',
+        'script': 'load_forecast_predictions.py',
         'status': 'success' if len(failed_processes) == 0 else 'partial',
         'start_time': start_time.isoformat(),
         'end_time': end_time.isoformat(),
@@ -333,6 +420,8 @@ def run_forecast_predictions(commodities=None, model_versions_filter=None):
         'commodities_processed': commodities,
         'successful_processes': len(all_results),
         'failed_processes': len(failed_processes),
+        'manifests_created': len(manifests_created),
+        'manifest_paths': manifests_created,
         'results': all_results,
         'failures': failed_processes
     }
