@@ -14,6 +14,7 @@ except NameError:
     sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
 
 from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 from production.strategies.lp_optimizer import solve_optimal_liquidation_lp
 from production.core.backtest_engine import BacktestEngine
 import pandas as pd
@@ -37,13 +38,16 @@ def test_lp_optimizer():
     print(f"  Model: {model_version}")
 
     # Load prices from unified_data (continuous daily coverage, forward-filled)
-    market_df = spark.table("commodity.silver.unified_data").filter(
+    # Grain is (date, commodity, region) but price is same across regions
+    # So aggregate by date to get one row per date
+    prices = spark.table("commodity.silver.unified_data").filter(
         f"lower(commodity) = '{commodity}'"
+    ).groupBy("date").agg(
+        F.first("close").alias("price")  # Price is same across regions, take first
     ).toPandas()
 
-    market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
-    market_df['price'] = market_df['close']
-    prices = market_df[['date', 'price']].drop_duplicates(subset=['date']).sort_values('date').reset_index(drop=True)
+    prices['date'] = pd.to_datetime(prices['date']).dt.normalize()
+    prices = prices.sort_values('date').reset_index(drop=True)
 
     print(f"  Price data: {len(prices)} days ({prices['date'].min()} to {prices['date'].max()})")
 
