@@ -112,34 +112,6 @@ ANALYSIS_CONFIG = {
 # HELPER FUNCTIONS
 # =============================================================================
 
-def get_data_paths(commodity, model_version):
-    """
-    Get data paths for a specific commodity and model version
-
-    Args:
-        commodity: Commodity name (e.g., 'coffee')
-        model_version: Model version (e.g., 'arima_v1', 'synthetic_acc90')
-
-    Returns:
-        dict: Dictionary of data paths
-            - prices_source: Delta table source for prices (unified_data, filter by commodity)
-            - prediction_matrices: Synthetic prediction matrix file
-            - prediction_matrices_real: Real prediction matrix file
-            - results_detailed: Output file for detailed results
-            - charts_dir: Directory for output charts
-    """
-    return {
-        # Input paths
-        'prices_source': MARKET_TABLE,  # commodity.silver.unified_data (filter by commodity in loader)
-        'prediction_matrices': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_synthetic_acc90.pkl",
-        'prediction_matrices_real': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_{model_version}_real.pkl",
-
-        # Output paths
-        'results_detailed': f"{VOLUME_PATH}/results_detailed_{commodity.lower()}_{model_version}.pkl",
-        'charts_dir': f"{VOLUME_PATH}/charts/{commodity.lower()}/{model_version}/"
-    }
-
-
 def get_model_versions(commodity, spark_session=None):
     """
     Discover available model versions for a commodity from forecast table
