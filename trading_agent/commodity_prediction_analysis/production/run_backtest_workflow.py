@@ -54,9 +54,7 @@ import argparse
 from datetime import datetime
 import subprocess
 
-# Add parent directories to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# On Databricks, repo is already in Python path - no need for manual path setup
 
 from production.config import COMMODITY_CONFIGS
 
