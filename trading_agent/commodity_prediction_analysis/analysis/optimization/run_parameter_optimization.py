@@ -290,22 +290,6 @@ def run_optimization(
     if objective in ['efficiency', 'multi']:
         theoretical_max = calculate_theoretical_max(prices, predictions, config)
 
-    # Initialize optimizer
-    print("\n" + "=" * 80)
-    print("INITIALIZING OPTIMIZER")
-    print("=" * 80)
-
-    # Pass full commodity config (required for production BacktestEngine)
-    optimizer = ParameterOptimizer(
-        prices_df=prices,
-        prediction_matrices=predictions,
-        config=config,  # Full config with harvest_volume, harvest_windows, etc.
-        theoretical_max_earnings=theoretical_max,
-        use_production_engine=True  # Use production engine for accurate results
-    )
-
-    print("✓ Optimizer initialized")
-
     # Get strategies to optimize
     all_strategies = get_strategy_classes()
 
@@ -316,16 +300,124 @@ def run_optimization(
         strategies = all_strategies
         print(f"✓ Optimizing all {len(strategies)} strategies")
 
-    # Run optimization
+    # Separate base and predictive strategies for two-pass matched pair optimization
+    base_strategies = []
+    predictive_strategies = []
+    other_strategies = []
+
+    matched_pairs = {
+        'price_threshold': 'price_threshold_predictive',
+        'moving_average': 'moving_average_predictive'
+    }
+
+    for cls, name in strategies:
+        if name in matched_pairs.keys():
+            # Base strategies (price_threshold, moving_average)
+            base_strategies.append((cls, name))
+        elif name in matched_pairs.values():
+            # Predictive strategies (price_threshold_predictive, moving_average_predictive)
+            predictive_strategies.append((cls, name))
+        else:
+            # Other strategies (immediate_sale, equal_batch, expected_value, etc.)
+            other_strategies.append((cls, name))
+
+    print(f"✓ Base strategies (Pass 1): {[name for _, name in base_strategies]}")
+    print(f"✓ Predictive strategies (Pass 2): {[name for _, name in predictive_strategies]}")
+    print(f"✓ Other strategies: {[name for _, name in other_strategies]}")
+
+    # ============================================================================
+    # PASS 1: Optimize base strategies (price_threshold, moving_average)
+    # ============================================================================
     print("\n" + "=" * 80)
-    print("RUNNING OPTIMIZATION")
+    print("PASS 1: OPTIMIZING BASE STRATEGIES (for matched pairs)")
     print("=" * 80)
 
-    results = optimizer.optimize_all_strategies(
-        strategies=strategies,
-        n_trials=n_trials,
-        objective=objective
+    pass1_optimizer = ParameterOptimizer(
+        prices_df=prices,
+        prediction_matrices=predictions,
+        config=config,
+        theoretical_max_earnings=theoretical_max,
+        use_production_engine=True
     )
+
+    pass1_results = {}
+    if base_strategies:
+        pass1_results = pass1_optimizer.optimize_all_strategies(
+            strategies=base_strategies,
+            n_trials=n_trials,
+            objective=objective
+        )
+        print(f"\n✓ Pass 1 complete - optimized {len(pass1_results)} base strategies")
+    else:
+        print("\n⚠️  No base strategies to optimize in Pass 1")
+
+    # ============================================================================
+    # PASS 2: Optimize predictive strategies with FIXED base parameters
+    # ============================================================================
+    print("\n" + "=" * 80)
+    print("PASS 2: OPTIMIZING PREDICTIVE STRATEGIES (with fixed base params)")
+    print("=" * 80)
+
+    # Extract best base parameters from Pass 1
+    fixed_base_params = {}
+    for base_name, predictive_name in matched_pairs.items():
+        if base_name in pass1_results:
+            best_params, _ = pass1_results[base_name]
+            fixed_base_params[base_name] = best_params
+            print(f"✓ Fixing {base_name} params for {predictive_name} optimization")
+
+    # Create optimizer with fixed base params
+    pass2_optimizer = ParameterOptimizer(
+        prices_df=prices,
+        prediction_matrices=predictions,
+        config=config,
+        theoretical_max_earnings=theoretical_max,
+        use_production_engine=True,
+        fixed_base_params=fixed_base_params  # KEY: Fixed base params for matched pairs
+    )
+
+    pass2_results = {}
+    if predictive_strategies and fixed_base_params:
+        pass2_results = pass2_optimizer.optimize_all_strategies(
+            strategies=predictive_strategies,
+            n_trials=n_trials,
+            objective=objective
+        )
+        print(f"\n✓ Pass 2 complete - optimized {len(pass2_results)} predictive strategies")
+    elif predictive_strategies and not fixed_base_params:
+        print("\n⚠️  Skipping predictive strategies - no base params from Pass 1")
+    else:
+        print("\n⚠️  No predictive strategies to optimize in Pass 2")
+
+    # ============================================================================
+    # PASS 3: Optimize other strategies (non-matched pairs)
+    # ============================================================================
+    print("\n" + "=" * 80)
+    print("PASS 3: OPTIMIZING OTHER STRATEGIES")
+    print("=" * 80)
+
+    pass3_optimizer = ParameterOptimizer(
+        prices_df=prices,
+        prediction_matrices=predictions,
+        config=config,
+        theoretical_max_earnings=theoretical_max,
+        use_production_engine=True
+    )
+
+    pass3_results = {}
+    if other_strategies:
+        pass3_results = pass3_optimizer.optimize_all_strategies(
+            strategies=other_strategies,
+            n_trials=n_trials,
+            objective=objective
+        )
+        print(f"\n✓ Pass 3 complete - optimized {len(pass3_results)} other strategies")
+    else:
+        print("\n⚠️  No other strategies to optimize in Pass 3")
+
+    # Combine all results
+    results = {**pass1_results, **pass2_results, **pass3_results}
+    print(f"\n✓ Total strategies optimized: {len(results)}")
 
     # Prepare parameters for saving
     best_params = {name: params for name, (params, value) in results.items()}
