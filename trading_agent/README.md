@@ -7,7 +7,7 @@
 >
 > **🤖 Automation Guide:** [docs/AUTOMATION_GUIDE.md](docs/AUTOMATION_GUIDE.md) - Job submission, orchestration, monitoring
 >
-> **📊 Technical Reference:** [commodity_prediction_analysis/TECHNICAL_REFERENCE.md](commodity_prediction_analysis/TECHNICAL_REFERENCE.md) - File inventory
+> **📊 Technical Reference:** [commodity_prediction_analysis/FILE_INVENTORY.md](commodity_prediction_analysis/FILE_INVENTORY.md) - File inventory
 
 ---
 
@@ -112,7 +112,6 @@ Run backtests across all models and commodities:
 ```
 trading_agent/
 ├── README.md                          # This file
-├── FORECAST_API_GUIDE.md              # Unity Catalog data access guide
 │
 ├── operations/                        # Operational tools
 │   ├── README.md                      # Daily recommendations guide
@@ -198,7 +197,7 @@ Structured JSON output ready for messaging services:
 - **[MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md)** - Complete system overview, execution phases, dependencies, and status tracking
 
 ### User Guides
-- **[FORECAST_API_GUIDE.md](FORECAST_API_GUIDE.md)** - How to query forecast data from Unity Catalog
+- **[docs/DATABRICKS_GUIDE.md](docs/DATABRICKS_GUIDE.md)** - How to query forecast data from Unity Catalog
 - **[operations/README.md](operations/README.md)** - Daily recommendations & WhatsApp integration
 
 ### Technical Documentation
@@ -240,7 +239,7 @@ actuals = load_actuals_from_distributions('Coffee', 'sarimax_auto_weather_v1', c
 fx_rates = get_exchange_rates(connection)
 ```
 
-**See:** [FORECAST_API_GUIDE.md](FORECAST_API_GUIDE.md) for complete examples
+**See:** [docs/DATABRICKS_GUIDE.md](docs/DATABRICKS_GUIDE.md) for complete examples
 
 ---
 
@@ -298,7 +297,7 @@ All prices and financial metrics automatically calculated in all available curre
 
 ## Support
 
-- **Forecast API Issues**: See [FORECAST_API_GUIDE.md](FORECAST_API_GUIDE.md)
+- **Forecast API Issues**: See [docs/DATABRICKS_GUIDE.md](docs/DATABRICKS_GUIDE.md)
 - **Operations Guide**: See [operations/README.md](operations/README.md)
 - **Project Status**: See [../collaboration/TRADING_AGENT_TODO.md](../collaboration/TRADING_AGENT_TODO.md)
 - **Questions**: Create issue in [../collaboration/REQUESTS.md](../collaboration/REQUESTS.md)

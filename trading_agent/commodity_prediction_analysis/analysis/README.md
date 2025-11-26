@@ -132,7 +132,7 @@ EFFICIENCY ANALYSIS
 **diagnostics/** used the OLD approach:
 - Paired t-tests on daily changes
 - Problem: Daily variance >> signal, no statistical significance
-- See `diagnostics/ALGORITHM_PERFORMANCE_ANALYSIS.md` for details
+- See `../../docs/DIAGNOSTICS.md` for details
 
 **analysis/** uses the NEW approach:
 - Theoretical maximum benchmark (dynamic programming)
