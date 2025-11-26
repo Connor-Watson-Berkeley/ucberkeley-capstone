@@ -68,14 +68,17 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
     print("=" * 80)
 
     # Load ALL price data from unified_data (continuous daily coverage, forward-filled)
+    # unified_data grain is (date, commodity, region) but price is same across regions
+    # So aggregate by date to get one row per date
     print(f"\n1. Loading price data for {commodity}...")
-    market_df = spark.table("commodity.silver.unified_data").filter(
+    all_prices = spark.table("commodity.silver.unified_data").filter(
         f"lower(commodity) = '{commodity}'"
+    ).groupBy("date").agg(
+        F.first("close").alias("price")  # Price is same across regions
     ).toPandas()
 
-    market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
-    market_df['price'] = market_df['close']
-    all_prices = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
+    all_prices['date'] = pd.to_datetime(all_prices['date']).dt.normalize()
+    all_prices = all_prices.sort_values('date').reset_index(drop=True)
 
     print(f"   ✓ Loaded {len(all_prices)} total price points")
     print(f"   Full price range: {all_prices['date'].min()} to {all_prices['date'].max()}")

@@ -35,6 +35,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from pathlib import Path
+from pyspark.sql import functions as F
 
 # Add parent directory to path
 script_dir = Path(__file__).parent
@@ -69,14 +70,17 @@ def load_data(spark, commodity, model_version):
     print("=" * 80)
 
     # Load price data from unified_data (continuous daily coverage, forward-filled)
+    # unified_data grain is (date, commodity, region) but price is same across regions
+    # So aggregate by date to get one row per date
     print(f"\n1. Loading price data for {commodity}...")
-    market_df = spark.table("commodity.silver.unified_data").filter(
+    prices = spark.table("commodity.silver.unified_data").filter(
         f"lower(commodity) = '{commodity}'"
+    ).groupBy("date").agg(
+        F.first("close").alias("price")  # Price is same across regions
     ).toPandas()
 
-    market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
-    market_df['price'] = market_df['close']
-    prices = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
+    prices['date'] = pd.to_datetime(prices['date']).dt.normalize()
+    prices = prices.sort_values('date').reset_index(drop=True)
 
     # Filter to recent data (2022+)
     prices = prices[prices['date'] >= '2022-01-01'].reset_index(drop=True)
