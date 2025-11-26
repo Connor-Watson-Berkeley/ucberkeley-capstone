@@ -326,11 +326,16 @@ def run_optimization(
     print(f"✓ Other strategies: {[name for _, name in other_strategies]}")
 
     # ============================================================================
-    # PASS 1: Optimize base strategies (price_threshold, moving_average)
+    # PASS 1: Optimize base strategies + other strategies (in parallel)
     # ============================================================================
     print("\n" + "=" * 80)
-    print("PASS 1: OPTIMIZING BASE STRATEGIES (for matched pairs)")
+    print("PASS 1: OPTIMIZING BASE + OTHER STRATEGIES (parallel)")
     print("=" * 80)
+    print(f"Base strategies: {[name for _, name in base_strategies]}")
+    print(f"Other strategies: {[name for _, name in other_strategies]}")
+
+    # Combine base and other strategies for parallel optimization
+    pass1_strategies = base_strategies + other_strategies
 
     pass1_optimizer = ParameterOptimizer(
         prices_df=prices,
@@ -341,15 +346,15 @@ def run_optimization(
     )
 
     pass1_results = {}
-    if base_strategies:
+    if pass1_strategies:
         pass1_results = pass1_optimizer.optimize_all_strategies(
-            strategies=base_strategies,
+            strategies=pass1_strategies,
             n_trials=n_trials,
             objective=objective
         )
-        print(f"\n✓ Pass 1 complete - optimized {len(pass1_results)} base strategies")
+        print(f"\n✓ Pass 1 complete - optimized {len(pass1_results)} strategies")
     else:
-        print("\n⚠️  No base strategies to optimize in Pass 1")
+        print("\n⚠️  No strategies to optimize in Pass 1")
 
     # ============================================================================
     # PASS 2: Optimize predictive strategies with FIXED base parameters
@@ -389,34 +394,8 @@ def run_optimization(
     else:
         print("\n⚠️  No predictive strategies to optimize in Pass 2")
 
-    # ============================================================================
-    # PASS 3: Optimize other strategies (non-matched pairs)
-    # ============================================================================
-    print("\n" + "=" * 80)
-    print("PASS 3: OPTIMIZING OTHER STRATEGIES")
-    print("=" * 80)
-
-    pass3_optimizer = ParameterOptimizer(
-        prices_df=prices,
-        prediction_matrices=predictions,
-        config=config,
-        theoretical_max_earnings=theoretical_max,
-        use_production_engine=True
-    )
-
-    pass3_results = {}
-    if other_strategies:
-        pass3_results = pass3_optimizer.optimize_all_strategies(
-            strategies=other_strategies,
-            n_trials=n_trials,
-            objective=objective
-        )
-        print(f"\n✓ Pass 3 complete - optimized {len(pass3_results)} other strategies")
-    else:
-        print("\n⚠️  No other strategies to optimize in Pass 3")
-
     # Combine all results
-    results = {**pass1_results, **pass2_results, **pass3_results}
+    results = {**pass1_results, **pass2_results}
     print(f"\n✓ Total strategies optimized: {len(results)}")
 
     # Prepare parameters for saving
