@@ -6,7 +6,9 @@ Tests the new JSON loading functionality added for orchestration.
 import sys
 import os
 
-# On Databricks, repo is already in Python path - no need for manual path setup
+# Add repo path for Databricks jobs (fixed path, not using __file__)
+sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
+
 from production.parameter_manager import ParameterManager
 
 def test_parameter_manager():

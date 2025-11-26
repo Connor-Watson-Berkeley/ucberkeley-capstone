@@ -54,7 +54,8 @@ import argparse
 from datetime import datetime
 import subprocess
 
-# On Databricks, repo is already in Python path - no need for manual path setup
+# Add repo path for Databricks jobs (fixed path, not using __file__)
+sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
 
 from production.config import COMMODITY_CONFIGS
 
