@@ -139,6 +139,148 @@ class ParameterManager:
         pkl_path = self.get_optimized_params_path(format='pkl')
         return os.path.exists(pkl_path)
 
+    def validate_parameters(self, params: Dict[str, Any]) -> tuple[bool, list[str]]:
+        """
+        Validate that parameters match current strategy signatures.
+
+        Args:
+            params: Dict of {strategy_name: params_dict}
+
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+        """
+        from production.strategies import (
+            ImmediateSaleStrategy, EqualBatchStrategy,
+            PriceThresholdStrategy, MovingAverageStrategy,
+            ConsensusStrategy, ExpectedValueStrategy,
+            RiskAdjustedStrategy, PriceThresholdPredictive,
+            MovingAveragePredictive, RollingHorizonMPC
+        )
+        import inspect
+
+        strategy_classes = {
+            'immediate_sale': ImmediateSaleStrategy,
+            'equal_batch': EqualBatchStrategy,
+            'price_threshold': PriceThresholdStrategy,
+            'moving_average': MovingAverageStrategy,
+            'consensus': ConsensusStrategy,
+            'expected_value': ExpectedValueStrategy,
+            'risk_adjusted': RiskAdjustedStrategy,
+            'price_threshold_predictive': PriceThresholdPredictive,
+            'moving_average_predictive': MovingAveragePredictive,
+            'rolling_horizon_mpc': RollingHorizonMPC
+        }
+
+        errors = []
+
+        for strategy_name, strategy_params in params.items():
+            if strategy_name not in strategy_classes:
+                errors.append(f"Unknown strategy: {strategy_name}")
+                continue
+
+            strategy_class = strategy_classes[strategy_name]
+            sig = inspect.signature(strategy_class.__init__)
+            valid_params = set(sig.parameters.keys()) - {'self'}
+
+            # Check for obsolete parameters
+            invalid_params = set(strategy_params.keys()) - valid_params
+            if invalid_params:
+                errors.append(
+                    f"{strategy_name}: obsolete parameters {invalid_params}"
+                )
+
+        is_valid = len(errors) == 0
+        return is_valid, errors
+
+    def purge_invalid_parameters(self, file_path: str) -> None:
+        """
+        Move invalid parameter file to archive.
+
+        Args:
+            file_path: Path to invalid parameter file
+        """
+        if not os.path.exists(file_path):
+            return
+
+        # Create archive directory
+        archive_dir = os.path.join(self.volume_path, 'optimization', 'archived')
+        os.makedirs(archive_dir, exist_ok=True)
+
+        # Move file to archive with timestamp
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = os.path.basename(file_path)
+        archive_path = os.path.join(archive_dir, f"{filename}.{timestamp}.invalid")
+
+        import shutil
+        shutil.move(file_path, archive_path)
+
+        if self.verbose:
+            print(f"  ✓ Archived invalid parameters: {archive_path}")
+
+    def trigger_optimization(self) -> bool:
+        """
+        Trigger Optuna optimization for this commodity/model.
+
+        Returns:
+            bool: True if optimization succeeded
+        """
+        if self.verbose:
+            print(f"\n{'=' * 80}")
+            print(f"AUTO-TRIGGERING OPTIMIZATION")
+            print(f"{'=' * 80}")
+            print(f"Commodity: {self.commodity}")
+            print(f"Model: {self.model_version}")
+            print(f"Reason: No valid optimized parameters found")
+
+        import subprocess
+        import sys
+
+        # Determine Python executable
+        python_cmd = sys.executable
+
+        # Run optimizer
+        cmd = [
+            python_cmd,
+            'analysis/optimization/run_parameter_optimization.py',
+            '--commodity', self.commodity,
+            '--model-version', self.model_version,
+            '--n-trials', '50',  # Quick optimization
+            '--objective', self.objective
+        ]
+
+        if self.verbose:
+            print(f"\nRunning: {' '.join(cmd)}")
+            print(f"This may take 10-20 minutes...\n")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=1800  # 30 minute timeout
+            )
+
+            if result.returncode == 0:
+                if self.verbose:
+                    print(result.stdout)
+                    print("\n✓ Optimization completed successfully")
+                return True
+            else:
+                if self.verbose:
+                    print(f"\n✗ Optimization failed:")
+                    print(result.stderr)
+                return False
+
+        except subprocess.TimeoutExpired:
+            if self.verbose:
+                print(f"\n✗ Optimization timed out after 30 minutes")
+            return False
+        except Exception as e:
+            if self.verbose:
+                print(f"\n✗ Optimization failed: {e}")
+            return False
+
     def load_optimized_params(self, force_reload: bool = False, version: str = 'latest') -> Optional[Dict[str, Any]]:
         """
         Load optimized parameters from optimizer output (JSON or pickle).
@@ -177,6 +319,30 @@ class ParameterManager:
                     if 'theoretical_max' in data and data['theoretical_max']:
                         print(f"  Theoretical max: ${data['theoretical_max']:,.2f}")
 
+                # Validate parameters match current strategy signatures
+                is_valid, errors = self.validate_parameters(params)
+
+                if not is_valid:
+                    if self.verbose:
+                        print(f"\n⚠️  Parameter validation FAILED:")
+                        for error in errors:
+                            print(f"    • {error}")
+                        print(f"\n  Purging invalid parameters and triggering re-optimization...")
+
+                    # Purge invalid file
+                    self.purge_invalid_parameters(json_path)
+
+                    # Trigger optimization
+                    if self.trigger_optimization():
+                        # Recursively load newly optimized parameters
+                        if self.verbose:
+                            print(f"\n  Loading newly optimized parameters...")
+                        return self.load_optimized_params(force_reload=True, version=version)
+                    else:
+                        if self.verbose:
+                            print(f"\n  ✗ Auto-optimization failed, falling back to defaults")
+                        return None
+
                 # Cache only 'latest' version
                 if version == 'latest':
                     self._optimized_params_cache = params
@@ -202,6 +368,30 @@ class ParameterManager:
                         print(f"✓ Loaded optimized parameters from pickle: {pkl_path}")
                         print(f"  Strategies optimized: {len(params)}")
                         print(f"  Optimization objective: {self.objective}")
+
+                    # Validate parameters
+                    is_valid, errors = self.validate_parameters(params)
+
+                    if not is_valid:
+                        if self.verbose:
+                            print(f"\n⚠️  Parameter validation FAILED:")
+                            for error in errors:
+                                print(f"    • {error}")
+                            print(f"\n  Purging invalid parameters and triggering re-optimization...")
+
+                        # Purge invalid file
+                        self.purge_invalid_parameters(pkl_path)
+
+                        # Trigger optimization
+                        if self.trigger_optimization():
+                            # Recursively load newly optimized parameters
+                            if self.verbose:
+                                print(f"\n  Loading newly optimized parameters...")
+                            return self.load_optimized_params(force_reload=True, version=version)
+                        else:
+                            if self.verbose:
+                                print(f"\n  ✗ Auto-optimization failed, falling back to defaults")
+                            return None
 
                     self._optimized_params_cache = params
                     self._optimized_params_loaded = True
