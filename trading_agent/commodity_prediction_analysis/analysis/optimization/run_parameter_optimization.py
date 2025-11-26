@@ -31,6 +31,7 @@ import argparse
 import pandas as pd
 import pickle
 from datetime import datetime
+from pyspark.sql import functions as F
 
 # Add parent directories to path
 try:
