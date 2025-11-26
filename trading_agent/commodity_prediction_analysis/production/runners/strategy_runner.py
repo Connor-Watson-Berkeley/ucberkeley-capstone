@@ -74,12 +74,14 @@ class StrategyRunner:
             """
             Add commodity-level cost parameters to prediction strategy params.
 
-            Costs come from COMMODITY_CONFIGS and should not be in the
-            optimized parameter dicts (they're added by the optimizer at runtime).
+            Costs come from COMMODITY_CONFIGS. Only add if not already present
+            to avoid duplicate keyword argument errors when using default params.
             """
             p = params.copy()
-            p['storage_cost_pct_per_day'] = self.commodity_config['storage_cost_pct_per_day']
-            p['transaction_cost_pct'] = self.commodity_config['transaction_cost_pct']
+            if 'storage_cost_pct_per_day' not in p:
+                p['storage_cost_pct_per_day'] = self.commodity_config['storage_cost_pct_per_day']
+            if 'transaction_cost_pct' not in p:
+                p['transaction_cost_pct'] = self.commodity_config['transaction_cost_pct']
             return p
 
         # Baseline strategies - unpack ALL optimized parameters
