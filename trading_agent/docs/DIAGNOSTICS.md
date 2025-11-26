@@ -25,16 +25,11 @@
 | `cost_config_small_farmer.py` | Cost configurations | Strategies |
 | `diagnostic_16_best_params.pkl` | **OUTPUT** from diagnostic_16 | **INPUT** to diagnostic_17 |
 
-### Documentation Files
+### Documentation
 
-| File | Status | Notes |
-|------|--------|-------|
-| `MASTER_DIAGNOSTIC_PLAN.md` | ✅ **THIS FILE** | Use this |
-| `ACCURACY_LEVEL_TESTING_GUIDE.md` | ✅ Current | Covers 100% testing |
-| `SYNTHETIC_PREDICTION_TEST_PLAN.md` | ⚠️ Outdated | References non-existent diagnostic_01-15 |
-| `DIAGNOSTIC_EXECUTION_GUIDE.md` | ⚠️ Outdated | References non-existent diagnostic_01-07 |
-| `COMPREHENSIVE_GRID_SEARCH_PLAN.md` | ⚠️ May be outdated | Check if superseded by diagnostic_16 |
-| Others (8 more .md files) | ⚠️ Unknown | Need consolidation |
+**This file** (`DIAGNOSTICS.md`) is the single source of truth for all diagnostic testing workflows.
+
+Previously scattered across multiple files - now consolidated here.
 
 ---
 

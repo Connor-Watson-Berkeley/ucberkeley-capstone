@@ -356,8 +356,8 @@ ValueError: Insufficient overlap: only 34.9% coverage (951/2726 days)
 ## References
 
 ### Academic Research
-- `Limited Foresight Inventory Optimization Research.md` - Shadow pricing and terminal values
-- `Optimizing Agricultural Inventory Liquidation.md` - Oracle algorithms and efficiency metrics
+- [research/Limited_Foresight_Inventory_Optimization.md](research/Limited_Foresight_Inventory_Optimization.md) - Shadow pricing and terminal values
+- [research/Perfect_Foresight_Benchmarks.md](research/Perfect_Foresight_Benchmarks.md) - Oracle algorithms and efficiency metrics
 
 ### Related Documentation
 - `MASTER_SYSTEM_PLAN.md` - Project status and task tracking
