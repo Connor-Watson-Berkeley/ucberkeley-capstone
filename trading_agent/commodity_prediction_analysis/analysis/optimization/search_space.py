@@ -22,7 +22,21 @@ class SearchSpaceRegistry:
 
     Provides centralized, consistent parameter ranges for optimization across
     all 10 strategies (4 baseline + 5 prediction-based + 1 advanced optimization).
+
+    Supports matched pair optimization where base parameters can be fixed
+    for predictive strategies to ensure valid comparisons.
     """
+
+    def __init__(self, fixed_base_params: Dict[str, Dict[str, Any]] = None):
+        """
+        Initialize search space registry.
+
+        Args:
+            fixed_base_params: Optional dict mapping strategy names to fixed parameters.
+                Example: {'price_threshold': {'threshold_pct': 0.05, ...}}
+                Used for matched pair optimization where base params are pre-optimized.
+        """
+        self.fixed_base_params = fixed_base_params or {}
 
     @staticmethod
     def immediate_sale(trial: optuna.Trial) -> Dict[str, Any]:
@@ -114,12 +128,14 @@ class SearchSpaceRegistry:
             'max_days_without_sale': trial.suggest_int('max_days_without_sale', 45, 75)
         }
 
-    @staticmethod
-    def price_threshold_predictive(trial: optuna.Trial) -> Dict[str, Any]:
+    def price_threshold_predictive(self, trial: optuna.Trial) -> Dict[str, Any]:
         """
         Search space for Price Threshold Predictive strategy.
 
         Inherits all parameters from price_threshold, plus prediction parameters.
+
+        For matched pair optimization: If fixed_base_params['price_threshold'] is set,
+        uses those values instead of sampling new base parameters.
 
         Additional Parameters:
             - min_net_benefit_pct: Minimum benefit to act on prediction (0.3-1.0%)
@@ -127,10 +143,16 @@ class SearchSpaceRegistry:
             - scenario_shift_aggressive: Scenario shift for aggressive (1-2)
             - scenario_shift_conservative: Scenario shift for conservative (1-2)
         """
-        # Start with base price threshold parameters
-        params = SearchSpaceRegistry.price_threshold(trial)
+        # Check if we have fixed base parameters for matched pair optimization
+        if 'price_threshold' in self.fixed_base_params:
+            # Use pre-optimized base parameters (matched pair mode)
+            params = self.fixed_base_params['price_threshold'].copy()
+            print(f"  [Matched Pair Mode] Using fixed base params from price_threshold optimization")
+        else:
+            # Sample new base parameters (independent optimization mode)
+            params = SearchSpaceRegistry.price_threshold(trial)
 
-        # Add prediction-specific parameters
+        # Add prediction-specific parameters (always optimized)
         params.update({
             'min_net_benefit_pct': trial.suggest_float('min_net_benefit_pct', 0.3, 1.0),
             'high_confidence_cv': trial.suggest_float('high_confidence_cv', 0.03, 0.08),
@@ -140,12 +162,14 @@ class SearchSpaceRegistry:
 
         return params
 
-    @staticmethod
-    def moving_average_predictive(trial: optuna.Trial) -> Dict[str, Any]:
+    def moving_average_predictive(self, trial: optuna.Trial) -> Dict[str, Any]:
         """
         Search space for Moving Average Predictive strategy.
 
         Inherits all parameters from moving_average, plus prediction parameters.
+
+        For matched pair optimization: If fixed_base_params['moving_average'] is set,
+        uses those values instead of sampling new base parameters.
 
         Additional Parameters:
             - min_net_benefit_pct: Minimum benefit to act on prediction (0.3-1.0%)
@@ -153,10 +177,16 @@ class SearchSpaceRegistry:
             - scenario_shift_aggressive: Scenario shift for aggressive (1-2)
             - scenario_shift_conservative: Scenario shift for conservative (1-2)
         """
-        # Start with base moving average parameters
-        params = SearchSpaceRegistry.moving_average(trial)
+        # Check if we have fixed base parameters for matched pair optimization
+        if 'moving_average' in self.fixed_base_params:
+            # Use pre-optimized base parameters (matched pair mode)
+            params = self.fixed_base_params['moving_average'].copy()
+            print(f"  [Matched Pair Mode] Using fixed base params from moving_average optimization")
+        else:
+            # Sample new base parameters (independent optimization mode)
+            params = SearchSpaceRegistry.moving_average(trial)
 
-        # Add prediction-specific parameters
+        # Add prediction-specific parameters (always optimized)
         params.update({
             'min_net_benefit_pct': trial.suggest_float('min_net_benefit_pct', 0.3, 1.0),
             'high_confidence_cv': trial.suggest_float('high_confidence_cv', 0.03, 0.08),
@@ -295,8 +325,7 @@ class SearchSpaceRegistry:
 
         return params
 
-    @classmethod
-    def get_search_space(cls, trial: optuna.Trial, strategy_name: str) -> Dict[str, Any]:
+    def get_search_space(self, trial: optuna.Trial, strategy_name: str) -> Dict[str, Any]:
         """
         Get search space for a strategy by name.
 
@@ -310,26 +339,33 @@ class SearchSpaceRegistry:
         Raises:
             ValueError: If strategy_name is unknown
         """
-        strategy_map = {
-            'immediate_sale': cls.immediate_sale,
-            'equal_batch': cls.equal_batch,
-            'price_threshold': cls.price_threshold,
-            'moving_average': cls.moving_average,
-            'price_threshold_predictive': cls.price_threshold_predictive,
-            'moving_average_predictive': cls.moving_average_predictive,
-            'expected_value': cls.expected_value,
-            'consensus': cls.consensus,
-            'risk_adjusted': cls.risk_adjusted,
-            'rolling_horizon_mpc': cls.rolling_horizon_mpc
+        # Static methods (no fixed base params needed)
+        static_strategies = {
+            'immediate_sale': SearchSpaceRegistry.immediate_sale,
+            'equal_batch': SearchSpaceRegistry.equal_batch,
+            'price_threshold': SearchSpaceRegistry.price_threshold,
+            'moving_average': SearchSpaceRegistry.moving_average,
+            'expected_value': SearchSpaceRegistry.expected_value,
+            'consensus': SearchSpaceRegistry.consensus,
+            'risk_adjusted': SearchSpaceRegistry.risk_adjusted,
+            'rolling_horizon_mpc': SearchSpaceRegistry.rolling_horizon_mpc
         }
 
-        if strategy_name not in strategy_map:
+        # Instance methods (support fixed base params for matched pairs)
+        instance_strategies = {
+            'price_threshold_predictive': self.price_threshold_predictive,
+            'moving_average_predictive': self.moving_average_predictive
+        }
+
+        if strategy_name in static_strategies:
+            return static_strategies[strategy_name](trial)
+        elif strategy_name in instance_strategies:
+            return instance_strategies[strategy_name](trial)
+        else:
             raise ValueError(
                 f"Unknown strategy: {strategy_name}. "
-                f"Available: {list(strategy_map.keys())}"
+                f"Available: {list(static_strategies.keys()) + list(instance_strategies.keys())}"
             )
-
-        return strategy_map[strategy_name](trial)
 
     @classmethod
     def get_available_strategies(cls) -> list:

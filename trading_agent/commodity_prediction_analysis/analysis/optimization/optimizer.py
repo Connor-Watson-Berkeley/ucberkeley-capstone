@@ -49,7 +49,8 @@ class ParameterOptimizer:
         config: Dict,
         backtest_engine_class: Optional[Callable] = None,
         theoretical_max_earnings: Optional[float] = None,
-        use_production_engine: bool = True
+        use_production_engine: bool = True,
+        fixed_base_params: Optional[Dict[str, Dict]] = None
     ):
         """
         Initialize optimizer.
@@ -69,11 +70,16 @@ class ParameterOptimizer:
             theoretical_max_earnings: Theoretical maximum earnings for efficiency calculation
             use_production_engine: If True (default), use production BacktestEngine for accuracy
                                   If False, use SimpleBacktestEngine for speed
+            fixed_base_params: Optional dict of fixed base parameters for matched pair optimization.
+                              Example: {'price_threshold': {...}, 'moving_average': {...}}
+                              Used in Pass 2 to fix base params while optimizing prediction params.
 
         Note:
             - Production engine recommended for final optimization (more accurate, harvest-aware)
             - Simple engine acceptable for rapid prototyping/testing
             - If theoretical_max_earnings is None, optimizer will only support 'earnings' objective
+            - For matched pair optimization: Pass 1 optimizes base strategies, Pass 2 uses
+              fixed_base_params to optimize predictive strategies with same base parameters
         """
         self.prices = prices_df
         self.predictions = prediction_matrices
@@ -95,8 +101,8 @@ class ParameterOptimizer:
         # Create engine instance
         self.engine = self.engine_class(prices_df, prediction_matrices, config)
 
-        # Search space registry
-        self.search_space = SearchSpaceRegistry()
+        # Search space registry (with optional fixed base params for matched pairs)
+        self.search_space = SearchSpaceRegistry(fixed_base_params=fixed_base_params)
 
     def optimize_strategy(
         self,
