@@ -43,7 +43,7 @@ def test_lp_optimizer():
 
     market_df['date'] = pd.to_datetime(market_df['date']).dt.normalize()
     market_df['price'] = market_df['close']
-    prices = market_df[['date', 'price']].sort_values('date').reset_index(drop=True)
+    prices = market_df[['date', 'price']].drop_duplicates(subset=['date']).sort_values('date').reset_index(drop=True)
 
     print(f"  Price data: {len(prices)} days ({prices['date'].min()} to {prices['date'].max()})")
 
