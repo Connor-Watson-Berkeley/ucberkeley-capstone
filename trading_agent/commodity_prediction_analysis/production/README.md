@@ -519,7 +519,7 @@ Tests failing in production/runners/tests/
 - **Test Suite:** `production/runners/tests/README.md`
 - **Daily Operations:** `../operations/README.md`
 - **WhatsApp Integration:** `../whatsapp/README.md`
-- **Theoretical Max Analysis:** `diagnostics/ALGORITHM_PERFORMANCE_ANALYSIS.md`
+- **Diagnostics:** `../../docs/DIAGNOSTICS.md`
 
 ---
 
