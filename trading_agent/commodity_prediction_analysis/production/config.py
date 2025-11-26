@@ -57,29 +57,37 @@ BASELINE_PARAMS = {
 # Prediction-based strategy parameters
 PREDICTION_PARAMS = {
     'consensus': {
-        'bullish_threshold': 0.70,  # 70% of paths must be bullish
-        'lookback_days': 7  # Look at 7-day ahead predictions
+        'storage_cost_pct_per_day': 0.005,  # 0.005% per day (matches commodity config)
+        'transaction_cost_pct': 0.01,       # 0.01% per transaction (matches commodity config)
+        'consensus_threshold': 0.70,        # 70% agreement to act
+        'evaluation_day': 14                # Evaluate at 14-day horizon
     },
 
     'expected_value': {
-        'discount_rate': 0.0001,  # Daily discount rate
-        'min_ev_improvement': 0.01  # Require 1% EV improvement to hold
+        'storage_cost_pct_per_day': 0.005,
+        'transaction_cost_pct': 0.01,
+        'min_net_benefit_pct': 0.5          # 0.5% minimum net benefit
     },
 
     'risk_adjusted': {
-        'risk_aversion': 0.5,  # Balance between return and uncertainty
-        'confidence_threshold': 0.80  # 80% confidence level
+        'storage_cost_pct_per_day': 0.005,
+        'transaction_cost_pct': 0.01,
+        'min_return': 0.03,                 # 3% minimum return
+        'max_uncertainty_low': 0.05,        # CV < 5% = low risk
+        'max_uncertainty_medium': 0.10,     # CV < 10% = medium risk
+        'max_uncertainty_high': 0.20        # CV < 20% = high risk
     },
 
     'price_threshold_predictive': {
-        'ma_window': 30,
-        'threshold_pct': 0.02,
-        'prediction_weight': 0.5  # Weight on prediction signal
+        'threshold_pct': 0.05,              # Match PriceThreshold baseline
+        'storage_cost_pct_per_day': 0.005,
+        'transaction_cost_pct': 0.01
     },
 
     'moving_average_predictive': {
-        'ma_window': 30,
-        'prediction_weight': 0.5  # Weight on prediction signal
+        'ma_period': 30,                    # Match MovingAverage baseline
+        'storage_cost_pct_per_day': 0.005,
+        'transaction_cost_pct': 0.01
     }
 }
 
