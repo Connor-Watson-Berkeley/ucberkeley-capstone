@@ -19,7 +19,7 @@ from production.strategies import (
     RiskAdjustedStrategy,
     RollingHorizonMPC
 )
-from production.core.backtest_engine import BacktestEngine, calculate_metrics
+from production.core.backtest_engine import BacktestEngine, calculate_metrics, calculate_metrics_by_year
 
 
 class StrategyRunner:
@@ -140,6 +140,7 @@ class StrategyRunner:
 
         results_dict = {}
         metrics_list = []
+        metrics_by_year_dict = {}  # Store year-by-year metrics
 
         for i, strategy in enumerate(all_strategies, 1):
             if verbose:
@@ -148,12 +149,16 @@ class StrategyRunner:
             # Run backtest
             results = self.engine.run(strategy)
 
-            # Calculate metrics
+            # Calculate overall metrics
             metrics = calculate_metrics(results)
+
+            # Calculate year-by-year metrics
+            year_metrics = calculate_metrics_by_year(results)
 
             # Store results
             results_dict[strategy.name] = results
             metrics_list.append(metrics)
+            metrics_by_year_dict[strategy.name] = year_metrics
 
             if verbose:
                 print(f"  Total Revenue:  ${metrics['total_revenue']:,.2f}")
@@ -181,7 +186,23 @@ class StrategyRunner:
         # Sort by net earnings
         metrics_df = metrics_df.sort_values('net_earnings', ascending=False)
 
-        return results_dict, metrics_df
+        # Create year-by-year DataFrame (flattened from nested dict)
+        year_metrics_list = []
+        for strategy_name, year_dict in metrics_by_year_dict.items():
+            for year, metrics in year_dict.items():
+                year_metrics_list.append(metrics)
+
+        metrics_by_year_df = pd.DataFrame(year_metrics_list) if year_metrics_list else pd.DataFrame()
+
+        if not metrics_by_year_df.empty:
+            # Add metadata
+            metrics_by_year_df['type'] = metrics_by_year_df['strategy'].apply(
+                lambda x: 'Baseline' if x in baseline_names else 'Prediction'
+            )
+            metrics_by_year_df['commodity'] = commodity
+            metrics_by_year_df['model_version'] = model_version
+
+        return results_dict, metrics_df, metrics_by_year_df
 
     def analyze_best_performers(
         self,
