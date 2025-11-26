@@ -48,18 +48,20 @@
 
 ## Critical Findings
 
-### 1. Coverage Validation Bug (BLOCKER)
+### 1. Coverage Validation Bug (FIXED 2025-11-25)
 
-**Location:** `analysis/optimization/run_parameter_optimization.py:149`
+**Location:** `analysis/optimization/run_parameter_optimization.py:136-158`
 
-**Current (Wrong) Logic:**
+**Problem (BEFORE - commit b7c9ef0):**
 ```python
+# WRONG: Checked against ALL price dates
+coverage_pct = len(common_dates) / len(all_price_dates) * 100
 if coverage_pct < 50:
     raise ValueError(f"Insufficient overlap: only {coverage_pct:.1f}% coverage...")
 ```
 
-**Problem:**
-- Checks percentage of ALL price data (2015-2025: 2726 days)
+**Issue:**
+- Checked percentage of ALL price data (2015-2025: 2726 days)
 - Predictions only go back to 2022 (951 days)
 - Result: 951 perfect overlapping dates rejected as "34.9% coverage"
 
@@ -68,25 +70,26 @@ if coverage_pct < 50:
 Price data:    2015-2025 (2726 days)
 Predictions:   2022-2025 (951 days)
 Overlap:       951 days (100% of prediction period!)
-Coverage:      951/2726 = 34.9% ❌ REJECTED
+Coverage:      951/2726 = 34.9% ❌ WRONGLY REJECTED
 ```
 
-**Established Standard** (from forecast loader):
-- **90%+ coverage** of prediction period
-- **730 day minimum** absolute count
-
-**Fix Required:**
+**Solution Implemented (commit b7c9ef0):**
 ```python
-# Remove percentage check against ALL prices
-# Apply forecast loader standard instead:
-if len(common_dates) < 730:
-    raise ValueError(f"Insufficient data: only {len(common_dates)} days (need 730+)")
+# CORRECT: Check against PREDICTION dates
+pred_coverage_pct = len(common_dates) / len(all_pred_dates) * 100
 
-# Check coverage of PREDICTION period, not all price history
-pred_coverage = len(common_dates) / len(pred_dates)
-if pred_coverage < 0.90:
-    raise ValueError(f"Sparse predictions: only {pred_coverage:.1%} coverage (need 90%+)")
+# Apply forecast loader standard: 730 day minimum
+if len(common_dates) < 730:
+    raise ValueError(f"Insufficient data: only {len(common_dates)} overlapping days (need 730+)")
+
+# Apply forecast loader standard: 90%+ coverage of PREDICTION period
+if pred_coverage_pct < 90:
+    raise ValueError(f"Sparse predictions: only {pred_coverage_pct:.1f}% coverage of prediction period (need 90%+)")
 ```
+
+**Status:** ✅ FIXED - Commit b7c9ef0 (2025-11-25, by Tony)
+
+**Validation:** Now correctly checks coverage against prediction period (90%+ coverage + 730 day minimum)
 
 ### 2. RollingHorizonMPC Strategy Added
 
@@ -311,18 +314,18 @@ pred_dates = set(pd.to_datetime(pred_df['timestamp']).dt.normalize())
 
 **Fixed in:** `test_lp_only.py:52`
 
-### Issue 4: Coverage Validation Too Strict
+### Issue 4: Coverage Validation Too Strict (FIXED)
 
-**Error:**
+**Error (BEFORE commit b7c9ef0):**
 ```
 ValueError: Insufficient overlap: only 34.9% coverage (951/2726 days)
 ```
 
-**Cause:** Checks against ALL price history, not prediction period
+**Cause:** Was checking against ALL price history, not prediction period
 
-**Fix:** See [Coverage Validation Bug](#1-coverage-validation-bug-blocker) above
+**Fix:** See [Coverage Validation Bug](#1-coverage-validation-bug-fixed-2025-11-25) above
 
-**Status:** Documented, not yet fixed
+**Status:** ✅ FIXED in commit b7c9ef0 (2025-11-25)
 
 ---
 
@@ -334,9 +337,10 @@ ValueError: Insufficient overlap: only 34.9% coverage (951/2726 days)
    - All 102 Optuna parameters now flow through correctly
    - See "Strategy Runner Parameter Flow" section above
 
-2. **Fix coverage validation** in `run_parameter_optimization.py:149` ⚠️ BLOCKER
-   - Remove percentage check against all prices
-   - Apply forecast loader standard (90%+ of predictions + 730 day minimum)
+2. ✅ **COMPLETED (2025-11-25):** Fixed coverage validation bug
+   - Commit b7c9ef0 by Tony
+   - Now correctly checks coverage against prediction period (not all price history)
+   - See "Coverage Validation Bug" section above
 
 3. **Push test_lp_only.py fixes**
    - Table name: `commodity.trading_agent.predictions_coffee`
