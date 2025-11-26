@@ -79,9 +79,13 @@ def test_parameter_manager():
 if __name__ == "__main__":
     try:
         success = test_parameter_manager()
-        sys.exit(0 if success else 1)
+        if success:
+            print("\n✓ All tests passed - script completed successfully")
+        else:
+            print("\n✗ Tests failed - raising exception")
+            raise RuntimeError("Test failures detected")
     except Exception as e:
         print(f"\n✗ TEST FAILED: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
+        raise  # Re-raise to signal failure to Databricks
