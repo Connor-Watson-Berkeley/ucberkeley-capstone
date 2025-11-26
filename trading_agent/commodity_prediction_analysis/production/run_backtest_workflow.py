@@ -343,16 +343,19 @@ def run_full_workflow(commodities=None, skip_predictions=False, reload_forecasts
 
         print(f"\nRunning backtests for: {list(commodity_configs.keys())}")
 
-        # Initialize runner with parameter management
-        # Note: Parameters will be loaded per-commodity in the runner
+        # Load default parameters from config
+        # Note: Using explicit defaults to avoid parameter_manager fallback issues
+        from production.config import BASELINE_PARAMS, PREDICTION_PARAMS
+
+        # Initialize runner with explicit default parameters
         runner = MultiCommodityRunner(
             spark=spark,
             commodity_configs=commodity_configs,
-            baseline_params=None,  # Will be loaded per commodity-model pair
-            prediction_params=None,  # Will be loaded per commodity-model pair
+            baseline_params=BASELINE_PARAMS,  # Explicit defaults from config
+            prediction_params=PREDICTION_PARAMS,  # Explicit defaults from config
             volume_path=VOLUME_PATH,
             output_schema=OUTPUT_SCHEMA,
-            use_optimized_params=True  # Enable automatic optimized parameter loading
+            use_optimized_params=False  # Use explicit params instead of parameter_manager
         )
 
         # Run backtests
