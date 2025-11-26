@@ -6,6 +6,7 @@ Handles loading prices and prediction matrices for backtesting
 import pandas as pd
 import pickle
 from typing import Dict, Tuple, Optional, Any
+from pyspark.sql import functions as F
 
 
 class DataLoader:
@@ -70,14 +71,14 @@ class DataLoader:
             raise ValueError("Spark session required to load prices from Delta table")
 
         # Load from unified_data and filter by commodity
-        # Note: unified_data has 'close' column, rename to 'price' for consistency
+        # unified_data grain is (date, commodity, region) but price is same across regions
+        # So aggregate by date to get one row per date
         prices = self.spark.table(data_paths['prices_source']) \
             .filter(f"commodity = '{commodity.title()}'") \
-            .select('date', 'close') \
+            .groupBy('date').agg(
+                F.first('close').alias('price')  # Price is same across regions
+            ) \
             .toPandas()
-
-        # Rename 'close' to 'price' for consistency with backtesting code
-        prices = prices.rename(columns={'close': 'price'})
 
         # CRITICAL: Normalize dates to midnight for dictionary lookup compatibility
         prices['date'] = pd.to_datetime(prices['date']).dt.normalize()

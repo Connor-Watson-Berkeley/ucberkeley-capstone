@@ -6,19 +6,32 @@ Purpose:
     and identify the best trading approaches for each commodity.
 
 Workflow:
-    1. Load latest forecast predictions (run_02_forecast_predictions.py)
-    2. Run backtests for all strategies (multi_commodity_runner)
-    3. Generate performance summaries
-    4. Identify best strategies per commodity
-    5. Optionally run theoretical max analysis
+    1. (Optional) Regenerate synthetic predictions
+    2. (Optional) Load/reload latest forecast predictions
+    3. (Optional) Reoptimize strategy parameters with Optuna
+    4. Run backtests for all 10 strategies (multi_commodity_runner)
+    5. Generate performance summaries
+    6. Identify best strategies per commodity
 
 Frequency:
     Run PERIODICALLY (monthly/quarterly) to re-evaluate strategies
     NOT daily - this is for strategic analysis, not operational recommendations
 
 Usage:
-    # Full workflow for all commodities
+    # Standard workflow (use existing predictions and params)
     python production/run_backtest_workflow.py --mode full
+
+    # Force reload forecasts from database
+    python production/run_backtest_workflow.py --mode full --reload-forecasts
+
+    # Regenerate synthetic predictions
+    python production/run_backtest_workflow.py --mode full --regenerate-synthetic
+
+    # Reoptimize parameters (runs Optuna optimization)
+    python production/run_backtest_workflow.py --mode full --reoptimize
+
+    # Full rebuild (all optional steps)
+    python production/run_backtest_workflow.py --mode full --reload-forecasts --regenerate-synthetic --reoptimize
 
     # Single commodity
     python production/run_backtest_workflow.py --mode full --commodity coffee
@@ -142,13 +155,17 @@ def parse_json_summary(output):
         return None
 
 
-def run_full_workflow(commodities=None, skip_predictions=False):
+def run_full_workflow(commodities=None, skip_predictions=False, reload_forecasts=False,
+                     regenerate_synthetic=False, reoptimize=False):
     """
     Run complete backtest workflow
 
     Args:
         commodities: List of commodities or None for all
         skip_predictions: Skip prediction loading step
+        reload_forecasts: Force reload forecasts from database
+        regenerate_synthetic: Regenerate synthetic predictions
+        reoptimize: Re-run Optuna parameter optimization
 
     Returns:
         dict: Workflow summary
@@ -160,6 +177,9 @@ def run_full_workflow(commodities=None, skip_predictions=False):
     print(f"Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Mode: Periodic backtesting (strategy evaluation)")
     print(f"Commodities: {commodities if commodities else 'ALL'}")
+    print(f"Reload forecasts: {reload_forecasts}")
+    print(f"Regenerate synthetic: {regenerate_synthetic}")
+    print(f"Reoptimize params: {reoptimize}")
     print("=" * 80)
 
     workflow_results = {
@@ -172,12 +192,56 @@ def run_full_workflow(commodities=None, skip_predictions=False):
     python_cmd = sys.executable
 
     # ----------------------------------------------------------------------
-    # STEP 1: Load Latest Predictions (Optional)
+    # STEP 1: Regenerate Synthetic Predictions (Optional)
     # ----------------------------------------------------------------------
-    if not skip_predictions:
+    if regenerate_synthetic:
+        cmd = [python_cmd, 'production/scripts/generate_synthetic_predictions.py']
+        if commodities:
+            for commodity in commodities:
+                cmd_commodity = cmd + ['--commodity', commodity]
+                success, stdout, stderr = run_command(
+                    cmd_commodity,
+                    f"Regenerate Synthetic Predictions ({commodity})",
+                    timeout=900
+                )
+
+                step_result = {
+                    'step': f'regenerate_synthetic_{commodity}',
+                    'success': success,
+                    'summary': parse_json_summary(stdout)
+                }
+                workflow_results['steps'].append(step_result)
+
+                if not success:
+                    print(f"\n⚠️  Failed to regenerate synthetic predictions for {commodity}, but continuing...")
+        else:
+            # Run for all commodities
+            for commodity in COMMODITY_CONFIGS.keys():
+                cmd_commodity = cmd + ['--commodity', commodity]
+                success, stdout, stderr = run_command(
+                    cmd_commodity,
+                    f"Regenerate Synthetic Predictions ({commodity})",
+                    timeout=900
+                )
+
+                step_result = {
+                    'step': f'regenerate_synthetic_{commodity}',
+                    'success': success,
+                    'summary': parse_json_summary(stdout)
+                }
+                workflow_results['steps'].append(step_result)
+    else:
+        print("\nℹ️  Using existing synthetic predictions")
+
+    # ----------------------------------------------------------------------
+    # STEP 2: Load Latest Predictions (Optional)
+    # ----------------------------------------------------------------------
+    if not skip_predictions or reload_forecasts:
         cmd = [python_cmd, 'production/scripts/load_forecast_predictions.py']
         if commodities:
             cmd.extend(['--commodities', ','.join(commodities)])
+        if reload_forecasts:
+            cmd.append('--force')  # Force reload from database
 
         success, stdout, stderr = run_command(
             cmd,
@@ -199,13 +263,64 @@ def run_full_workflow(commodities=None, skip_predictions=False):
         print("\nℹ️  Skipping prediction loading (using existing data)")
 
     # ----------------------------------------------------------------------
-    # STEP 2: Run Backtests (Multi-Commodity Runner)
+    # STEP 3: Reoptimize Parameters (Optional)
+    # ----------------------------------------------------------------------
+    if reoptimize:
+        print("\n" + "=" * 80)
+        print("STEP: Reoptimize Strategy Parameters")
+        print("=" * 80)
+        print("Running Optuna optimization to find best parameters...")
+
+        # Run optimizer
+        cmd = [python_cmd, 'analysis/optimization/run_parameter_optimization.py']
+        if commodities:
+            cmd.extend(['--commodity', commodities[0] if len(commodities) == 1 else 'coffee'])
+
+        success, stdout, stderr = run_command(
+            cmd,
+            "Run Optuna Parameter Optimization",
+            timeout=7200  # 2 hours max
+        )
+
+        step_result = {
+            'step': 'reoptimize_params',
+            'success': success,
+            'summary': parse_json_summary(stdout)
+        }
+        workflow_results['steps'].append(step_result)
+
+        if not success:
+            print("\n⚠️  Parameter optimization failed")
+            print("   Checking if previous optimized parameters exist for fallback...")
+
+            # Check if previous params exist - if so, use them and continue
+            from production.parameter_manager import ParameterManager
+            pm = ParameterManager(
+                commodity=commodities[0] if commodities else 'coffee',
+                model_version='arima_v1',
+                verbose=True
+            )
+
+            # Try to load previous params
+            previous_params = pm.load_optimized_params(version='previous')
+            if previous_params:
+                print("   ✓ Found previous optimized parameters - using those instead")
+                print("   Workflow will continue with fallback parameters")
+            else:
+                print("   ✗ No previous parameters available")
+                print("   Workflow will use default hardcoded parameters")
+                # Don't fail the workflow - just continue with defaults
+    else:
+        print("\nℹ️  Using existing optimized parameters (or defaults if unavailable)")
+
+    # ----------------------------------------------------------------------
+    # STEP 4: Run Backtests (Multi-Commodity Runner)
     # ----------------------------------------------------------------------
     print("\n" + "=" * 80)
     print("STEP: Run Strategy Backtests")
     print("=" * 80)
     print("Using production/runners/multi_commodity_runner.py")
-    print("This will backtest all 9 strategies across all commodity-model combinations")
+    print("This will backtest all 10 strategies across all commodity-model combinations")
 
     # Import and run multi_commodity_runner
     try:
@@ -413,6 +528,24 @@ if __name__ == "__main__":
         type=str,
         help='Comma-separated list of commodities'
     )
+    parser.add_argument(
+        '--reload-forecasts',
+        action='store_true',
+        default=False,
+        help='Force reload forecasts from database (default: use existing if available)'
+    )
+    parser.add_argument(
+        '--regenerate-synthetic',
+        action='store_true',
+        default=False,
+        help='Regenerate synthetic predictions (default: use existing)'
+    )
+    parser.add_argument(
+        '--reoptimize',
+        action='store_true',
+        default=False,
+        help='Re-run Optuna parameter optimization (default: use existing optimized params)'
+    )
 
     args = parser.parse_args()
 
@@ -429,12 +562,18 @@ if __name__ == "__main__":
     elif args.mode == 'backtest-only':
         result = run_full_workflow(
             commodities=commodities,
-            skip_predictions=True
+            skip_predictions=True,
+            reload_forecasts=args.reload_forecasts,
+            regenerate_synthetic=args.regenerate_synthetic,
+            reoptimize=args.reoptimize
         )
     else:  # full
         result = run_full_workflow(
             commodities=commodities,
-            skip_predictions=False
+            skip_predictions=False,
+            reload_forecasts=args.reload_forecasts,
+            regenerate_synthetic=args.regenerate_synthetic,
+            reoptimize=args.reoptimize
         )
 
     # Print final JSON summary
