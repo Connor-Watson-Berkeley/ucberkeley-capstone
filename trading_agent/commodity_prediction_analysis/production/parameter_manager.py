@@ -36,6 +36,7 @@ Usage:
 
 import os
 import pickle
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional, Literal
 import warnings
@@ -96,14 +97,30 @@ class ParameterManager:
         self._optimized_params_cache = None
         self._optimized_params_loaded = False
 
-    def get_optimized_params_path(self) -> str:
+    def get_optimized_params_path(self, version: str = 'latest', format: str = 'json') -> str:
         """
         Get file path for optimized parameters.
 
+        Args:
+            version: 'latest', 'previous', or 'timestamped' (for new JSON format)
+            format: 'json' or 'pkl' (for backwards compatibility)
+
         Returns:
-            str: Path to optimized parameters pickle file
+            str: Path to optimized parameters file
         """
-        filename = f"optimized_params_{self.commodity}_{self.model_version}_{self.objective}.pkl"
+        if format == 'json':
+            # New JSON format with versioning
+            if version == 'latest':
+                filename = f"optuna_results_{self.commodity}_{self.model_version}_latest.json"
+            elif version == 'previous':
+                filename = f"optuna_results_{self.commodity}_{self.model_version}_previous.json"
+            else:
+                # For timestamped, caller needs to provide full filename
+                filename = f"optuna_results_{self.commodity}_{self.model_version}_{version}.json"
+        else:
+            # Legacy pickle format (for backwards compatibility)
+            filename = f"optimized_params_{self.commodity}_{self.model_version}_{self.objective}.pkl"
+
         return os.path.join(self.volume_path, 'optimization', filename)
 
     def has_optimized_params(self) -> bool:
@@ -111,55 +128,100 @@ class ParameterManager:
         Check if optimized parameters exist for this commodity/model/objective.
 
         Returns:
-            bool: True if optimized params file exists
+            bool: True if optimized params file exists (JSON or pickle)
         """
-        path = self.get_optimized_params_path()
-        return os.path.exists(path)
+        # Check JSON first (preferred format)
+        json_path = self.get_optimized_params_path(version='latest', format='json')
+        if os.path.exists(json_path):
+            return True
 
-    def load_optimized_params(self, force_reload: bool = False) -> Optional[Dict[str, Any]]:
+        # Fall back to legacy pickle format
+        pkl_path = self.get_optimized_params_path(format='pkl')
+        return os.path.exists(pkl_path)
+
+    def load_optimized_params(self, force_reload: bool = False, version: str = 'latest') -> Optional[Dict[str, Any]]:
         """
-        Load optimized parameters from optimizer output.
+        Load optimized parameters from optimizer output (JSON or pickle).
 
         Args:
             force_reload: Force reload even if cached
+            version: 'latest' or 'previous' (for rollback)
 
         Returns:
             Dict of {strategy_name: params} or None if not available
         """
-        # Return cached if available
-        if self._optimized_params_loaded and not force_reload:
+        # Return cached if available (only for 'latest')
+        if version == 'latest' and self._optimized_params_loaded and not force_reload:
             return self._optimized_params_cache
 
-        path = self.get_optimized_params_path()
+        # Try JSON first (preferred format)
+        json_path = self.get_optimized_params_path(version=version, format='json')
 
-        if not os.path.exists(path):
-            if self.verbose:
-                print(f"ℹ️  No optimized parameters found at: {path}")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r') as f:
+                    data = json.load(f)
+
+                # Extract parameters from JSON structure
+                # JSON format: {'strategies': {strategy_name: {'parameters': {...}, 'best_value': ...}}}
+                params = {}
+                for strategy_name, strategy_data in data.get('strategies', {}).items():
+                    params[strategy_name] = strategy_data.get('parameters', {})
+
+                if self.verbose:
+                    print(f"✓ Loaded optimized parameters from JSON: {json_path}")
+                    print(f"  Version: {version}")
+                    print(f"  Strategies optimized: {len(params)}")
+                    if 'execution_time' in data:
+                        print(f"  Optimization date: {data['execution_time']}")
+                    if 'theoretical_max' in data and data['theoretical_max']:
+                        print(f"  Theoretical max: ${data['theoretical_max']:,.2f}")
+
+                # Cache only 'latest' version
+                if version == 'latest':
+                    self._optimized_params_cache = params
+                    self._optimized_params_loaded = True
+
+                return params
+
+            except Exception as e:
+                if self.verbose:
+                    print(f"⚠️  Failed to load JSON from {json_path}: {e}")
+                # Continue to try pickle format below
+
+        # Fall back to legacy pickle format (only for 'latest')
+        if version == 'latest':
+            pkl_path = self.get_optimized_params_path(format='pkl')
+
+            if os.path.exists(pkl_path):
+                try:
+                    with open(pkl_path, 'rb') as f:
+                        params = pickle.load(f)
+
+                    if self.verbose:
+                        print(f"✓ Loaded optimized parameters from pickle: {pkl_path}")
+                        print(f"  Strategies optimized: {len(params)}")
+                        print(f"  Optimization objective: {self.objective}")
+
+                    self._optimized_params_cache = params
+                    self._optimized_params_loaded = True
+                    return params
+
+                except Exception as e:
+                    warnings.warn(
+                        f"Failed to load optimized parameters from {pkl_path}: {e}. "
+                        f"Falling back to defaults."
+                    )
+
+        # No valid params found
+        if self.verbose:
+            print(f"ℹ️  No optimized parameters found (version={version})")
+
+        if version == 'latest':
             self._optimized_params_cache = None
             self._optimized_params_loaded = True
-            return None
 
-        try:
-            with open(path, 'rb') as f:
-                params = pickle.load(f)
-
-            if self.verbose:
-                print(f"✓ Loaded optimized parameters from: {path}")
-                print(f"  Strategies optimized: {len(params)}")
-                print(f"  Optimization objective: {self.objective}")
-
-            self._optimized_params_cache = params
-            self._optimized_params_loaded = True
-            return params
-
-        except Exception as e:
-            warnings.warn(
-                f"Failed to load optimized parameters from {path}: {e}. "
-                f"Falling back to defaults."
-            )
-            self._optimized_params_cache = None
-            self._optimized_params_loaded = True
-            return None
+        return None
 
     def get_baseline_params(
         self,
@@ -256,7 +318,8 @@ class ParameterManager:
             'moving_average_predictive',
             'expected_value',
             'consensus',
-            'risk_adjusted'
+            'risk_adjusted',
+            'rolling_horizon_mpc'
         ]
 
         prediction_params = {}

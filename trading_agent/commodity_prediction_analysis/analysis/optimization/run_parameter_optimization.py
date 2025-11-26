@@ -28,7 +28,9 @@ import sys
 import os
 from pathlib import Path
 import argparse
+import json
 import pandas as pd
+import numpy as np
 import pickle
 from datetime import datetime
 from pyspark.sql import functions as F
@@ -453,9 +455,65 @@ def run_optimization(
     summary_df.to_csv(csv_file, index=False)
     print(f"✓ Saved summary to: {csv_file}")
 
+    # Save JSON results with versioning (for orchestration workflow)
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+    # Convert params to JSON-serializable format
+    json_params = {}
+    for strategy_name, params in best_params.items():
+        json_params[strategy_name] = {
+            k: (float(v) if isinstance(v, (int, float, np.integer, np.floating)) else v)
+            for k, v in params.items()
+        }
+
+    # Create timestamped JSON file
+    json_data = {
+        'execution_time': datetime.now().isoformat(),
+        'commodity': commodity,
+        'model_version': model_version,
+        'objective': objective,
+        'n_trials': n_trials,
+        'theoretical_max': float(theoretical_max) if theoretical_max else None,
+        'duration_seconds': 0,  # Will be updated below
+        'strategies': {}
+    }
+
+    for strategy_name, (params, value) in results.items():
+        json_data['strategies'][strategy_name] = {
+            'best_value': float(value),
+            'parameters': json_params.get(strategy_name, {}),
+            'is_baseline': strategy_name in ['immediate_sale', 'equal_batch', 'price_threshold', 'moving_average'],
+            'is_predictive': strategy_name in ['expected_value', 'consensus', 'risk_adjusted',
+                                                'price_threshold_predictive', 'moving_average_predictive',
+                                                'rolling_horizon_mpc']
+        }
+
+    # Save timestamped version
+    json_file_timestamped = f"{output_dir}/optuna_results_{commodity}_{model_version}_{timestamp}.json"
+    with open(json_file_timestamped, 'w') as f:
+        json.dump(json_data, f, indent=2)
+    print(f"✓ Saved JSON (timestamped) to: {json_file_timestamped}")
+
+    # Save/update "latest" version (overwrite previous)
+    json_file_latest = f"{output_dir}/optuna_results_{commodity}_{model_version}_latest.json"
+
+    # Backup previous "latest" if it exists (keep one backup)
+    if os.path.exists(json_file_latest):
+        json_file_backup = f"{output_dir}/optuna_results_{commodity}_{model_version}_previous.json"
+        import shutil
+        shutil.copy2(json_file_latest, json_file_backup)
+        print(f"✓ Backed up previous results to: {json_file_backup}")
+
+    with open(json_file_latest, 'w') as f:
+        json.dump(json_data, f, indent=2)
+    print(f"✓ Saved JSON (latest) to: {json_file_latest}")
+
     # Final summary
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
+
+    # Update JSON duration
+    json_data['duration_seconds'] = duration
 
     print("\n" + "=" * 80)
     print("OPTIMIZATION COMPLETE")
