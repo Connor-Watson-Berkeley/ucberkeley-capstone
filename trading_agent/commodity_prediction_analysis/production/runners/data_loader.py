@@ -58,11 +58,16 @@ class DataLoader:
 
     def _load_prices(self, commodity: str, data_paths: Dict[str, str]) -> pd.DataFrame:
         """
-        Load price data from Delta table
+        Load price data from commodity.silver.unified_data (continuous daily coverage)
+
+        Uses unified_data table which provides:
+        - Continuous daily coverage (every day since 2015-07-07, no gaps)
+        - Forward-filled prices (no NULL values)
+        - Multi-region grain, but prices are identical across regions
 
         Args:
-            commodity: Commodity name to filter by
-            data_paths: Dictionary containing 'prices_source' key
+            commodity: Commodity name to filter by (e.g., 'coffee')
+            data_paths: Dictionary containing data paths (not used for prices, kept for compatibility)
 
         Returns:
             DataFrame with columns ['date', 'price']
@@ -70,12 +75,18 @@ class DataLoader:
         if self.spark is None:
             raise ValueError("Spark session required to load prices from Delta table")
 
-        # Load from prices_prepared table (already commodity-specific)
-        # Table is already in correct format: (date, price)
-        prices = self.spark.table(data_paths['prices_prepared']).toPandas()
+        # Load from unified_data (continuous daily coverage, forward-filled)
+        # unified_data grain is (date, commodity, region) but price is same across regions
+        # Aggregate by date to get one row per date
+        prices = self.spark.table("commodity.silver.unified_data").filter(
+            f"lower(commodity) = '{commodity.lower()}'"
+        ).groupBy("date").agg(
+            F.first("close").alias("price")  # Price is identical across regions, take first
+        ).toPandas()
 
         # CRITICAL: Normalize dates to midnight for dictionary lookup compatibility
         prices['date'] = pd.to_datetime(prices['date']).dt.normalize()
+        prices = prices.sort_values('date').reset_index(drop=True)
 
         return prices
 
