@@ -329,3 +329,102 @@ def calculate_metrics(results: Dict) -> Dict:
         'days_to_liquidate': days_to_liquidate,
         'avg_days_between_trades': days_between_trades
     }
+
+
+def calculate_metrics_by_year(results: Dict) -> Dict[int, Dict]:
+    """
+    Calculate performance metrics broken down by year.
+
+    Since different forecast models have different time periods,
+    year-by-year comparison enables fair comparison across models.
+
+    Args:
+        results: Output from BacktestEngine.run()
+
+    Returns:
+        Dict mapping {year: metrics_dict}
+    """
+    import pandas as pd
+
+    trades = results['trades']
+    daily_state = results['daily_state']
+
+    # Group trades by year
+    trades_by_year = {}
+    for trade in trades:
+        year = trade['date'].year
+        if year not in trades_by_year:
+            trades_by_year[year] = []
+        trades_by_year[year].append(trade)
+
+    # Group daily state by year
+    daily_by_year = {}
+    for state in daily_state:
+        year = state['date'].year
+        if year not in daily_by_year:
+            daily_by_year[year] = []
+        daily_by_year[year].append(state)
+
+    # Calculate metrics for each year
+    metrics_by_year = {}
+
+    for year in sorted(set(list(trades_by_year.keys()) + list(daily_by_year.keys()))):
+        year_trades = trades_by_year.get(year, [])
+        year_daily = daily_by_year.get(year, [])
+
+        # Calculate year totals
+        year_revenue = sum(t['revenue'] for t in year_trades)
+        year_transaction_costs = sum(t['transaction_cost'] for t in year_trades)
+
+        # Calculate storage costs for this year
+        year_storage_costs = 0.0
+        for state in year_daily:
+            if 'storage_cost' in state:
+                year_storage_costs += state['storage_cost']
+
+        year_net_earnings = year_revenue - year_transaction_costs - year_storage_costs
+
+        # Trading metrics
+        n_trades = len(year_trades)
+
+        if n_trades > 0:
+            total_volume = sum(t['amount'] for t in year_trades)
+            avg_sale_price = year_revenue / total_volume if total_volume > 0 else 0
+
+            first_trade_day = year_trades[0]['day']
+            last_trade_day = year_trades[-1]['day']
+            days_to_liquidate = last_trade_day - first_trade_day
+
+            if n_trades > 1:
+                trade_days = [t['day'] for t in year_trades]
+                days_between_trades = float(np.mean(np.diff(trade_days)))
+            else:
+                days_between_trades = 0.0
+
+            first_sale_price = year_trades[0]['price']
+            last_sale_price = year_trades[-1]['price']
+        else:
+            avg_sale_price = 0.0
+            days_to_liquidate = 0
+            days_between_trades = 0.0
+            first_sale_price = 0.0
+            last_sale_price = 0.0
+
+        metrics_by_year[year] = {
+            'year': year,
+            'strategy': results['strategy_name'],
+            'net_earnings': year_net_earnings,
+            'total_revenue': year_revenue,
+            'total_costs': year_transaction_costs + year_storage_costs,
+            'transaction_costs': year_transaction_costs,
+            'storage_costs': year_storage_costs,
+            'avg_sale_price': avg_sale_price,
+            'first_sale_price': first_sale_price,
+            'last_sale_price': last_sale_price,
+            'n_trades': n_trades,
+            'days_to_liquidate': days_to_liquidate,
+            'avg_days_between_trades': days_between_trades,
+            'n_days_in_year': len(year_daily)
+        }
+
+    return metrics_by_year

@@ -5,7 +5,7 @@ Handles persistence of backtest results to Delta tables and pickle files
 
 import pandas as pd
 import pickle
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pathlib import Path
 
 
@@ -28,6 +28,7 @@ class ResultSaver:
         metrics_df: pd.DataFrame,
         results_dict: Dict[str, Any],
         data_paths: Dict[str, str],
+        metrics_by_year_df: Optional[pd.DataFrame] = None,
         verbose: bool = True
     ) -> Dict[str, str]:
         """
@@ -36,9 +37,10 @@ class ResultSaver:
         Args:
             commodity: Commodity name
             model_version: Model version
-            metrics_df: Metrics DataFrame
+            metrics_df: Overall metrics DataFrame
             results_dict: Full results dictionary
             data_paths: Data paths from config
+            metrics_by_year_df: Year-by-year metrics DataFrame (optional)
             verbose: Print save messages
 
         Returns:
@@ -49,12 +51,23 @@ class ResultSaver:
 
         saved_paths = {}
 
-        # 1. Save metrics to Delta table
+        # 1. Save overall metrics to Delta table
         saved_paths['delta_metrics'] = self._save_metrics_to_delta(
             metrics_df, data_paths['results'], verbose
         )
 
-        # 2. Save detailed results to pickle
+        # 2. Save year-by-year metrics to Delta table (if provided)
+        if metrics_by_year_df is not None and not metrics_by_year_df.empty:
+            # Use same table name with _by_year suffix
+            year_table_name = data_paths['results'].replace(
+                f"results_{commodity}",
+                f"results_{commodity}_by_year"
+            )
+            saved_paths['delta_metrics_by_year'] = self._save_metrics_to_delta(
+                metrics_by_year_df, year_table_name, verbose
+            )
+
+        # 3. Save detailed results to pickle
         saved_paths['pickle_detailed'] = self._save_detailed_to_pickle(
             results_dict, data_paths['results_detailed'], verbose
         )
