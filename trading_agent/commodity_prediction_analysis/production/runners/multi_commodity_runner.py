@@ -403,42 +403,8 @@ def main():
         from production.runners.multi_commodity_runner import main
         results = main()
     """
-    # This would typically be imported from production.config
-    # For now, showing structure
-    from production.config import COMMODITY_CONFIGS
-
-    # Strategy parameters (from notebook 00)
-    BASELINE_PARAMS = {
-        'equal_batch': {
-            'batch_size': 0.25,
-            'frequency_days': 30
-        },
-        'price_threshold': {
-            'threshold_pct': 0.05
-        },
-        'moving_average': {
-            'ma_period': 30
-        }
-    }
-
-    PREDICTION_PARAMS = {
-        'consensus': {
-            'consensus_threshold': 0.70,
-            'min_return': 0.03,
-            'evaluation_day': 14
-        },
-        'expected_value': {
-            'min_ev_improvement': 50,
-            'baseline_batch': 0.15,
-            'baseline_frequency': 10
-        },
-        'risk_adjusted': {
-            'min_return': 0.03,
-            'max_uncertainty': 0.35,
-            'consensus_threshold': 0.60,
-            'evaluation_day': 14
-        }
-    }
+    # Import all parameters from production.config
+    from production.config import COMMODITY_CONFIGS, BASELINE_PARAMS, PREDICTION_PARAMS
 
     # Initialize runner (assuming spark is available)
     runner = MultiCommodityRunner(

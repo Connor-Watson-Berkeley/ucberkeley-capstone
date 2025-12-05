@@ -359,7 +359,9 @@ def calculate_metrics_by_year(results: Dict) -> Dict[int, Dict]:
 
     # Group daily state by year
     daily_by_year = {}
-    for state in daily_state:
+    # Convert DataFrame to list of dicts if it's a DataFrame
+    daily_state_records = daily_state.to_dict('records') if isinstance(daily_state, pd.DataFrame) else daily_state
+    for state in daily_state_records:
         year = state['date'].year
         if year not in daily_by_year:
             daily_by_year[year] = []
