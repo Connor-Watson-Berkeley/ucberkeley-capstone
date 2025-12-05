@@ -42,12 +42,24 @@ Confirmed alignment across entire execution chain:
 
 ### Current Execution Status
 
-**Backtest Job:** Running (Job ID: 973523882071559)
-- Progress: 3/18 models completed for COFFEE
-- Discovered: 5 synthetic models (acc60, acc70, acc80, acc90, acc100) + 13 real models
-- All 10 strategies executing successfully
-- Results saving to Delta tables: `commodity.trading_agent.results_*`
-- Visualizations generating: `/Volumes/commodity/trading_agent/files/*.png`
+**Backtest Job:** ✅ COMPLETED (Job ID: 973523882071559)
+- **Duration:** 12 minutes (721 seconds)
+- **Status:** SUCCESS
+- **Models Processed:**
+  - COFFEE: 18 models (5 synthetic: acc60, acc70, acc80, acc90, acc100 + 13 real models)
+  - SUGAR: 11 models (5 synthetic + 6 real models)
+- **Strategies:** All 10 strategies executed successfully per model
+- **Results:** Saved to Delta tables `commodity.trading_agent.results_{commodity}_{model}`
+- **Year-by-Year:** Saved to `commodity.trading_agent.results_{commodity}_by_year_{model}`
+- **Visualizations:** 5 charts generated per model → `/Volumes/commodity/trading_agent/files/*.png`
+- **Pickle Files:** Detailed results → `/Volumes/commodity/trading_agent/files/results_detailed_*.pkl`
+
+**Notable Results (Coffee):**
+- Best strategy varied by model:
+  - random_walk_v1_test: RollingHorizonMPC ($2,094,118.95)
+  - synthetic_acc100: Price Threshold Predictive ($2,000,452.09)
+  - arima_v1: RollingHorizonMPC ($2,094,118.95)
+  - sarimax_auto_weather_v1: RollingHorizonMPC ($2,109,907.24)
 
 ### Statistical Analysis Framework (Planned)
 
