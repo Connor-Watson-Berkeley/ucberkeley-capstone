@@ -32,7 +32,15 @@ import numpy as np
 from datetime import datetime
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Handle both local and Databricks execution environments
+try:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    # __file__ not defined in Databricks - use current working directory
+    script_dir = os.path.join(os.getcwd(), 'production', 'scripts')
+
+parent_dir = os.path.dirname(os.path.dirname(script_dir))
+sys.path.insert(0, parent_dir)
 
 from production.config import COMMODITY_CONFIGS, OUTPUT_SCHEMA, VOLUME_PATH
 
