@@ -1,7 +1,9 @@
 # Trading Agent - Production System
 
-**Status:** ✅ Phase 2 Core Complete (Automation ready for periodic backtesting)
-**Last Updated:** 2025-11-24
+**Status:** ✅ Phase 2 Core Complete + Bug Fixes Applied (2025-12-04)
+**Last Updated:** 2025-12-04
+
+> **Recent Updates:** Critical parameter alignment fixes applied. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ---
 
@@ -514,6 +516,7 @@ Tests failing in production/runners/tests/
 
 ## Related Documentation
 
+- **Changelog:** `production/CHANGELOG.md` - Recent bug fixes and updates
 - **Overall System:** `/Users/markgibbons/capstone/ucberkeley-capstone/trading_agent/MASTER_SYSTEM_PLAN.md`
 - **Runners Module:** `production/runners/README.md`
 - **Test Suite:** `production/runners/tests/README.md`
