@@ -31,18 +31,21 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-# Add parent directory to path
-# Handle both local and Databricks execution environments
+# Add parent directory to path for imports
+# Use try/except to handle both local and Databricks environments
 try:
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-except NameError:
-    # __file__ not defined in Databricks - use current working directory
-    script_dir = os.path.join(os.getcwd(), 'production', 'scripts')
-
-parent_dir = os.path.dirname(os.path.dirname(script_dir))
-sys.path.insert(0, parent_dir)
-
-from production.config import COMMODITY_CONFIGS, OUTPUT_SCHEMA, VOLUME_PATH
+    # Try local import first
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from production.config import COMMODITY_CONFIGS, OUTPUT_SCHEMA, VOLUME_PATH
+except (NameError, ModuleNotFoundError):
+    # Databricks environment - define constants directly
+    print("⚠️  Running in Databricks - using hardcoded config constants")
+    COMMODITY_CONFIGS = {
+        'coffee': {'commodity': 'coffee'},
+        'sugar': {'commodity': 'sugar'}
+    }
+    OUTPUT_SCHEMA = "commodity.trading_agent"
+    VOLUME_PATH = "/Volumes/commodity/trading_agent/files"
 
 
 def convert_model_to_pickle(spark, commodity, model_version):
