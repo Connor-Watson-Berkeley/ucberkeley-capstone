@@ -2,11 +2,133 @@
 
 **Critical**: These schemas define interfaces between agents. Changes require team alignment.
 
-## Input: commodity.silver.unified_data
+---
+
+## Input Tables
+
+### commodity.gold.unified_data (RECOMMENDED for ML)
+
+**Owner**: Research Agent
+**Grain**: One row per (date, commodity)
+**Rows**: ~7k (2 commodities × ~3,500 days)
+**Created**: Dec 2024
+**Status**: ✅ Production ready
+
+**Purpose**: Unified data with multi-regional weather and GDELT as array-of-structs for flexible ML feature engineering.
+
+#### Schema
+
+| Column | Type | Description | Nulls |
+|--------|------|-------------|-------|
+| **Primary Keys** ||||
+| `date` | DATE | Calendar date (continuous, no gaps) | No |
+| `commodity` | STRING | 'Coffee' or 'Sugar' | No |
+| **Flags** ||||
+| `is_trading_day` | INT | 1 = trading day, 0 = weekend/holiday | No |
+| **Market Data** ||||
+| `open` | DOUBLE | Futures open price (USD) | No |
+| `high` | DOUBLE | Daily high | No |
+| `low` | DOUBLE | Daily low | No |
+| `close` | DOUBLE | Futures close price (USD, **target variable**) | No |
+| `volume` | DOUBLE | Trading volume | No |
+| **Market Volatility** ||||
+| `vix` | DOUBLE | Volatility index (forward-filled) | No |
+| **Exchange Rates** (24 columns) ||||
+| `vnd_usd` | DOUBLE | Vietnamese Dong / USD | No |
+| `cop_usd` | DOUBLE | Colombian Peso / USD (critical for trader use case) | No |
+| `idr_usd` | DOUBLE | Indonesian Rupiah / USD | No |
+| ... | DOUBLE | 21 more exchange rates | No |
+| **Weather Data** (Array of Structs) ||||
+| `weather_data` | ARRAY&lt;STRUCT&gt; | Multi-regional weather data | No |
+| **GDELT Sentiment** (Array of Structs) ||||
+| `gdelt_themes` | ARRAY&lt;STRUCT&gt; | News sentiment by theme group | No |
+
+#### Array Structures
+
+**weather_data**: Array of structs, one per region
+```sql
+ARRAY<STRUCT<
+  region STRING,              -- e.g., 'Sul_de_Minas', 'Bugisu_Uganda'
+  temp_max_c DOUBLE,
+  temp_min_c DOUBLE,
+  temp_mean_c DOUBLE,
+  precipitation_mm DOUBLE,
+  rain_mm DOUBLE,
+  snowfall_cm DOUBLE,
+  humidity_mean_pct DOUBLE,
+  wind_speed_max_kmh DOUBLE
+>>
+```
+
+**gdelt_themes**: Array of structs, one per theme group (7 groups)
+```sql
+ARRAY<STRUCT<
+  theme_group STRING,         -- SUPPLY, LOGISTICS, TRADE, MARKET, POLICY, CORE, OTHER
+  article_count INT,
+  tone_avg DOUBLE,
+  tone_positive DOUBLE,
+  tone_negative DOUBLE,
+  tone_polarity DOUBLE
+>>
+```
+
+#### Data Quality
+
+- ✅ **No nulls**: All scalar columns are forward-filled
+- ✅ **Continuous dates**: No gaps from 2015-07-07 to present
+- ✅ **Unique grain**: (date, commodity) is unique
+- ✅ **90% row reduction**: vs silver.unified_data (~7k vs ~75k rows)
+- ✅ **Validated**: See `research_agent/infrastructure/tests/validate_gold_unified_data.py`
+
+#### Usage Pattern
+
+```python
+# Load gold.unified_data for ML training
+df = spark.table("commodity.gold.unified_data") \
+    .filter("commodity = 'Coffee' AND is_trading_day = 1")
+
+# Explode weather array to access regional data
+from pyspark.sql.functions import explode
+
+weather_df = df.select(
+    "date",
+    "commodity",
+    "close",
+    explode("weather_data").alias("weather")
+).select(
+    "date",
+    "commodity",
+    "close",
+    "weather.region",
+    "weather.temp_mean_c",
+    "weather.precipitation_mm"
+)
+
+# Or aggregate weather features (mean temperature across all regions)
+from pyspark.sql.functions import expr
+
+agg_df = df.select(
+    "date",
+    "commodity",
+    "close",
+    expr("aggregate(weather_data, 0.0, (acc, w) -> acc + w.temp_mean_c, acc -> acc / size(weather_data))").alias("avg_temp")
+)
+```
+
+**When to use gold.unified_data**:
+- ✅ Training ML models with flexible regional aggregation
+- ✅ Models that need to choose how to aggregate regions (mean, weighted, separate features)
+- ✅ When you want fewer rows for faster processing (~90% reduction)
+- ✅ When you need GDELT sentiment data
+
+---
+
+### commodity.silver.unified_data (Legacy)
 
 **Owner**: Research Agent (Francisco)
 **Grain**: One row per (date, commodity, region)
 **Rows**: ~75k (as of Oct 2024)
+**Status**: ⚠️ Maintained for compatibility, prefer gold.unified_data for new models
 
 ### Schema
 

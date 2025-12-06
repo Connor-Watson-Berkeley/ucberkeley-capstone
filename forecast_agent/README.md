@@ -84,7 +84,9 @@ python quick_eval.py --commodity Coffee --model naive
 ## Data Flow
 
 ```
-commodity.silver.unified_data (input)
+commodity.gold.unified_data (recommended input - array-based)
+  OR
+commodity.silver.unified_data (legacy input - regional grain)
   ↓
 Train models → commodity.forecast.trained_models (model storage)
   ↓
@@ -95,7 +97,10 @@ commodity.forecast.point_forecasts (14-day predictions)
 commodity.forecast.forecast_metadata (performance metrics)
 ```
 
-**Input data**: See `../research_agent/UNIFIED_DATA_ARCHITECTURE.md` for unified_data schema details.
+**Input data**:
+- **Recommended**: `commodity.gold.unified_data` (90% fewer rows, array-based weather/GDELT)
+- **Legacy**: `commodity.silver.unified_data` (regional grain, maintained for compatibility)
+- **Schema details**: See `../research_agent/UNIFIED_DATA_ARCHITECTURE.md` and `../docs/DATA_CONTRACTS.md`
 
 ## Model Registry
 

@@ -186,9 +186,15 @@ See: [SPARK_BACKFILL_GUIDE.md](SPARK_BACKFILL_GUIDE.md)
 
 ### Input Table
 
-**`commodity.silver.unified_data`**
-- Unified commodity prices with weather, GDELT sentiment, VIX, exchange rates
+**`commodity.gold.unified_data` (Recommended)**
+- Unified commodity prices with multi-regional weather (array-based), GDELT sentiment (7 theme groups), VIX, exchange rates
 - Daily continuous data (including weekends) with forward-fill
+- Grain: (date, commodity) - 90% fewer rows than silver (~7k vs ~75k)
+- Array structures: `weather_data` (regions), `gdelt_themes` (theme groups)
+
+**`commodity.silver.unified_data` (Legacy - Maintained for Compatibility)**
+- Same features as gold, but regional grain: (date, commodity, region)
+- Use gold.unified_data for new models unless you need explicit regional rows
 - See `../research_agent/UNIFIED_DATA_ARCHITECTURE.md` for details
 
 ### Output Tables

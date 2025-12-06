@@ -1,12 +1,54 @@
 # Unified Data Architecture
 
-**Purpose**: Document the design philosophy and technical approach for `commodity.silver.unified_data`
+**Purpose**: Document the design philosophy and technical approach for unified commodity data
 
 **Owner**: Research Agent (Stuart & Francisco)
 
 ---
 
-## Data Hierarchy
+## Overview: Silver vs Gold Layers
+
+This document covers TWO unified data tables:
+
+| Table | Grain | Rows | Use Case |
+|-------|-------|------|----------|
+| **commodity.silver.unified_data** | (date, commodity, region) | ~75k | Regional analysis, data exploration |
+| **commodity.gold.unified_data** | (date, commodity) | ~7k | **ML training** (array-based, flexible aggregation) |
+
+**Recommendation**: Use **gold.unified_data** for ML models - it's faster (90% fewer rows) and more flexible.
+
+---
+
+## Gold Layer (Recommended for ML)
+
+### Data Hierarchy
+
+**Grain**: One row per `(date, commodity)`
+
+```
+Date (daily, continuous)
+  ├── Commodity (Coffee, Sugar)
+      ├── weather_data: ARRAY<STRUCT<region, temp, precip, ...>>
+      ├── gdelt_themes: ARRAY<STRUCT<theme_group, count, tone, ...>>
+```
+
+**Why this grain?**
+- **90% fewer rows**: ~7k vs ~75k (faster training, lower memory)
+- **Flexible aggregation**: Models decide how to use regional data
+  - Mean temperature across all regions
+  - Weighted by production volume
+  - Separate features per region
+  - Learn regional importance via attention mechanisms
+- **Clean ML integration**: Array operations work natively with PySpark ML transformers
+- **Includes GDELT**: News sentiment as array of theme groups
+
+**Schema Details**: See [docs/DATA_CONTRACTS.md](../docs/DATA_CONTRACTS.md)
+
+---
+
+## Silver Layer (Legacy, Maintained for Compatibility)
+
+### Data Hierarchy
 
 **Grain**: One row per `(date, commodity, region)`
 
@@ -20,7 +62,7 @@ Date (daily, continuous)
 - **Date**: Full calendar coverage (trading + non-trading days)
 - **Commodity**: Separate time series for Coffee and Sugar
 - **Region**: Preserves geographic granularity for weather data
-- **Flexibility**: Forecast models can aggregate/pivot regions as needed
+- **Flexibility**: Forecast models can aggregate/pivot regions as needed (but requires manual pivoting)
 
 ---
 
