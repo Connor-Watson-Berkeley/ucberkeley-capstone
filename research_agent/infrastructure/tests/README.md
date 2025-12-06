@@ -6,6 +6,9 @@
 
 ### Data Quality Tests
 ```bash
+# Validate gold.unified_data table (comprehensive)
+python tests/validate_gold_unified_data.py
+
 # Validate July 2021 frost event captured
 python tests/validate_july2021_frost.py
 

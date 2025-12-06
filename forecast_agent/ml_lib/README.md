@@ -134,30 +134,26 @@ ml_lib/
 │   └── ARCHITECTURE_ANALYSIS.md    # Detailed trade-offs and decisions
 │
 ├── transformers/                   # Custom PySpark transformers
-│   ├── weather_features.py         # Add weather columns
-│   ├── sentiment_features.py       # Add GDELT sentiment
-│   ├── lag_features.py             # LagFeatureEstimator (fit finds optimal lags)
-│   └── time_features.py            # Day of week, month, seasonality
+│   ├── weather_features.py         # Unpack weather arrays (aggregation, regions)
+│   └── sentiment_features.py       # Unpack GDELT themes (weighted aggregation)
 │
 ├── models/                         # Model implementations
-│   ├── baseline.py                 # Naive, RandomWalk
-│   ├── linear.py                   # LinearRegression, Ridge, LASSO
-│   └── xgboost_model.py            # XGBoost forecaster
+│   ├── baseline.py                 # NaiveForecaster
+│   └── linear.py                   # LinearRegression, Ridge, LASSO, ElasticNet
 │
 ├── cross_validation/               # Time-series CV
 │   ├── time_series_cv.py           # TimeSeriesForecastCV class
-│   └── data_loader.py              # Loads commodity.silver.unified_data
+│   └── data_loader.py              # GoldDataLoader (loads gold.unified_data)
 │
 ├── pipelines/                      # Pipeline definitions (model registry)
 │   ├── pipeline_registry.py        # All model configs (builder functions)
-│   └── pipeline_factory.py         # get_pipeline() - lazy load
+│   └── __init__.py                 # get_pipeline(), list_models()
 │
 ├── monte_carlo/                    # Uncertainty quantification
-│   └── path_generator.py           # Block bootstrap path generation
+│   └── path_generator.py           # BlockBootstrapPathGenerator
 │
-├── persistence/                    # Save/load pipelines
-│   ├── pipeline_saver.py           # DBFS save/load
-│   └── metadata_tracker.py         # SQL table tracking
+├── examples/                       # Example notebooks
+│   └── end_to_end_example.py       # Complete workflow demo (Databricks notebook)
 │
 ├── train.py                        # Stage 1: Train models with CV
 └── inference.py                    # Stage 2: Generate forecasts
@@ -167,22 +163,39 @@ ml_lib/
 
 ## Quick Start
 
+### Prerequisites
+
+1. **Gold layer table exists:**
+   ```sql
+   -- Run this SQL in Databricks:
+   -- research_agent/sql/create_gold_unified_data.sql
+   ```
+
+2. **Validation passed:**
+   ```python
+   # Run validation notebook in Databricks:
+   # research_agent/infrastructure/databricks/validate_gold_unified_data.py
+   ```
+
 ### Stage 1: Train Models
 
 ```bash
 cd forecast_agent/ml_lib
 
+# List available models
+python train.py --list-models
+
 # Train with 5-fold expanding window CV
 python train.py \
   --commodity Coffee \
-  --models xgboost_weather linear_baseline \
-  --cv-folds 5 \
-  --cv-window expanding
+  --models naive_baseline linear_weather_min_max \
+  --n-folds 5 \
+  --window-type expanding
 
 # Output:
-# - Fitted pipelines: dbfs:/forecast_models/coffee_xgboost_weather_2024-12-05/
-# - Metadata: commodity.forecast.ml_pipeline_metadata
-# - CV residuals: dbfs:/forecast_residuals/coffee_xgboost_weather_2024-12-05.parquet
+# - Fitted pipelines: dbfs:/commodity/models/Coffee/<model>/<date>/final
+# - Metadata: commodity.forecast.model_metadata
+# - CV residuals: dbfs:/commodity/residuals/Coffee/<model>/<date>
 ```
 
 ### Stage 2: Generate Forecasts
@@ -191,37 +204,52 @@ python train.py \
 # Load fitted pipeline and generate forecasts
 python inference.py \
   --commodity Coffee \
-  --model xgboost_weather \
-  --start-date 2024-01-01 \
-  --end-date 2024-12-31 \
-  --n-paths 2000
+  --models naive_baseline linear_weather_min_max \
+  --n-paths 2000 \
+  --block-size 3
 
 # Output:
 # - Point forecasts: commodity.forecast.point_forecasts
 # - Monte Carlo paths: commodity.forecast.distributions
 ```
 
+### Complete Example (Databricks Notebook)
+
+See `examples/end_to_end_example.py` for a complete workflow demonstration including:
+- Training 2 models
+- Generating forecasts
+- Validating results
+- Visualizing uncertainty
+
 ---
 
 ## Data Flow
 
 ```
-commodity.silver.unified_data (continuous daily data)
+commodity.gold.unified_data (array-based daily data)
+  ├─ Grain: (date, commodity)
+  ├─ Weather: ARRAY<STRUCT> with ~65 regions per row
+  └─ GDELT: ARRAY<STRUCT> with 7 theme groups per row
+  ↓
+[GoldDataLoader] → Load and filter data
   ↓
 [TimeSeriesForecastCV]
-  ├─ Expanding window splits (2018-2020, 2018-2021, etc.)
+  ├─ Expanding window splits (2015-2020, 2015-2021, etc.)
   ├─ Fit pipeline on each fold
   ├─ Collect residuals for uncertainty estimation
-  └─ Save metrics to metadata table
+  └─ Calculate directional accuracy metrics
   ↓
 [train.py] → Fitted PipelineModel saved to DBFS
+  ├─ Model: dbfs:/commodity/models/Coffee/naive_baseline/2024-12-05/final
+  ├─ Residuals: dbfs:/commodity/residuals/Coffee/naive_baseline/2024-12-05
+  └─ Metadata: commodity.forecast.model_metadata
   ↓
 [inference.py] → Load pipeline, generate forecasts
-  ├─ Point forecasts (mean predictions)
-  └─ Monte Carlo paths (block bootstrap on CV residuals)
+  ├─ Point forecasts (14-day predictions)
+  └─ Monte Carlo paths (2,000 paths via block bootstrap)
   ↓
-commodity.forecast.distributions (2,000 paths × dates)
-commodity.forecast.point_forecasts (14-day predictions)
+commodity.forecast.point_forecasts (1 row per forecast)
+commodity.forecast.distributions (2,000 paths per forecast)
 ```
 
 ---
@@ -303,9 +331,10 @@ python inference.py --commodity Coffee --model my_new_model --start-date 2024-01
 - Metadata queryable in SQL for analysis
 
 **Storage:**
-- Fitted pipelines: `dbfs:/forecast_models/{commodity}_{model}_{date}/`
-- Metadata: `commodity.forecast.ml_pipeline_metadata`
-- CV residuals: `dbfs:/forecast_residuals/{commodity}_{model}_{date}.parquet`
+- Fitted pipelines: `dbfs:/commodity/models/{commodity}/{model}/{date}/final`
+- Fold models (optional): `dbfs:/commodity/models/{commodity}/{model}/{date}/fold_{i}`
+- Metadata: `commodity.forecast.model_metadata`
+- CV residuals: `dbfs:/commodity/residuals/{commodity}/{model}/{date}`
 
 ---
 
@@ -431,33 +460,63 @@ def build_arima_pipeline():
 
 ---
 
-## Migration Plan
+## Implementation Status
 
-### Phase 1: Proof of Concept (Current)
+### Phase 1: Core Infrastructure ✅ Complete
 - [x] Create folder structure
 - [x] Document architecture decisions
-- [ ] Implement `TimeSeriesForecastCV`
-- [ ] Implement block bootstrap path generator
-- [ ] Migrate 2 models: Naive baseline, Linear Regression
-- [ ] Test on small date range (Jan 2024)
+- [x] Implement `GoldDataLoader` (array-based gold.unified_data)
+- [x] Implement `TimeSeriesForecastCV` with directional accuracy
+- [x] Implement `BlockBootstrapPathGenerator`
+- [x] Implement custom transformers:
+  - [x] `WeatherAggregator` (min/max/mean aggregations)
+  - [x] `WeatherRegionSelector` (top coffee regions)
+  - [x] `WeatherRegionExpander` (all ~65 regions)
+  - [x] `GdeltAggregator` (weighted by article count)
+  - [x] `GdeltThemeExpander` (7 theme groups)
+- [x] Implement baseline models:
+  - [x] `NaiveForecaster`
+  - [x] Linear regression variants (Ridge, LASSO, ElasticNet)
+- [x] Create pipeline registry with builder functions
+- [x] Create `train.py` (Stage 1 - training workflow)
+- [x] Create `inference.py` (Stage 2 - forecasting workflow)
+- [x] Create end-to-end example notebook
 
-### Phase 2: Expand Coverage
+### Phase 2: Add Advanced Models
 - [ ] Add XGBoost with full feature engineering
 - [ ] Add ARIMA/SARIMAX (custom Estimator wrapper)
+- [ ] Add LSTM/TFT (deep learning models)
 - [ ] Compare metrics across all models
 
-### Phase 3: Production
-- [ ] Wire up to Databricks jobs
-- [ ] Backfill historical forecasts
+### Phase 3: Production Deployment
+- [ ] Run validation notebook in Databricks
+- [ ] Test end-to-end workflow with Coffee 2024 data
+- [ ] Wire up to Databricks scheduled jobs
+- [ ] Backfill historical forecasts (2015-2024)
+- [ ] Integrate with trading_agent
 - [ ] Deprecate legacy code
 
 ---
 
-## Open Questions / TODOs
+## Current Models Available
 
-1. **ARIMA Integration:** Need custom `ARIMAEstimator` wrapper (statsmodels not native to Spark)
-2. **Spark Parallelization:** Can parallelize inference across dates using `spark.parallelize(dates)`
-3. **Feature Store:** Consider pre-computing expensive features later (not MVP)
+1. **`naive_baseline`** - Forecast = last observed value (baseline for comparison)
+2. **`linear_weather_min_max`** - Linear regression with extreme weather events (min/max)
+3. **`linear_weather_all`** - Linear regression with all weather aggregations (mean + min + max)
+4. **`ridge_top_regions`** - Ridge regression with top 6 coffee producing regions
+
+**To list all models:**
+```python
+from ml_lib.pipelines import list_models
+list_models()
+```
+
+## Next Steps
+
+1. **Immediate:** Run validation notebook in Databricks to verify gold.unified_data
+2. **Test:** Execute end-to-end example notebook with Coffee 2024 data
+3. **Expand:** Add XGBoost, ARIMA, and deep learning models
+4. **Production:** Backfill historical forecasts and integrate with trading_agent
 
 ---
 
