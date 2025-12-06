@@ -272,6 +272,35 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ---
 
+## Databricks Infrastructure Rules (CRITICAL)
+
+**NEVER use Databricks Serverless - it is extremely expensive!**
+
+**Instead:**
+- **For SQL queries** → Use Unity Catalog SQL warehouse
+- **For notebooks/Python** → Use dedicated clusters
+
+**Finding or Creating Clusters:**
+1. Check component's `infrastructure/databricks/clusters/` folder for existing cluster configs
+2. Examples:
+   - `forecast_agent/infrastructure/databricks/clusters/`
+   - `research_agent/infrastructure/databricks/clusters/`
+3. If no suitable cluster exists → Use Databricks API to create one (see cluster config examples)
+4. DO NOT create Serverless compute
+
+**Example: List existing clusters**
+```bash
+databricks clusters list
+```
+
+**Example: Create cluster via API**
+```python
+# See forecast_agent/infrastructure/databricks/clusters/create_ml_clusters.py
+# Use similar pattern with appropriate cluster config
+```
+
+---
+
 ## Databricks Deployment Workflow
 
 **Full workflow: Local Development → Git → Databricks → Execution**
@@ -304,7 +333,7 @@ python infrastructure/databricks/clusters/deploy_package.py
 
 ### 4. Run on Databricks
 ```bash
-# Option A: Run notebook in Databricks UI
+# Option A: Run notebook in Databricks UI (attach to existing cluster!)
 # Option B: Submit job via CLI
 databricks jobs run-now --job-id 123
 
@@ -313,6 +342,7 @@ databricks workspace import-dir notebooks /Repos/your-user/ucberkeley-capstone/f
 ```
 
 **Key Points:**
+- **NEVER use Serverless** - expensive!
 - **forecast_agent** requires package deployment (setup.py → wheel → DBFS)
 - **research_agent** Lambda functions deployed via AWS (deploy.sh scripts)
 - **trading_agent** uses Databricks notebooks (no package deployment needed)
