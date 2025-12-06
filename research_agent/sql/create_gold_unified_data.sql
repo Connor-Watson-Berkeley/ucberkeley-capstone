@@ -17,15 +17,11 @@
 --   - Simple: ~122 lines vs 300+ lines of duplicated SQL
 --
 -- PREREQUISITE:
+--   - commodity.gold schema must exist
 --   - commodity.gold.unified_data_raw must exist
 --   - Run create_gold_unified_data_raw.sql FIRST
 -- =============================================================================
 
--- Create gold schema if it doesn't exist
-CREATE SCHEMA IF NOT EXISTS commodity.gold
-COMMENT 'Gold layer: Production-ready aggregated data for ML models';
-
--- Create the unified_data table by forward-filling unified_data_no_imputation
 CREATE OR REPLACE TABLE commodity.gold.unified_data AS
 SELECT
   date,

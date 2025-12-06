@@ -19,7 +19,7 @@ load_dotenv('infra/.env')
 
 token = os.environ['DATABRICKS_TOKEN']
 host = os.environ['DATABRICKS_HOST'].replace('https://', '').replace('http://', '')
-http_path = os.environ['DATABRICKS_CLUSTER_HTTP_PATH']
+http_path = os.environ['DATABRICKS_HTTP_PATH']  # Use SQL Warehouse
 
 print('🔍 Rigorous Validation of Gold Tables')
 print('=' * 80)
@@ -240,7 +240,9 @@ cursor.execute("""
     LIMIT 3
 """)
 for row in cursor.fetchall():
-    print(f'  {row[0]} | close={row[1]:.2f} | vix={row[2]:.2f if row[2] else "NULL"} | weather={row[3]} regions | GDELT={row[4]} themes')
+    vix_str = f"{row[2]:.2f}" if row[2] is not None else "NULL"
+    gdelt_count = row[4] if row[4] is not None else 0
+    print(f'  {row[0]} | close={row[1]:.2f} | vix={vix_str} | weather={row[3]} regions | GDELT={gdelt_count} themes')
 
 print('\nExperimental table (latest 3 Coffee rows with NULL indicators):')
 cursor.execute("""

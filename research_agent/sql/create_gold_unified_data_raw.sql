@@ -24,13 +24,11 @@
 -- ARCHITECTURE:
 --   - This is the BASE TABLE (single source of truth)
 --   - commodity.gold.unified_data is DERIVED from this via forward-fill
+--
+-- PREREQUISITE: commodity.gold schema must exist
+--   (run once: CREATE SCHEMA IF NOT EXISTS commodity.gold)
 -- =============================================================================
 
--- Create gold schema if it doesn't exist
-CREATE SCHEMA IF NOT EXISTS commodity.gold
-COMMENT 'Gold layer: Production-ready aggregated data for ML models';
-
--- Create the unified_data_raw table
 CREATE OR REPLACE TABLE commodity.gold.unified_data_raw AS
 
 -- =============================================================================
@@ -200,7 +198,7 @@ weather_array AS (
         wind_speed_max_kmh  -- NULL if missing
       )
     ) as weather_data
-  FROM commodity.bronze.weather_v2
+  FROM commodity.bronze.weather
   WHERE date >= '2015-07-07'
   GROUP BY date, commodity
 ),
