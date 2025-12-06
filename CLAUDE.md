@@ -2,6 +2,8 @@
 
 **Purpose:** Checklist to prevent errors when working across this multi-component capstone project
 
+**Note:** Component-specific patterns in forecast_agent/CLAUDE.md, research_agent/CLAUDE.md, trading_agent/CLAUDE.md are automatically loaded when working in those folders.
+
 ---
 
 ## Documentation Structure (CRITICAL)
@@ -29,6 +31,46 @@
 - **Before running Spark backfills** → Read [forecast_agent/docs/SPARK_BACKFILL_GUIDE.md](forecast_agent/docs/SPARK_BACKFILL_GUIDE.md) for cluster sizing and cost optimization
 - **Before modifying models** → Read [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md) section on "Model Implementation Pattern"
 - **Before large backfills** → Read [forecast_agent/README.md](forecast_agent/README.md) for execution environment guidance (local vs Databricks)
+
+---
+
+## Documentation Creation Rules
+
+**Strategic Document Creation:**
+- You don't need explicit permission to create .md docs, BUT be strategic and context-aware
+- Ask yourself: "Does this add lasting value or create clutter?"
+- Temporary analysis/exploration → Use comments in code or ask user if doc needed
+- Important decisions/learnings → Create doc (e.g., DECISIONS_AND_LEARNINGS.md)
+
+**Structure Rules:**
+- **One .md file per folder maximum** (except docs/ subfolder)
+- Additional documentation → Create docs/ subfolder in that folder
+- Reference detailed docs from main README.md in that folder
+- Follow existing hierarchy patterns (see DOCUMENTATION_STRATEGY.md)
+
+**Temporary Documents:**
+- Organizing a complex project → Create temporary doc in tmp/ subfolder
+- Examples: tmp/MIGRATION_PLAN.md, tmp/REFACTOR_NOTES.md
+- Clean up tmp/ folder once project is complete
+- tmp/ folders are useful during active work but should not persist long-term
+
+**Examples:**
+```
+Good:
+  forecast_agent/README.md                # Main entry point
+  forecast_agent/docs/ARCHITECTURE.md     # Detailed guide
+  forecast_agent/tmp/REFACTOR_PLAN.md     # Temporary (delete when done)
+
+Bad:
+  forecast_agent/README.md
+  forecast_agent/NOTES.md                 # Violates one-per-folder rule
+  forecast_agent/TODO.md                  # Should be in tmp/ or deleted
+```
+
+**Context Awareness:**
+- Before creating a new .md, check if existing docs cover the topic
+- Consolidate related content rather than proliferating files
+- Use temporary document lifecycle (see DOCUMENTATION_STRATEGY.md)
 
 ---
 
@@ -158,19 +200,25 @@ grep -r "dapi" --include="*.py"  # Check for hardcoded tokens
 
 ## File Permissions / Ownership
 
-### ✅ You Can Modify
-- `research_agent/*` (data pipelines)
-- `forecast_agent/*` (your forecasting models)
-- `collaboration/*` (shared docs)
-- `docs/*` (architecture docs)
+**Component Ownership:**
+- **forecast_agent/** - Owned by Connor
+- **research_agent/** - Shared among all team members
+- **trading_agent/** - Owned by Tony
 
-### ⚠️ Ask First
-- `infra/*` (infrastructure changes)
-- Root-level config files
+**Rules:**
+- If working with Connor → Can modify `forecast_agent/*` and `research_agent/*`
+- If working with Tony → Can modify `trading_agent/*` (see trading_agent/CLAUDE.md)
+- If working with other team members → Can modify `research_agent/*` only
+- **All team members** can modify: `collaboration/*`, `docs/*`
 
-### ❌ Don't Touch
-- `trading_agent/*` (Tony's code)
+**Always Ask First:**
+- `infra/*` (infrastructure changes, contains credentials)
+- Root-level config files (.gitignore, setup files)
+
+**Never Commit:**
 - `.env` files (credentials)
+- `infra/*` contents (credentials)
+- Files in `trading_agent/*` unless you are Tony's AI assistant
 
 ---
 
@@ -221,6 +269,55 @@ Brief description (imperative mood)
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
+
+---
+
+## Databricks Deployment Workflow
+
+**Full workflow: Local Development → Git → Databricks → Execution**
+
+### 1. Local Development & Git Push
+```bash
+# Develop locally in forecast_agent/ or research_agent/
+# Test changes
+# Push to GitHub
+git add .
+git commit -m "description"
+git push origin main
+```
+
+### 2. Pull into Databricks
+```bash
+# In Databricks Repos UI: Pull latest from GitHub
+# OR via CLI:
+databricks repos update --path /Repos/your-user/ucberkeley-capstone --branch main
+```
+
+### 3. Deploy Package to Cluster (forecast_agent only)
+```bash
+# Build wheel, upload to DBFS, install on cluster
+cd forecast_agent
+python infrastructure/databricks/clusters/deploy_package.py
+
+# This enables: from ml_lib.models import ...
+```
+
+### 4. Run on Databricks
+```bash
+# Option A: Run notebook in Databricks UI
+# Option B: Submit job via CLI
+databricks jobs run-now --job-id 123
+
+# Option C: Run Python script directly
+databricks workspace import-dir notebooks /Repos/your-user/ucberkeley-capstone/forecast_agent/notebooks
+```
+
+**Key Points:**
+- **forecast_agent** requires package deployment (setup.py → wheel → DBFS)
+- **research_agent** Lambda functions deployed via AWS (deploy.sh scripts)
+- **trading_agent** uses Databricks notebooks (no package deployment needed)
+- Always pull latest from Git before running in Databricks
+- See component-specific CLAUDE.md for detailed deployment patterns
 
 ---
 
@@ -299,10 +396,10 @@ cat research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md | grep -A 10 "unified_data"
 **If in doubt:**
 1. Read [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) to understand doc organization
 2. Read component README.md, then follow links to detailed docs/
-3. Ask the user before creating new files/docs
-4. Query `commodity.silver.unified_data` for forecasting
+3. Be strategic about creating new docs (follow "Documentation Creation Rules" above)
+4. Query `commodity.gold.unified_data` for forecasting (NOT bronze or silver tables)
 5. Never hardcode credentials
-6. Don't touch `trading_agent/`
+6. Respect component ownership (Tony owns trading_agent/)
 
 **When stuck:**
 1. Read relevant documentation FIRST (follow hierarchical links)
