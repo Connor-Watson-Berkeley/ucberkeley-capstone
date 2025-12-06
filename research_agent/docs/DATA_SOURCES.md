@@ -70,7 +70,7 @@ This document describes all data sources, their coverage dates, known limitation
 - Some regions are approximate centroids of growing areas
 
 ### Region Details
-See `research_agent/config/region_coordinates.json` for:
+See `research_agent/infrastructure/lambda/functions/weather-data-fetcher/region_coordinates.json` for:
 - Precise lat/lon coordinates for each region
 - Elevation, commodity type, country
 - Growing area descriptions
@@ -269,7 +269,7 @@ Incorrect: Weather Actual (T-14) → Price Forecast (T+14)
 ---
 
 ## Region Coordinates
-**File**: `research_agent/config/region_coordinates.json`
+**File**: `research_agent/infrastructure/lambda/functions/weather-data-fetcher/region_coordinates.json`
 
 ### Coverage
 - **Regions**: 67 coffee/sugar growing regions

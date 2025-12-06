@@ -10,7 +10,7 @@ token = os.getenv("DATABRICKS_TOKEN")
 http_path = os.getenv("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/3cede8561503a13c")
 
 # Load coordinates file
-with open('research_agent/config/region_coordinates.json', 'r') as f:
+with open('research_agent/infrastructure/lambda/functions/weather-data-fetcher/region_coordinates.json', 'r') as f:
     coordinates = json.load(f)
 
 coordinate_regions = {r['region'] for r in coordinates}
