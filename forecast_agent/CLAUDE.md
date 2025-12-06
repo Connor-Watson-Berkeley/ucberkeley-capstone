@@ -30,11 +30,26 @@ df = spark.table('commodity.silver.unified_data') # Deprecated!
 - **Always think:** "Can I parallelize this with Spark instead of pandas/numpy?"
 - Identify parallelization opportunities using PySpark
 - When using pandas/numpy, consider if Spark would be more efficient
-- When using Spark, seek efficient implementations (avoid collect(), use window functions, etc.)
+- When using Spark, seek efficient implementations:
+  - **Cache** intermediate results that are reused (`df.cache()`)
+  - **Broadcast** small lookup tables for joins (`F.broadcast(small_df)`)
+  - Use window functions instead of collect()
+  - Avoid multiple actions on uncached DataFrames
 
 ```python
 # GOOD - PySpark (parallelized)
 df_spark.groupBy('commodity').agg(F.mean('close'))
+
+# GOOD - Broadcast small table for efficient join
+from pyspark.sql.functions import broadcast
+df_large.join(broadcast(df_small), 'id')
+
+# GOOD - Cache reused DataFrames
+df_filtered = df.filter(F.col('commodity') == 'Coffee')
+df_filtered.cache()
+df_filtered.count()  # Materialize cache
+result1 = df_filtered.agg(...)  # Reuses cache
+result2 = df_filtered.groupBy(...)  # Reuses cache
 
 # AVOID - Pandas (single-threaded on driver)
 df_pandas = df_spark.toPandas()  # Pulls all data to driver!
