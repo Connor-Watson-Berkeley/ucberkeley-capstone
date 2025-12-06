@@ -4,6 +4,8 @@
 
 **Note:** Component-specific patterns in forecast_agent/CLAUDE.md, research_agent/CLAUDE.md, trading_agent/CLAUDE.md are automatically loaded when working in those folders.
 
+**Collaboration Philosophy:** The user is very open to questions and suggestions. If you're ever unclear, ask or offer them options - this is a collaboration.
+
 ---
 
 ## Documentation Structure (CRITICAL)
@@ -434,8 +436,9 @@ cat research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md | grep -A 10 "unified_data"
 **When stuck:**
 1. Read relevant documentation FIRST (follow hierarchical links)
 2. Check existing code for patterns
-3. Ask user for clarification
-4. Don't guess - verify with data queries
+3. **Ask the user for clarification** - they're open to questions and suggestions
+4. Offer options if multiple approaches are viable
+5. Don't guess - verify with data queries
 
 **Documentation Quick Links:**
 - [docs/DOCUMENTATION_STRATEGY.md](docs/DOCUMENTATION_STRATEGY.md) - How we organize docs
