@@ -137,7 +137,7 @@ has_gdelt_data INT    -- 1 if GDELT array non-empty
 **Research Agent:**
 - `research_agent/sql/create_gold_unified_data.sql` - Existing table (forward-filled)
 - `research_agent/sql/create_gold_unified_data_raw.sql` - New table (NULLs preserved)
-- `research_agent/GOLD_MIGRATION_GUIDE.md` - "Which Table Should I Use?"
+- `research_agent/docs/GOLD_MIGRATION_GUIDE.md` - "Which Table Should I Use?"
 - `docs/DATA_CONTRACTS.md` - Input contract documentation
 
 **Forecast Agent:**

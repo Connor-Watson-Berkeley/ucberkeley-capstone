@@ -379,10 +379,10 @@ df_imputed.count()  # Materialize
 
 - **Implementation**: `forecast_agent/ml_lib/transformers/imputation.py`
 - **Examples**: `forecast_agent/ml_lib/example_imputation_usage.py`
-- **Migration Guide**: `research_agent/GOLD_MIGRATION_GUIDE.md`
+- **Migration Guide**: `research_agent/docs/GOLD_MIGRATION_GUIDE.md`
 - **Data Contracts**: `docs/DATA_CONTRACTS.md`
 - **NULL Handling Strategy**: `collaboration/agent_collaboration/unified_data_null_handling/`
 
 ---
 
-**Questions?** See `research_agent/GOLD_MIGRATION_GUIDE.md` for detailed migration guidance.
+**Questions?** See `research_agent/docs/GOLD_MIGRATION_GUIDE.md` for detailed migration guidance.

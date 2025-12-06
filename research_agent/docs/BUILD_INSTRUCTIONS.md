@@ -21,7 +21,7 @@
 
 5. **Validate**:
    ```bash
-   python research_agent/validate_gold_tables.py
+   python research_agent/tests/validation/validate_gold_tables.py
    ```
 
 ### Option 2: Python Script (Local)

@@ -99,7 +99,7 @@ commodity.gold.unified_data  ← DERIVED TABLE (production-ready)
 
 ### For Forecast Agent (Consumers)
 
-1. **[research_agent/GOLD_MIGRATION_GUIDE.md](../../../research_agent/GOLD_MIGRATION_GUIDE.md)**
+1. **[research_agent/docs/GOLD_MIGRATION_GUIDE.md](../../../research_agent/docs/GOLD_MIGRATION_GUIDE.md)**
    - **Which table should I use?** Decision tree and use cases
    - **DRY architecture** explanation
    - **Migration examples**: SARIMAX, XGBoost, regional models
@@ -112,7 +112,7 @@ commodity.gold.unified_data  ← DERIVED TABLE (production-ready)
    - **Missingness flags** documentation
    - **Example queries** for weather/GDELT arrays
 
-3. **[research_agent/BUILD_INSTRUCTIONS.md](../../../research_agent/BUILD_INSTRUCTIONS.md)**
+3. **[research_agent/docs/BUILD_INSTRUCTIONS.md](../../../research_agent/docs/BUILD_INSTRUCTIONS.md)**
    - **DRY architecture** diagram
    - **Build order**: Raw first, then production
    - **Validation** instructions
@@ -125,7 +125,7 @@ commodity.gold.unified_data  ← DERIVED TABLE (production-ready)
    - `research_agent/sql/create_gold_unified_data.sql` (DERIVED - 122 lines)
 
 5. **Validation Script**:
-   - `research_agent/validate_gold_tables.py` (6 comprehensive tests)
+   - `research_agent/tests/validation/validate_gold_tables.py` (6 comprehensive tests)
 
 ---
 
@@ -289,7 +289,7 @@ EOF
 ### Validation After Rebuild
 
 ```bash
-python research_agent/validate_gold_tables.py
+python research_agent/tests/validation/validate_gold_tables.py
 # Runs 6 comprehensive tests
 # Expected: All tests pass with similar metrics to above
 ```
@@ -330,8 +330,8 @@ python research_agent/validate_gold_tables.py
 
 ### Questions About Tables
 - **Schema/Architecture**: See `docs/DATA_CONTRACTS.md`
-- **Usage/Migration**: See `research_agent/GOLD_MIGRATION_GUIDE.md`
-- **Build/Validation**: See `research_agent/BUILD_INSTRUCTIONS.md`
+- **Usage/Migration**: See `research_agent/docs/GOLD_MIGRATION_GUIDE.md`
+- **Build/Validation**: See `research_agent/docs/BUILD_INSTRUCTIONS.md`
 
 ### Issues or Bugs
 - **GitHub Issues**: Report at repository issue tracker
@@ -351,11 +351,11 @@ python research_agent/validate_gold_tables.py
 - `README.md`: Overview of the collaboration
 
 ### Research Agent Documentation
-- `research_agent/GOLD_MIGRATION_GUIDE.md`: Migration guide for forecast models
-- `research_agent/BUILD_INSTRUCTIONS.md`: How to build and validate tables
+- `research_agent/docs/GOLD_MIGRATION_GUIDE.md`: Migration guide for forecast models
+- `research_agent/docs/BUILD_INSTRUCTIONS.md`: How to build and validate tables
 - `research_agent/sql/create_gold_unified_data_raw.sql`: Base table SQL
 - `research_agent/sql/create_gold_unified_data.sql`: Derived table SQL
-- `research_agent/validate_gold_tables.py`: 6-test validation suite
+- `research_agent/tests/validation/validate_gold_tables.py`: 6-test validation suite
 
 ### Shared Documentation
 - `docs/DATA_CONTRACTS.md`: Schema contracts between agents
