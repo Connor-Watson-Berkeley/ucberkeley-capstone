@@ -2,9 +2,8 @@
 Imputation transformers for handling NULLs in commodity.gold.unified_data_raw.
 
 Provides multiple imputation strategies optimized for time-series forecasting:
-- forward_fill: For market data that persists (OHLV, VIX)
+- forward_fill: For market data that persists (OHLV, VIX, weather)
 - mean_7d: For stable short-term data (FX rates)
-- interpolate: For gradual changes (weather)
 - zero: For non-existent historical data (GDELT pre-2021)
 - keep_null: For model-native NULL handling (XGBoost)
 
@@ -59,17 +58,12 @@ class ImputationTransformer(Transformer):
        - Use case: Currency rates stable short-term
        - Implementation: avg(...).over(window_7d)
 
-    3. interpolate (Weather)
-       - Linear interpolation between non-null points
-       - Use case: Gradual environmental changes
-       - Implementation: Weighted average of surrounding values
-
-    4. zero (GDELT pre-2021)
+    3. zero (GDELT pre-2021)
        - Fill with 0
        - Use case: Data didn't exist historically
        - Implementation: coalesce(..., lit(0))
 
-    5. keep_null (XGBoost-native handling)
+    4. keep_null (XGBoost-native handling)
        - Leave NULLs for model to handle
        - Use case: Tree models with native NULL support
        - Implementation: No transformation
@@ -85,7 +79,7 @@ class ImputationTransformer(Transformer):
             feature_strategies={
                 'vix_close': 'forward_fill',
                 'eur_usd': 'mean_7d',
-                'weather_temp_mean_c_avg': 'interpolate',
+                'weather_temp_mean_c_avg': 'forward_fill',
                 'gdelt_*': 'zero'  # Wildcard for all GDELT features
             }
         )
@@ -131,7 +125,7 @@ class ImputationTransformer(Transformer):
     default_strategy = Param(
         Params._dummy(),
         "default_strategy",
-        "Default imputation strategy: 'forward_fill', 'mean_7d', 'interpolate', 'zero', 'keep_null'",
+        "Default imputation strategy: 'forward_fill', 'mean_7d', 'zero', 'keep_null'",
         typeConverter=TypeConverters.toString
     )
 
@@ -351,15 +345,6 @@ class ImputationTransformer(Transformer):
             # 7-day rolling average
             return spark_avg(col(col_name)).over(window_rolling)
 
-        elif strategy == 'interpolate':
-            # Linear interpolation (simplified: use forward-fill + backward-fill average)
-            # For production, consider more sophisticated interpolation
-            forward = spark_last(col(col_name), ignorenulls=True).over(window)
-            # Note: Backward-fill requires reverse window (complex in Spark)
-            # For now, use forward-fill as approximation
-            # TODO: Implement proper linear interpolation if needed
-            return forward
-
         elif strategy == 'zero':
             # Fill with 0
             return lit(0)
@@ -430,7 +415,7 @@ def get_default_imputation_config() -> Dict[str, str]:
         'ils_usd': 'mean_7d',
 
         # Weather (aggregated features)
-        'weather_*': 'interpolate',
+        'weather_*': 'forward_fill',
 
         # GDELT (handled via date-conditional below)
         'gdelt_*': 'forward_fill'  # Default for post-2021
@@ -464,7 +449,7 @@ def create_production_imputer() -> ImputationTransformer:
     - OHLV: forward_fill
     - VIX: forward_fill
     - FX (24 cols): mean_7d
-    - Weather: interpolate
+    - Weather: forward_fill (< 5% NULLs, weather changes gradually)
     - GDELT pre-2021: zero
     - GDELT post-2021: forward_fill
 
