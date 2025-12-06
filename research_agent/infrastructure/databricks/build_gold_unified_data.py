@@ -22,8 +22,13 @@
 # COMMAND ----------
 
 # Read SQL file from repository
-with open("/Workspace/Repos/<username>/ucberkeley-capstone/research_agent/sql/create_gold_unified_data.sql") as f:
+sql_path = "/Workspace/Repos/Project_Git/ucberkeley-capstone/research_agent/sql/create_gold_unified_data.sql"
+
+with open(sql_path) as f:
     create_gold_sql = f.read()
+
+print(f"Executing SQL from: {sql_path}")
+print(f"SQL size: {len(create_gold_sql):,} characters\n")
 
 # Execute the CREATE TABLE statement
 spark.sql(create_gold_sql)
