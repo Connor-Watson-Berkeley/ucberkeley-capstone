@@ -1,7 +1,15 @@
 # Trading Agent
 
-**Status**: ✅ Production Ready
-**Last Updated**: 2025-11-10
+**Status**: 🔧 Phase 2 (Automation) - 45% Complete
+**Last Updated**: 2025-11-24
+
+> **📋 Complete System Plan:** [MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md) - Priorities, phases, dependencies, status
+>
+> **🤖 Automation Guide:** [docs/AUTOMATION_GUIDE.md](docs/AUTOMATION_GUIDE.md) - Job submission, orchestration, monitoring
+>
+> **📊 Technical Reference:** [commodity_prediction_analysis/FILE_INVENTORY.md](commodity_prediction_analysis/FILE_INVENTORY.md) - File inventory
+
+---
 
 ## Overview
 
@@ -104,7 +112,6 @@ Run backtests across all models and commodities:
 ```
 trading_agent/
 ├── README.md                          # This file
-├── FORECAST_API_GUIDE.md              # Unity Catalog data access guide
 │
 ├── operations/                        # Operational tools
 │   ├── README.md                      # Daily recommendations guide
@@ -186,12 +193,19 @@ Structured JSON output ready for messaging services:
 
 ## Documentation
 
+### Master Plan
+- **[MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md)** - Complete system overview, execution phases, dependencies, and status tracking
+
 ### User Guides
-- **[FORECAST_API_GUIDE.md](FORECAST_API_GUIDE.md)** - How to query forecast data from Unity Catalog
+- **[docs/DATABRICKS_GUIDE.md](docs/DATABRICKS_GUIDE.md)** - How to query forecast data from Unity Catalog
 - **[operations/README.md](operations/README.md)** - Daily recommendations & WhatsApp integration
 
 ### Technical Documentation
 - **[docs/MULTI_MODEL_ANALYSIS.md](docs/MULTI_MODEL_ANALYSIS.md)** - Multi-model framework implementation & accuracy threshold analysis
+- **[commodity_prediction_analysis/FILE_INVENTORY.md](commodity_prediction_analysis/FILE_INVENTORY.md)** - Notebook and script inventory for backtesting
+
+### WhatsApp Integration
+- **[whatsapp/LLM_IMPLEMENTATION_PLAN.md](whatsapp/LLM_IMPLEMENTATION_PLAN.md)** - LLM-powered conversational Q&A plan
 
 ### Project Management
 - **[../collaboration/TRADING_AGENT_TODO.md](../collaboration/TRADING_AGENT_TODO.md)** - Current status & roadmap
@@ -225,7 +239,7 @@ actuals = load_actuals_from_distributions('Coffee', 'sarimax_auto_weather_v1', c
 fx_rates = get_exchange_rates(connection)
 ```
 
-**See:** [FORECAST_API_GUIDE.md](FORECAST_API_GUIDE.md) for complete examples
+**See:** [docs/DATABRICKS_GUIDE.md](docs/DATABRICKS_GUIDE.md) for complete examples
 
 ---
 
@@ -283,24 +297,28 @@ All prices and financial metrics automatically calculated in all available curre
 
 ## Support
 
-- **Forecast API Issues**: See [FORECAST_API_GUIDE.md](FORECAST_API_GUIDE.md)
+- **Forecast API Issues**: See [docs/DATABRICKS_GUIDE.md](docs/DATABRICKS_GUIDE.md)
 - **Operations Guide**: See [operations/README.md](operations/README.md)
 - **Project Status**: See [../collaboration/TRADING_AGENT_TODO.md](../collaboration/TRADING_AGENT_TODO.md)
 - **Questions**: Create issue in [../collaboration/REQUESTS.md](../collaboration/REQUESTS.md)
 
 ---
 
-## Status Summary
+## Current Status
 
-✅ **Production Ready**
-- Real-time daily recommendations
-- Multi-model backtesting
-- WhatsApp/messaging integration
-- Multi-currency support
-- Complete Databricks integration
+**Main Blocker:** Phase 2 (Automation) - 45% complete
 
-⏸️ **Pending**
-- Interactive dashboard
-- Production deployment automation
+**For complete status, priorities, and phase dependencies:** See [MASTER_SYSTEM_PLAN.md](MASTER_SYSTEM_PLAN.md)
 
-Last Updated: 2025-11-10 (Session 3)
+**What's Working:**
+- ✅ Real-time daily recommendations
+- ✅ Multi-model backtesting
+- ✅ WhatsApp/messaging integration
+- ✅ Multi-currency support
+- ✅ Complete Databricks integration
+
+**What's In Progress:**
+- 🔧 Phase 2: Automation (orchestrator for automated workflow)
+- 📋 Phase 1: Algorithm debugging (deferred until Phase 2 complete)
+
+Last Updated: 2025-11-24
