@@ -26,20 +26,35 @@ df = spark.table('commodity.silver.unified_data') # Deprecated!
 
 **Why:** Gold tables have continuous daily coverage (no gaps), 90% fewer rows, forward-filled data
 
-**2. Always Cache After Imputation**
+**2. Prefer PySpark Over Pandas**
+- **Always think:** "Can I parallelize this with Spark instead of pandas/numpy?"
+- Identify parallelization opportunities using PySpark
+- When using pandas/numpy, consider if Spark would be more efficient
+- When using Spark, seek efficient implementations (avoid collect(), use window functions, etc.)
+
+```python
+# GOOD - PySpark (parallelized)
+df_spark.groupBy('commodity').agg(F.mean('close'))
+
+# AVOID - Pandas (single-threaded on driver)
+df_pandas = df_spark.toPandas()  # Pulls all data to driver!
+df_pandas.groupby('commodity')['close'].mean()
+```
+
+**3. Always Cache After Imputation**
 ```python
 df_imputed = imputer.transform(df_raw)
 df_imputed.cache()  # CRITICAL for 2-3x speedup!
 df_imputed.count()   # Materialize
 ```
 
-**3. Package Deployment**
+**4. Package Deployment**
 After code changes:
 ```bash
 python infrastructure/databricks/clusters/deploy_package.py
 ```
 
-**4. Testing**
+**5. Testing**
 ```bash
 pytest tests/
 ```
