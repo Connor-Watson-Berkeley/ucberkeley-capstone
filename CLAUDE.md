@@ -56,6 +56,12 @@
 - Clean up tmp/ folder once project is complete
 - tmp/ folders are useful during active work but should not persist long-term
 
+**File Organization Philosophy:**
+- Be very intentional about maintaining a clean, structured file tree
+- If you notice files that could be better grouped, **suggest refactoring**
+- The user is open to reorganizing the file tree if a better structure is more logical
+- Before adding new files, consider: "Is there a better place for this?" or "Should we reorganize?"
+
 **Examples:**
 ```
 Good:
