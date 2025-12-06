@@ -8,19 +8,23 @@ import pandas as pd
 from ground_truth.features import aggregators
 
 
-def load_unified_data(spark: SparkSession, table_name: str = "commodity.silver.unified_data",
+def load_unified_data(spark: SparkSession, table_name: str = "commodity.gold.unified_data",
                       commodity: str = 'Coffee', cutoff_date: str = None) -> SparkDataFrame:
     """
     Load unified data from Databricks Delta table.
 
     Args:
         spark: Active Spark session
-        table_name: Delta table name
+        table_name: Delta table name (default: commodity.gold.unified_data)
         commodity: 'Coffee' or 'Sugar'
         cutoff_date: Optional - for backtesting, filters data <= cutoff_date
 
     Returns:
         Spark DataFrame with unified data
+
+    Note:
+        Defaults to commodity.gold.unified_data (90% fewer rows than silver).
+        For legacy compatibility, can specify table_name="commodity.silver.unified_data"
 
     Example:
         df = load_unified_data(spark, commodity='Coffee', cutoff_date='2024-01-01')
