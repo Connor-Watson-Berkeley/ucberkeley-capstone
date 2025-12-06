@@ -1,6 +1,21 @@
 # System Architecture
 
-## High-Level Data Flow
+> **⚠️ NOTICE: This document describes legacy V1/V2 architecture (2024-2025).**
+>
+> **For current forecast_agent architecture**, see:
+> - [forecast_agent/README.md](../forecast_agent/README.md) - Current ml_lib pipeline overview
+> - [forecast_agent/docs/ARCHITECTURE.md](../forecast_agent/docs/ARCHITECTURE.md) - Train-once/inference-many pattern
+> - [forecast_agent/docs/FORECASTING_EVOLUTION.md](../forecast_agent/docs/FORECASTING_EVOLUTION.md) - V1 → V2 → V3 progression
+>
+> **For current data architecture**, see:
+> - [research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md](../research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md) - Gold layer design
+> - [research_agent/docs/GOLD_MIGRATION_GUIDE.md](../research_agent/docs/GOLD_MIGRATION_GUIDE.md) - Migration from silver to gold
+>
+> This document is preserved for historical context only. The ground_truth pipeline described here has been moved to [forecast_agent/deprecated/](../forecast_agent/deprecated/).
+
+---
+
+## High-Level Data Flow (Legacy V1/V2)
 
 ```
 ┌─────────────────┐

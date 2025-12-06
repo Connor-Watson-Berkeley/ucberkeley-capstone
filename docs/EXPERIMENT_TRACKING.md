@@ -1,8 +1,17 @@
 # Experiment Tracking Database Design
 
-**Purpose**: Track all model experiments to demonstrate platform's experimentation capabilities while enabling systematic pruning of poor-performing models.
+> **⚠️ NOTICE: This document describes a proposed design for the legacy ground_truth pipeline (V1/V2).**
+>
+> **Status**: Design phase (never implemented). The forecast_agent has since migrated to ml_lib (V3) with a different approach:
+> - **Current approach**: "Fit many, publish few" pattern - see [forecast_agent/ml_lib/MODEL_SELECTION_STRATEGY.md](../forecast_agent/ml_lib/MODEL_SELECTION_STRATEGY.md)
+> - **Current testing**: `commodity.forecast_testing` schema for experimentation - see [forecast_agent/ml_lib/VALIDATION_WORKFLOW.md](../forecast_agent/ml_lib/VALIDATION_WORKFLOW.md)
+> - **Legacy context**: ground_truth pipeline moved to [forecast_agent/deprecated/](../forecast_agent/deprecated/)
+>
+> This document is preserved for historical reference. Path references below (forecast_agent/ground_truth/) are outdated.
 
-**Status**: Design phase (not yet implemented)
+---
+
+**Original Purpose**: Track all model experiments to demonstrate platform's experimentation capabilities while enabling systematic pruning of poor-performing models.
 
 ---
 

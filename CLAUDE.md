@@ -143,9 +143,10 @@ grep -r "pattern_name" --include="*.py"
 ```
 
 **Example:** Before adding a new model:
-1. Read [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md) section on "Model Implementation Pattern"
-2. Check existing models in `forecast_agent/ground_truth/models/`
-3. Follow the train/predict separation pattern
+1. Read [forecast_agent/README.md](forecast_agent/README.md) → [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md)
+2. Check existing models in `forecast_agent/ml_lib/models/` (baseline.py, linear.py, multi_horizon.py)
+3. For legacy context, see `forecast_agent/deprecated/README.md`
+4. Follow the train-once/inference-many pattern
 
 ### 5. Research Best Practices
 When approaching a new task or technology:
@@ -170,34 +171,45 @@ Bronze (Raw)
   └── commodity.bronze.weather         # Daily, complete
   └── commodity.bronze.vix             # Trading days only
   └── commodity.bronze.forex           # Weekdays only
+  └── commodity.bronze.gdelt           # News sentiment data
          ↓
-    Forward-fill to continuous daily
+    Forward-fill + join to continuous daily
          ↓
-Silver (Unified)
-  └── commodity.silver.unified_data    # ⚠️ USE THIS FOR FORECASTING
-      - Grain: (date, commodity, region)
-      - Coverage: Every day since 2015-07-07
-      - Forward-filled: No NULLs
-      - Trading flag: is_trading_day column
+Gold (Unified Data - ⚠️ USE FOR FORECASTING)
+  ├── commodity.gold.unified_data      # Production (forward-filled, no NULLs)
+  │   - Grain: (date, commodity)
+  │   - 90% fewer rows than silver (7k vs 75k)
+  │   - Array-based regional data
+  │
+  └── commodity.gold.unified_data_raw  # Experimental (NULLs preserved)
+      - Requires ImputationTransformer
+      - For testing new imputation strategies
          ↓
-Gold (Forecasts)
-  └── commodity.forecast.distributions # Model outputs
+    Models consume gold tables
+         ↓
+Gold (Forecast Outputs)
+  └── commodity.forecast.distributions # Model outputs (2,000 paths)
+  └── commodity.forecast.point_forecasts
+  └── commodity.forecast.model_metadata
+
+Legacy (Deprecated Q1 2025):
+  └── commodity.silver.unified_data    # 90% larger, exploded regions
 ```
 
-**Golden Rule:** All forecasting models should query `unified_data`, not bronze tables.
+**Golden Rule:** All forecasting models should query `commodity.gold.unified_data`, NOT bronze or silver tables.
 
 ---
 
 ## Common Pitfalls (Learn from Past Mistakes)
 
-### ❌ Mistake #1: Querying bronze.market Instead of unified_data
+### ❌ Mistake #1: Querying bronze.market Instead of gold.unified_data
 **What happened:** TFT implementation queried `bronze.market` which only has trading days, causing "missing timesteps" error.
 
 **Why wrong:** Bronze tables have gaps (weekends/holidays missing).
 
-**Correct approach:** Query `unified_data` which has continuous daily data with forward-filled prices.
+**Correct approach:** Query `commodity.gold.unified_data` which has continuous daily data with forward-filled prices.
 
-**File reference:** `research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md` lines 266-276
+**File reference:** `research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md`
 
 ### ❌ Mistake #2: Creating Docs Without Being Asked
 **What happened:** Created `TFT_STATUS.md` proactively without user request.

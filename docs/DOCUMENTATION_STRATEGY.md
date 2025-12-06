@@ -88,10 +88,15 @@ ucberkeley-capstone/                  # ROOT
 - Links to agent-specific READMEs for detailed guidance
 
 **Rules**:
-- ONLY ONE CLAUDE.md at root level
-- Agent folders do NOT have CLAUDE.md (use README.md instead)
+- Root CLAUDE.md contains universal rules (credentials, git workflow, permissions)
+- **Each agent folder has component-specific CLAUDE.md** (auto-loaded when working in that folder)
+  - forecast_agent/CLAUDE.md (forecasting-specific patterns)
+  - research_agent/CLAUDE.md (data pipeline patterns)
+  - trading_agent/CLAUDE.md (ownership notice)
 - Reference docs/DOCUMENTATION_STRATEGY.md
 - Emphasize reading docs before tasks
+
+**Note**: This evolved from initial "only root CLAUDE.md" approach to hierarchical distribution for better focus and context efficiency (Dec 2024).
 
 ### 2. Detailed Documentation (docs/*.md)
 
@@ -275,17 +280,34 @@ Step 3: Execute with full context (no discovery loops)
 ## Current Status
 
 **Completed**:
+- ✅ Root-level documentation
+  - CLAUDE.md (universal rules + collaboration philosophy)
+  - docs/DOCUMENTATION_STRATEGY.md (this file)
+  - docs/DATA_CONTRACTS.md (schema authority)
+
 - ✅ forecast_agent hierarchical documentation
   - forecast_agent/README.md (concise, links to docs/)
+  - forecast_agent/CLAUDE.md (PySpark patterns, gold tables, caching)
   - forecast_agent/docs/ARCHITECTURE.md
+  - forecast_agent/docs/FORECASTING_EVOLUTION.md (V1 → V2 → V3)
   - forecast_agent/docs/SPARK_BACKFILL_GUIDE.md
+  - forecast_agent/ml_lib/QUICKSTART.md (3-step workflow)
+  - forecast_agent/ml_lib/VALIDATION_WORKFLOW.md (5-phase validation)
+  - forecast_agent/ml_lib/MODEL_SELECTION_STRATEGY.md (fit many, publish few)
+  - forecast_agent/deprecated/README.md (legacy ground_truth context)
+
 - ✅ research_agent hierarchical documentation
   - research_agent/README.md (concise, links to docs/)
+  - research_agent/CLAUDE.md (Lambda patterns, testing, gold builds)
   - research_agent/docs/ (6 detailed guides)
+  - research_agent/tests/README.md (testing structure)
   - research_agent/tests/ (organized validation/health_checks/monitoring)
+  - research_agent/DECISIONS_AND_LEARNINGS.md (final report reference)
 
-**Planned**:
-- trading_agent documentation structure (TBD)
+- ✅ trading_agent documentation
+  - trading_agent/README.md (navigation to docs/)
+  - trading_agent/CLAUDE.md (ownership notice only)
+  - trading_agent/docs/ (DATABRICKS_GUIDE.md, MULTI_MODEL_ANALYSIS.md)
 
 ## Summary
 

@@ -124,7 +124,7 @@ ARRAY<STRUCT<
 - ✅ **Continuous dates**: No gaps from 2015-07-07 to present
 - ✅ **Unique grain**: (date, commodity) is unique
 - ✅ **90% row reduction**: vs silver.unified_data (~7k vs ~75k rows)
-- ✅ **Validated**: See `research_agent/infrastructure/tests/validate_gold_unified_data.py`
+- ✅ **Validated**: See `research_agent/tests/validation/validate_gold_tables.py`
 
 **Imputation Strategy (Minimal Assumptions)**:
 - ✅ **`close` price**: Forward-filled (target variable = market state on weekends)
@@ -188,9 +188,9 @@ df = spark.table("commodity.gold.unified_data")
 # XGBoost handles NULLs automatically, no imputation needed
 
 # Option 2: Use ImputationTransformer (forecast_agent pattern)
-from forecast_agent.transformers import ImputationTransformer
+from forecast_agent.ml_lib.transformers import ImputationTransformer
 
-df = spark.table("commodity.gold.unified_data")
+df = spark.table("commodity.gold.unified_data_raw")  # Use raw table with NULLs
 imputer = ImputationTransformer(strategy='forward_fill')  # or 'mean', 'median', 'interpolate'
 df_imputed = imputer.transform(df)
 
