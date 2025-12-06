@@ -56,11 +56,11 @@ Gold Tables (commodity.gold.*)
 ```
 
 **Key Architecture Docs:**
-- **[UNIFIED_DATA_ARCHITECTURE.md](UNIFIED_DATA_ARCHITECTURE.md)** - Data joining strategy and unified table design
+- **[docs/UNIFIED_DATA_ARCHITECTURE.md](docs/UNIFIED_DATA_ARCHITECTURE.md)** - Data joining strategy and unified table design
 - **[docs/GOLD_MIGRATION_GUIDE.md](docs/GOLD_MIGRATION_GUIDE.md)** - Gold layer usage guide
 - **[docs/DATABRICKS_MIGRATION_GUIDE.md](docs/DATABRICKS_MIGRATION_GUIDE.md)** - Databricks setup and migration
-- **[DATA_SOURCES.md](DATA_SOURCES.md)** - Complete data source documentation
-- **[GDELT_PROCESSING.md](GDELT_PROCESSING.md)** - GDELT sentiment processing guide
+- **[docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)** - Complete data source documentation
+- **[docs/GDELT_PROCESSING.md](docs/GDELT_PROCESSING.md)** - GDELT sentiment processing guide
 
 ### Infrastructure
 
@@ -205,12 +205,10 @@ cd research_agent/infrastructure/lambda/functions/market-data-fetcher
 
 ## Related Documentation
 
-**Overview (Read First)**:
-- [UNIFIED_DATA_ARCHITECTURE.md](UNIFIED_DATA_ARCHITECTURE.md) - Data joining strategy
-- [DATA_SOURCES.md](DATA_SOURCES.md) - All data sources explained
-- [GDELT_PROCESSING.md](GDELT_PROCESSING.md) - GDELT sentiment processing
-
-**Detailed Guides** (in `docs/`):
+**Detailed Documentation** (in `docs/`):
+- [docs/UNIFIED_DATA_ARCHITECTURE.md](docs/UNIFIED_DATA_ARCHITECTURE.md) - Data joining strategy
+- [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) - All data sources explained
+- [docs/GDELT_PROCESSING.md](docs/GDELT_PROCESSING.md) - GDELT sentiment processing
 - [docs/BUILD_INSTRUCTIONS.md](docs/BUILD_INSTRUCTIONS.md) - Build and validate gold tables
 - [docs/GOLD_MIGRATION_GUIDE.md](docs/GOLD_MIGRATION_GUIDE.md) - Migration guide for forecast models
 - [docs/DATABRICKS_MIGRATION_GUIDE.md](docs/DATABRICKS_MIGRATION_GUIDE.md) - Databricks setup and migration

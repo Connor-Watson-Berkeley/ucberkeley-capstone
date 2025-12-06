@@ -45,8 +45,8 @@ trading_agent/test_single_model_run.py
 # Test output directories
 trading_agent/output/
 
-# Archived old scripts (keep in git for reference)
-# research_agent/infrastructure/archive/
+# Archived old scripts (historical reference only, not tracked)
+research_agent/infrastructure/archive/
 
 # =============================================================================
 # Local Configuration & Guides

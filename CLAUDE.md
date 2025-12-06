@@ -58,15 +58,15 @@ forecast_agent/README.md (concise overview)
   ↓ links to
 forecast_agent/docs/ARCHITECTURE.md  (detailed implementation)
   ↓ references
-research_agent/UNIFIED_DATA_ARCHITECTURE.md  (data source authority)
+research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md  (data source authority)
 ```
 
 **Key docs by topic:**
 - **Documentation strategy:** `docs/DOCUMENTATION_STRATEGY.md` (read this to understand our doc organization)
-- **Data architecture:** `research_agent/UNIFIED_DATA_ARCHITECTURE.md`
+- **Data architecture:** `research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md`
 - **Forecasting architecture:** `forecast_agent/docs/ARCHITECTURE.md`
 - **Spark parallelization:** `forecast_agent/docs/SPARK_BACKFILL_GUIDE.md`
-- **Data sources:** `research_agent/DATA_SOURCES.md`
+- **Data sources:** `research_agent/docs/DATA_SOURCES.md`
 - **Trading system:** `trading_agent/README.md`
 
 **IMPORTANT**: All documentation is reachable from root README.md through explicit links. Never search for files - follow the hierarchy.
@@ -134,7 +134,7 @@ Gold (Forecasts)
 
 **Correct approach:** Query `unified_data` which has continuous daily data with forward-filled prices.
 
-**File reference:** `research_agent/UNIFIED_DATA_ARCHITECTURE.md` lines 266-276
+**File reference:** `research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md` lines 266-276
 
 ### ❌ Mistake #2: Creating Docs Without Being Asked
 **What happened:** Created `TFT_STATUS.md` proactively without user request.
@@ -231,7 +231,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 # Before: "I think I should query bronze.market"
 # After: "Let me read UNIFIED_DATA_ARCHITECTURE.md first"
 
-cat research_agent/UNIFIED_DATA_ARCHITECTURE.md | grep -A 10 "unified_data"
+cat research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md | grep -A 10 "unified_data"
 ```
 
 ### Instead of Creating Temp Files, Ask
@@ -316,7 +316,7 @@ cat research_agent/UNIFIED_DATA_ARCHITECTURE.md | grep -A 10 "unified_data"
 - [forecast_agent/docs/ARCHITECTURE.md](forecast_agent/docs/ARCHITECTURE.md) - Train-once architecture
 - [forecast_agent/docs/SPARK_BACKFILL_GUIDE.md](forecast_agent/docs/SPARK_BACKFILL_GUIDE.md) - Spark parallelization
 - [research_agent/README.md](research_agent/README.md) - Research agent guide
-- [research_agent/UNIFIED_DATA_ARCHITECTURE.md](research_agent/UNIFIED_DATA_ARCHITECTURE.md) - Data architecture
+- [research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md](research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md) - Data architecture
 
 ---
 

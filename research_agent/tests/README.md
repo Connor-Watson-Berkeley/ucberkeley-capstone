@@ -1,81 +1,62 @@
-# Research Agent Testing & Validation
+# Tests & Validation
 
-This folder contains scripts for testing, validation, and monitoring of the research agent's data pipelines and tables.
+**All test and validation scripts for the data pipeline.**
 
-## Structure
+## Running Tests
 
-```
-tests/
-├── validation/          # One-time validation scripts
-│   └── validate_gold_tables.py - Comprehensive 6-test validation of gold layer tables
-├── health_checks/       # Ongoing health check scripts (placeholder)
-└── monitoring/          # Continuous monitoring scripts (placeholder)
-```
-
-## Script Categories
-
-### `validation/` - One-Time Validation
-
-Scripts that validate a specific implementation or migration. Run once after major changes to verify correctness.
-
-**Current scripts:**
-- **`validate_gold_tables.py`** - Validates both gold layer tables after build
-  - Checks row counts, NULL rates, missingness flags, GDELT capitalization
-  - Run after building `commodity.gold.unified_data` and `commodity.gold.unified_data_raw`
-  - Usage: `python research_agent/tests/validation/validate_gold_tables.py`
-
-### `health_checks/` - Periodic Health Checks
-
-Scripts that check ongoing data quality and pipeline health. Run periodically (daily/weekly) to catch issues.
-
-**Planned:**
-- Table freshness checks (data recency)
-- NULL rate drift detection
-- Row count anomaly detection
-
-### `monitoring/` - Continuous Monitoring
-
-Scripts for production monitoring and alerting. Designed for automation (cron, EventBridge, etc.).
-
-**Planned:**
-- Lambda function execution monitoring
-- Databricks table build failures
-- Data quality alerts (schema changes, unexpected patterns)
-
----
-
-## Usage
-
-### Running Validation Scripts
-
+### Data Quality Tests
 ```bash
-# Validate gold tables after rebuild
-python research_agent/tests/validation/validate_gold_tables.py
+# Validate gold.unified_data table (comprehensive)
+python tests/validate_gold_unified_data.py
 
-# Expected output:
-# ✅ All 6 tests pass
-# - Row counts match (7,612)
-# - Production NULL rates correct (0% for market data)
-# - Raw NULL rates correct (~30% market, ~73% GDELT)
-# - Missingness flags work correctly
-# - GDELT commodities capitalized
+# Validate July 2021 frost event captured
+python tests/validate_july2021_frost.py
+
+# Check region coordinates are correct
+python tests/validate_region_coordinates.py
+
+# General data quality checks
+python tests/validate_data_quality.py
+python tests/validate_pipeline.py
 ```
 
-### Adding New Scripts
+### Catalog & Schema Tests
+```bash
+# Check Unity Catalog structure
+python tests/check_catalog_structure.py
 
-1. **Determine category**: Validation (one-time), health check (periodic), or monitoring (continuous)
-2. **Create script** in appropriate folder
-3. **Document** in this README under the relevant section
-4. **Add to automation** if health check or monitoring script
+# Validate forecast schemas
+python tests/check_forecast_schemas.py
+python tests/test_forecast_schema.py
+```
 
----
+### Pipeline Tests
+```bash
+# Full pipeline test
+python tests/test_full_pipeline.py
 
-## Related Documentation
+# Component tests
+python tests/test_pipeline.py
+python tests/test_unified_data.py
+```
 
-- **Build Instructions**: `research_agent/docs/BUILD_INSTRUCTIONS.md` - How to build gold tables
-- **Data Contracts**: `docs/DATA_CONTRACTS.md` - Schema definitions
-- **Gold Migration Guide**: `research_agent/docs/GOLD_MIGRATION_GUIDE.md` - Table selection and usage
+### Data Source Tests
+```bash
+# Check individual data sources
+python tests/check_databricks_tables.py
+python tests/check_gdelt_data.py
+python tests/check_landing_sugar.py
+python tests/check_sugar_weather.py
+```
 
----
+## Test Organization
 
-**Last Updated**: December 5, 2024
+- **validate_*.py** - Data quality validation
+- **check_*.py** - Infrastructure/catalog checks
+- **test_*.py** - Pipeline component tests
+
+## Notes
+
+- All tests load credentials from `../.env`
+- Tests are read-only and safe to run in production
+- Run tests after major data pipeline changes

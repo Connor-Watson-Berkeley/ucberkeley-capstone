@@ -33,12 +33,13 @@ ucberkeley-capstone/                  # ROOT
 │
 ├── research_agent/
 │   ├── README.md                    # Concise overview + links to docs/ (both human & AI readable)
-│   ├── UNIFIED_DATA_ARCHITECTURE.md # CRITICAL: Keep at root for visibility
-│   ├── DATA_SOURCES.md
-│   ├── GDELT_PROCESSING.md
 │   └── docs/                        # Agent-specific detailed docs
-│       ├── DATABRICKS_MIGRATION_GUIDE.md
-│       └── LAMBDA_IMPLEMENTATION.md
+│       ├── UNIFIED_DATA_ARCHITECTURE.md # Data joining strategy
+│       ├── DATA_SOURCES.md          # All data sources explained
+│       ├── GDELT_PROCESSING.md      # GDELT sentiment processing
+│       ├── BUILD_INSTRUCTIONS.md    # Build and validate gold tables
+│       ├── GOLD_MIGRATION_GUIDE.md  # Migration guide for forecast models
+│       └── DATABRICKS_MIGRATION_GUIDE.md # Databricks setup
 │
 └── trading_agent/
     ├── README.md                    # Concise overview + links to docs/
@@ -276,12 +277,12 @@ Step 3: Execute with full context (no discovery loops)
 **Completed**:
 - ✅ forecast_agent hierarchical documentation
   - forecast_agent/README.md (concise, links to docs/)
-  - forecast_agent/CLAUDE.md (emphasizes reading docs first)
   - forecast_agent/docs/ARCHITECTURE.md
   - forecast_agent/docs/SPARK_BACKFILL_GUIDE.md
-
-**In Progress**:
-- research_agent hierarchical reorganization (pending)
+- ✅ research_agent hierarchical documentation
+  - research_agent/README.md (concise, links to docs/)
+  - research_agent/docs/ (6 detailed guides)
+  - research_agent/tests/ (organized validation/health_checks/monitoring)
 
 **Planned**:
 - trading_agent documentation structure (TBD)

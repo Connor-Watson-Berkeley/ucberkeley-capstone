@@ -195,7 +195,7 @@ See: [SPARK_BACKFILL_GUIDE.md](SPARK_BACKFILL_GUIDE.md)
 **`commodity.silver.unified_data` (Legacy - Maintained for Compatibility)**
 - Same features as gold, but regional grain: (date, commodity, region)
 - Use gold.unified_data for new models unless you need explicit regional rows
-- See `../research_agent/UNIFIED_DATA_ARCHITECTURE.md` for details
+- See `../research_agent/docs/UNIFIED_DATA_ARCHITECTURE.md` for details
 
 ### Output Tables
 

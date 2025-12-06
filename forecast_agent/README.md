@@ -2,243 +2,134 @@
 
 Machine learning system for coffee price forecasting with 14-day horizon. Generates probabilistic forecasts (2,000 Monte Carlo paths) and point predictions with uncertainty quantification.
 
-## Quick Start
+---
 
-**Before running any commands, review relevant documentation in [docs/](docs/):**
-- New to the system? Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for train-once/inference-many pattern
-- Running backfills at scale? See [docs/SPARK_BACKFILL_GUIDE.md](docs/SPARK_BACKFILL_GUIDE.md)
-- Looking for general workflow guidelines? See root [../CLAUDE.md](../CLAUDE.md) for AI agent guidance
+## 🚀 NEW: ml_lib Pipeline (Dec 2024)
 
-### Setup
+**Modern PySpark-based forecasting framework** with gold table integration and intelligent model selection.
 
-```bash
-# Load Databricks credentials from ../infra/.env
-cd forecast_agent
-set -a && source ../infra/.env && set +a
+### Quick Start (3 Steps)
 
-# Install dependencies
-pip install databricks-sql-connector scikit-learn xgboost statsmodels pmdarima prophet pandas numpy
+```python
+# 1. Load gold table (90% fewer rows than silver!)
+from forecast_agent.ml_lib.cross_validation.data_loader import GoldDataLoader
+
+loader = GoldDataLoader()  # Defaults to commodity.gold.unified_data
+df = loader.load(commodity='Coffee')
+
+# 2. Optional: Use raw table with custom imputation
+from forecast_agent.ml_lib.transformers import create_production_imputer
+
+loader_raw = GoldDataLoader(table_name='commodity.gold.unified_data_raw')
+df_raw = loader_raw.load(commodity='Coffee')
+
+imputer = create_production_imputer()
+df_imputed = imputer.transform(df_raw)
+df_imputed.cache()  # CRITICAL for 2-3x speedup!
+df_imputed.count()
+
+# 3. Fit models (cross-validation framework)
+# from forecast_agent.ml_lib.cross_validation import TimeSeriesForecastCV
+# cv = TimeSeriesForecastCV(n_folds=5, horizon=14)
+# results = cv.fit(df_imputed)
 ```
 
-### Train Models (Phase 1)
+### Key Features
 
-Train models periodically and persist them for reuse:
+✅ **Gold Tables** - 90% row reduction vs silver (7k vs 75k rows)
+✅ **ImputationTransformer** - Flexible NULL handling (4 strategies)
+✅ **forecast_testing Schema** - Isolated testing before production
+✅ **Fit Many, Publish Few** - Test 200+ configs, publish top ~15 (93% compute savings!)
 
-```bash
-python train_models.py \
-  --commodity Coffee \
-  --models naive xgboost sarimax_auto_weather \
-  --train-frequency semiannually
+### Documentation
+
+- **Quick Start**: [ml_lib/QUICKSTART.md](ml_lib/QUICKSTART.md) - 3-step workflow, table selection guide
+- **Validation**: [ml_lib/VALIDATION_WORKFLOW.md](ml_lib/VALIDATION_WORKFLOW.md) - 5-phase validation plan
+- **Selection**: [ml_lib/MODEL_SELECTION_STRATEGY.md](ml_lib/MODEL_SELECTION_STRATEGY.md) - Fit many, publish few
+- **Migration**: [../research_agent/docs/GOLD_MIGRATION_GUIDE.md](../research_agent/docs/GOLD_MIGRATION_GUIDE.md) - Silver → Gold migration
+- **Data Contracts**: [../docs/DATA_CONTRACTS.md](../docs/DATA_CONTRACTS.md) - Schema details
+
+### Data Sources (Gold Tables - Recommended)
+
+| Table | Use Case | Rows | NULLs | Imputation Required |
+|-------|----------|------|-------|---------------------|
+| `commodity.gold.unified_data` | Production, stable pipelines | 7,612 | None (forward-filled) | ❌ No |
+| `commodity.gold.unified_data_raw` | Experimentation, new models | 7,612 | ~30% market data, ~73% GDELT | ✅ Yes (ImputationTransformer) |
+| `commodity.silver.unified_data` | Legacy (deprecated Q1 2025) | 75,000 | None | ❌ No |
+
+**Choose gold.unified_data** if: Production models, proven data, no imputation needed
+**Choose gold.unified_data_raw** if: New models, custom imputation, experimenting
+
+### Testing Schema (forecast_testing)
+
+Isolate experimentation from production:
+
+```python
+# Test in forecast_testing (safe)
+save_results(schema='commodity.forecast_testing', results)
+
+# After validation → promote to production
+promote_to_production(selected_models, from_schema='forecast_testing')
 ```
 
-Trains models every 6 months and saves to `commodity.forecast.trained_models` table.
+**Tables**:
+- `commodity.forecast_testing.distributions`
+- `commodity.forecast_testing.point_forecasts`
+- `commodity.forecast_testing.model_metadata`
+- `commodity.forecast_testing.validation_results` (tracks test outcomes)
 
-### Generate Forecasts (Phase 2)
+**Setup**: `python setup_testing_schema.py`
 
-Load pretrained models and generate forecasts (180x faster):
+### Model Selection Strategy
 
-```bash
-python backfill_rolling_window.py \
-  --commodity Coffee \
-  --models naive xgboost \
-  --train-frequency semiannually
-```
+**Problem**: Fitting 200 configs and publishing all → trading agent tests 200 forecasts (explosion!)
 
-Auto-resumes from last completed date. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for performance metrics.
+**Solution**: **Fit Many, Publish Few**
 
-### Check Status
+1. **Experiment**: Fit 200+ configs in `forecast_testing`
+2. **Evaluate**: Measure DA, MAE, stability
+3. **Select**: Choose top ~15 diverse models (SQL-based selection)
+4. **Backfill**: Only backfill selected 15 (93% compute savings!)
+5. **Publish**: Promote to `commodity.forecast` (production)
 
-```bash
-# Coverage across models
-python check_backfill_coverage.py --commodity Coffee --models naive xgboost
+**Benefits**:
+- Compute: 4,800 hours → 360 hours (93% reduction)
+- Trading agent: Test 15 curated forecasts (not 200)
+- Production: Clean, interpretable ensemble
+- Experimentation: Freedom without production impact
 
-# Verify specific model
-python verify_backfill.py --commodity Coffee --model naive
+See [ml_lib/MODEL_SELECTION_STRATEGY.md](ml_lib/MODEL_SELECTION_STRATEGY.md) for detailed selection criteria.
 
-# Quick evaluation
-python quick_eval.py --commodity Coffee --model naive
-```
-
-## Architecture Overview
-
-### Train-Once/Inference-Many Pattern
-
-**Problem**: Traditional systems retrain models for every forecast (2,875 trainings for 2018-2024 backfill).
-
-**Solution**: Two-phase architecture:
-- **Phase 1**: Train models semiannually (~16 trainings)
-- **Phase 2**: Load pretrained models for fast inference (~880x faster data loading)
-- **Result**: 24-48 hours → 1-2 hours for full backfill
-
-**Read more**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed implementation patterns and performance metrics.
-
-### Production Model
-
-**SARIMAX+Weather** (`sarimax_auto_weather`)
-- MAE: $3.10
-- Directional Accuracy from Day 0: 69.5% ± 27.7%
-- Features: temp_mean_c, humidity_mean_pct, precipitation_mm
-- Horizon: 14 days
-- Training: Semiannual
-
-## Data Flow
-
-```
-commodity.gold.unified_data (recommended input - array-based)
-  OR
-commodity.silver.unified_data (legacy input - regional grain)
-  ↓
-Train models → commodity.forecast.trained_models (model storage)
-  ↓
-Load models → Generate forecasts
-  ↓
-commodity.forecast.distributions (2,000 Monte Carlo paths)
-commodity.forecast.point_forecasts (14-day predictions)
-commodity.forecast.forecast_metadata (performance metrics)
-```
-
-**Input data**:
-- **Recommended**: `commodity.gold.unified_data` (90% fewer rows, array-based weather/GDELT)
-- **Legacy**: `commodity.silver.unified_data` (regional grain, maintained for compatibility)
-- **Schema details**: See `../research_agent/UNIFIED_DATA_ARCHITECTURE.md` and `../docs/DATA_CONTRACTS.md`
-
-## Model Registry
-
-25+ models in `ground_truth/config/model_registry.py`:
-- Baseline: Naive, Random Walk
-- Statistical: ARIMA, SARIMAX (with/without weather)
-- Machine Learning: XGBoost, Prophet
-
-All models implement train/predict separation for efficient reuse. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for implementation pattern.
-
-## Execution Environments
-
-### Local Development
-
-Good for testing small date ranges:
-```bash
-python backfill_rolling_window.py --commodity Coffee --models naive \
-  --start-date 2024-01-01 --end-date 2024-01-31
-```
-
-### Databricks (Recommended for Production)
-
-**CRITICAL**: Always use All-Purpose Clusters for long-running jobs, NOT SQL Warehouses.
-- SQL Warehouses: $417 for 20-hour backfill
-- All-Purpose Cluster: ~$10-20 for same workload
-
-See "Environment Setup" section below for cluster setup instructions and cost optimization.
-
-### Spark Parallelization (Large Scale)
-
-For 1000+ date backfills: 20-60 minutes vs 10-20 hours local execution.
-
-**Read more**: [docs/SPARK_BACKFILL_GUIDE.md](docs/SPARK_BACKFILL_GUIDE.md)
+---
 
 ## Project Structure
 
 ```
 forecast_agent/
-├── README.md                    # This file
-├── CLAUDE.md                    # AI assistant guide
-├── docs/                        # Detailed documentation
-│   ├── ARCHITECTURE.md          # Train-once pattern, performance
-│   └── SPARK_BACKFILL_GUIDE.md  # Parallel processing at scale
+├── README.md                         # This file
+├── ml_lib/                           # Modern PySpark forecasting framework
+│   ├── transformers/                 # ImputationTransformer, feature engineering
+│   ├── cross_validation/             # TimeSeriesForecastCV, data loaders
+│   ├── models/                       # Model implementations
+│   ├── QUICKSTART.md                 # 3-step workflow guide
+│   ├── VALIDATION_WORKFLOW.md        # 5-phase validation
+│   └── MODEL_SELECTION_STRATEGY.md   # Fit many, publish few
 │
-├── ground_truth/                # Production package
-│   ├── config/
-│   │   └── model_registry.py   # 25 models (single source of truth)
-│   ├── core/
-│   │   ├── base_forecaster.py
-│   │   ├── backtester.py
-│   │   ├── data_loader.py
-│   │   └── walk_forward_evaluator.py
-│   ├── features/               # Feature engineering
-│   ├── models/                 # Model implementations
-│   └── storage/
-│       └── production_writer.py
+├── docs/                             # Architecture documentation
+│   ├── FORECASTING_EVOLUTION.md      # V1 → V2 → V3 progression
+│   ├── ARCHITECTURE.md               # Train-once/inference-many pattern
+│   └── SPARK_BACKFILL_GUIDE.md       # Parallel processing
 │
-├── utils/
-│   ├── model_persistence.py    # save_model(), load_model()
-│   └── monte_carlo_simulation.py
+├── infrastructure/                   # Deployment automation
+│   └── databricks/
+│       ├── clusters/                 # Cluster config, package deployment
+│       └── sql/                      # Schema definitions
 │
-├── train_models.py             # Phase 1: Train and persist
-├── backfill_rolling_window.py  # Phase 2: Fast inference
-├── backfill_rolling_window_spark.py  # Spark parallel backfill
-├── backfill_actuals.py         # Populate actuals table
-├── evaluate_historical_forecasts.py
-├── check_backfill_coverage.py
-└── databricks_quickstart.py    # Databricks entry point
+├── notebooks/                        # Databricks notebooks
+├── tests/                            # Unit tests
+├── deprecated/                       # Legacy ground_truth pipeline (archived)
+└── setup.py                          # Package configuration
 ```
-
-## Common Commands
-
-### Training
-
-```bash
-# Semiannual training (recommended for expensive models)
-python train_models.py --commodity Coffee --models xgboost sarimax_auto_weather \
-  --train-frequency semiannually
-
-# Monthly training (for fast models)
-python train_models.py --commodity Coffee --models naive arima_111 \
-  --train-frequency monthly
-```
-
-### Backfilling
-
-```bash
-# Full historical backfill (auto-resumes)
-python backfill_rolling_window.py --commodity Coffee --models naive xgboost \
-  --train-frequency semiannually
-
-# Date-range backfill
-python backfill_rolling_window.py --commodity Coffee --models naive \
-  --start-date 2023-01-01 --end-date 2024-01-01 --train-frequency semiannually
-
-# Backfill actuals
-python backfill_actuals.py --commodity Coffee --start-date 2018-01-01 --end-date 2025-11-17
-```
-
-### Evaluation
-
-```bash
-# Historical forecast evaluation
-python evaluate_historical_forecasts.py --commodity Coffee --models naive xgboost
-
-# Generate evaluation dashboard
-python dashboard_forecast_evaluation.py
-```
-
-## Key Metrics
-
-- **MAE** (Mean Absolute Error): Average prediction error in dollars
-- **RMSE** (Root Mean Squared Error): Penalizes large errors
-- **Dir Day0**: Directional accuracy from day 0 (primary trading metric)
-  - Measures: Is day i > day 0? (trading signal quality)
-- **Dir**: Day-to-day directional accuracy (less useful for trading)
-
-## Critical Notes
-
-### Database Sessions
-
-Databricks SQL Warehouses have 15-minute session timeouts. Scripts handle this automatically:
-- Reconnect every 50 forecasts (before batch write)
-- Resume mode skips existing forecasts
-- Just rerun the same command to continue
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for database reconnection strategy details.
-
-### Column Name Conventions
-
-Weather and feature columns in unified_data:
-- `temp_mean_c` (NOT temp_c)
-- `humidity_mean_pct` (NOT humidity_pct)
-- `vix` (NOT vix_close)
-
-### ARIMA Auto-Tuning
-
-`auto_arima` without exogenous variables selects order (0,1,0) = naive forecast. **Always use exogenous features with SARIMAX models.**
 
 ## Output Tables
 
@@ -247,43 +138,70 @@ All tables in `commodity.forecast` schema:
 **`distributions`**
 - 2,000 Monte Carlo paths per forecast
 - Columns: day_1 through day_14, path_id (0-1999)
-- Actuals: `model_version='actuals'` and `is_actuals=TRUE` (hybrid convention)
 
 **`point_forecasts`**
 - 14-day forecasts with prediction intervals
 - Columns: day_1 through day_14, actual_close
 
-**`forecast_metadata`**
+**`model_metadata`**
 - Model performance metrics (MAE, RMSE, Dir Day0)
 
-**`trained_models`**
-- Persistent model storage
-- Partitioned by (year, month)
-- Storage: JSON (<1MB) or S3 (≥1MB)
+**Testing Schema** (`commodity.forecast_testing`):
+- Parallel structure for safe experimentation
+- Setup: `python setup_testing_schema.py`
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for data contracts and actuals storage conventions.
+## Key Metrics
+
+- **MAE** (Mean Absolute Error): Average prediction error in dollars
+- **RMSE** (Root Mean Squared Error): Penalizes large errors
+- **Dir Day0**: Directional accuracy from day 0 (primary trading metric)
+  - Measures: Is day i > day 0? (trading signal quality)
 
 ## Environment Setup
 
 ### Databricks Credentials
 Load credentials from `../infra/.env`:
 ```bash
+cd forecast_agent
 set -a && source ../infra/.env && set +a
 ```
 
 Required environment variables:
 - `DATABRICKS_HOST` - Databricks workspace URL
 - `DATABRICKS_TOKEN` - Personal access token
-- `DATABRICKS_HTTP_PATH` - SQL warehouse path (**Use clusters for long-running jobs!**)
 
-### Python Dependencies
+### Deploy Package to Databricks
 ```bash
-pip install databricks-sql-connector scikit-learn xgboost statsmodels pmdarima prophet pandas numpy
+# Build wheel, upload to DBFS, install on cluster
+python infrastructure/databricks/clusters/deploy_package.py
 ```
+
+## Legacy Code
+
+**⚠️ The previous ground_truth pipeline is deprecated** (Dec 6, 2024)
+
+All legacy code has been moved to `deprecated/` folder. For historical context and the evolution from V1 → V2 → V3, see:
+
+- **[docs/FORECASTING_EVOLUTION.md](docs/FORECASTING_EVOLUTION.md)** - Complete progression history, lessons learned, presentation highlights
+- **[deprecated/README.md](deprecated/README.md)** - Legacy code inventory
+
+**Key Evolution**:
+- V1: Retrain-per-forecast (24-48 hours)
+- V2: Train-once/inference-many (1-2 hours, 180x speedup)
+- V3: ml_lib + "fit many, publish few" (93% compute savings, 90% fewer rows)
 
 ## Documentation
 
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Train-once/inference-many pattern, model persistence, performance metrics
-- **[docs/SPARK_BACKFILL_GUIDE.md](docs/SPARK_BACKFILL_GUIDE.md)** - Parallel processing guide for large-scale backfills
-- **`../research_agent/UNIFIED_DATA_ARCHITECTURE.md`** - Input data schema and architecture
-- **[../CLAUDE.md](../CLAUDE.md)** - Root AI agent workflow guidelines
+**Current (ml_lib)**:
+- **[ml_lib/QUICKSTART.md](ml_lib/QUICKSTART.md)** - 3-step workflow, table selection guide
+- **[ml_lib/VALIDATION_WORKFLOW.md](ml_lib/VALIDATION_WORKFLOW.md)** - 5-phase validation plan
+- **[ml_lib/MODEL_SELECTION_STRATEGY.md](ml_lib/MODEL_SELECTION_STRATEGY.md)** - Selection criteria
+
+**Architecture**:
+- **[docs/FORECASTING_EVOLUTION.md](docs/FORECASTING_EVOLUTION.md)** - V1 → V2 → V3 progression
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Train-once/inference-many pattern
+- **[infrastructure/databricks/clusters/README.md](infrastructure/databricks/clusters/README.md)** - Deployment guide
+
+**Data**:
+- **[../research_agent/docs/GOLD_MIGRATION_GUIDE.md](../research_agent/docs/GOLD_MIGRATION_GUIDE.md)** - Silver → Gold migration
+- **[../docs/DATA_CONTRACTS.md](../docs/DATA_CONTRACTS.md)** - Schema details
