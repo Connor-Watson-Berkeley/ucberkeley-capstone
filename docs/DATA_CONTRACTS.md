@@ -24,7 +24,7 @@
 
 ---
 
-### commodity.gold.unified_data_no_imputation (EXPERIMENTAL - NULLs Preserved)
+### commodity.gold.unified_data_raw (EXPERIMENTAL - NULLs Preserved)
 
 **Owner**: Research Agent
 **Grain**: One row per (date, commodity)
@@ -98,7 +98,7 @@ ARRAY<STRUCT<
 
 #### Comparison: Production vs. Experimental Tables
 
-| Aspect | `unified_data` (Production) | `unified_data_no_imputation` (Experimental) |
+| Aspect | `unified_data` (Production) | `unified_data_raw` (Experimental) |
 |--------|----------------------------|-------------------------------------------|
 | **Imputation** | All features forward-filled | Only `close` forward-filled |
 | **NULLs in VIX** | Never (forward-filled) | ~30% (weekends/holidays) |
@@ -110,14 +110,14 @@ ARRAY<STRUCT<
 | **Use case** | Production, stable pipelines | Experimentation, new models |
 | **Requires ImputationTransformer** | ❌ No | ✅ Yes |
 
-**Additional columns in `unified_data_no_imputation`**:
+**Additional columns in `unified_data_raw`**:
 - `has_market_data INT`: 1 if VIX + any FX + OHLV present (trading day), 0 otherwise
 - `has_weather_data INT`: 1 if weather_data array non-empty, 0 otherwise
 - `has_gdelt_data INT`: 1 if gdelt_themes array non-empty, 0 otherwise
 
 ---
 
-#### Data Quality & Imputation Philosophy (unified_data_no_imputation ONLY)
+#### Data Quality & Imputation Philosophy (unified_data_raw ONLY)
 
 **Core Principle**: Imputation is a **modeling decision**, not a data layer decision.
 
