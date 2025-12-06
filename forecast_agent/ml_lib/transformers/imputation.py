@@ -4,8 +4,15 @@ Imputation transformers for handling NULLs in commodity.gold.unified_data_raw.
 Provides multiple imputation strategies optimized for time-series forecasting:
 - forward_fill: For market data that persists (OHLV, VIX, weather)
 - mean_7d: For stable short-term data (FX rates)
-- zero: For non-existent historical data (GDELT pre-2021)
+- zero: For non-existent historical data (GDELT - assumes neutral news)
 - keep_null: For model-native NULL handling (XGBoost)
+
+TODO: Implement forward_fill_decay strategy for GDELT (news relevance decays over time)
+- News events should decay to 0 (neutral) over time
+- Exponential decay: value * exp(-λ * days_since_observation)
+- Half-life parameter (7 days recommended)
+- More realistic than forward_fill (current news > old news)
+- Add in Month 2-3 after initial validation
 
 Key Design Decisions:
 1. Cache after imputation for 2-3x speedup (see CACHING_STRATEGY.md)
@@ -428,7 +435,14 @@ def get_gdelt_date_conditional_config() -> Dict[str, Dict]:
 
     GDELT data only exists post-2021, so:
     - Before 2021-01-01: Fill with 0 (data didn't exist)
-    - After 2021-01-01: Forward-fill
+    - After 2021-01-01: Fill with 0 (missing data = assume neutral news)
+
+    Note: 0 is the neutral baseline for GDELT features:
+    - avg_tone: 0 = neutral sentiment (range -10 to +10)
+    - avg_goldstein_scale: 0 = neutral cooperation/conflict (range -10 to +10)
+    - event_count: 0 = no events
+
+    TODO: Consider forward_fill_decay in Month 2-3 (news relevance decays over time)
 
     Returns:
         Dict with date-conditional strategies
@@ -436,7 +450,7 @@ def get_gdelt_date_conditional_config() -> Dict[str, Dict]:
     return {
         'gdelt_*': {
             'before': ('2021-01-01', 'zero'),
-            'after': ('2021-01-01', 'forward_fill')
+            'after': ('2021-01-01', 'zero')
         }
     }
 
@@ -450,8 +464,7 @@ def create_production_imputer() -> ImputationTransformer:
     - VIX: forward_fill
     - FX (24 cols): mean_7d
     - Weather: forward_fill (< 5% NULLs, weather changes gradually)
-    - GDELT pre-2021: zero
-    - GDELT post-2021: forward_fill
+    - GDELT (all dates): zero (0 = neutral news, see TODO for decay strategy)
 
     Usage:
         imputer = create_production_imputer()
