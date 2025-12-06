@@ -6,42 +6,66 @@
 
 ## Input Tables
 
-### commodity.gold.unified_data (RECOMMENDED for ML)
+### commodity.gold.unified_data (PRODUCTION - Forward-Filled)
 
 **Owner**: Research Agent
 **Grain**: One row per (date, commodity)
 **Rows**: ~7k (2 commodities × ~3,500 days)
 **Created**: Dec 2024
-**Status**: ✅ Production ready
+**Status**: ✅ Production - Stable, all features forward-filled
 
-**Purpose**: Unified data with multi-regional weather and GDELT as array-of-structs for flexible ML feature engineering.
+**Purpose**: Production table with all features forward-filled for stable, proven ML pipelines.
+
+**Use when**:
+- ✅ Running existing production models
+- ✅ Want proven, stable data
+- ✅ Don't need imputation flexibility
+- ✅ Minimizing risk
+
+---
+
+### commodity.gold.unified_data_no_imputation (EXPERIMENTAL - NULLs Preserved)
+
+**Owner**: Research Agent
+**Grain**: One row per (date, commodity)
+**Rows**: ~7k (2 commodities × ~3,500 days)
+**Created**: Dec 2024
+**Status**: ⚠️ Experimental - Requires `ImputationTransformer`
+
+**Purpose**: Experimental table with NULLs preserved for imputation flexibility and experimentation.
+
+**Use when**:
+- ✅ Building new models
+- ✅ Want control over imputation strategy
+- ✅ Model handles NULLs natively (e.g., XGBoost)
+- ✅ Experimenting with different imputation approaches
 
 #### Schema
 
 | Column | Type | Description | Nulls |
 |--------|------|-------------|-------|
 | **Primary Keys** ||||
-| `date` | DATE | Calendar date (continuous, no gaps) | No |
-| `commodity` | STRING | 'Coffee' or 'Sugar' | No |
+| `date` | DATE | Calendar date (continuous, no gaps) | Never |
+| `commodity` | STRING | 'Coffee' or 'Sugar' | Never |
 | **Flags** ||||
-| `is_trading_day` | INT | 1 = trading day, 0 = weekend/holiday | No |
+| `is_trading_day` | INT | 1 = trading day, 0 = weekend/holiday | Never |
 | **Market Data** ||||
-| `open` | DOUBLE | Futures open price (USD) | No |
-| `high` | DOUBLE | Daily high | No |
-| `low` | DOUBLE | Daily low | No |
-| `close` | DOUBLE | Futures close price (USD, **target variable**) | No |
-| `volume` | DOUBLE | Trading volume | No |
+| `open` | DOUBLE | Futures open price (USD) | Yes (~30%) |
+| `high` | DOUBLE | Daily high | Yes (~30%) |
+| `low` | DOUBLE | Daily low | Yes (~30%) |
+| `close` | DOUBLE | Futures close price (USD, **target variable**, forward-filled) | Never |
+| `volume` | DOUBLE | Trading volume | Yes (~30%) |
 | **Market Volatility** ||||
-| `vix` | DOUBLE | Volatility index (forward-filled) | No |
+| `vix` | DOUBLE | Volatility index | Yes (~30%) |
 | **Exchange Rates** (24 columns) ||||
-| `vnd_usd` | DOUBLE | Vietnamese Dong / USD | No |
-| `cop_usd` | DOUBLE | Colombian Peso / USD (critical for trader use case) | No |
-| `idr_usd` | DOUBLE | Indonesian Rupiah / USD | No |
-| ... | DOUBLE | 21 more exchange rates | No |
+| `vnd_usd` | DOUBLE | Vietnamese Dong / USD | Yes (~30%) |
+| `cop_usd` | DOUBLE | Colombian Peso / USD (critical for trader use case) | Yes (~30%) |
+| `idr_usd` | DOUBLE | Indonesian Rupiah / USD | Yes (~30%) |
+| ... | DOUBLE | 21 more exchange rates | Yes (~30%) |
 | **Weather Data** (Array of Structs) ||||
-| `weather_data` | ARRAY&lt;STRUCT&gt; | Multi-regional weather data | No |
+| `weather_data` | ARRAY&lt;STRUCT&gt; | Multi-regional weather data (struct fields may be NULL) | Rare |
 | **GDELT Sentiment** (Array of Structs) ||||
-| `gdelt_themes` | ARRAY&lt;STRUCT&gt; | News sentiment by theme group | No |
+| `gdelt_themes` | ARRAY&lt;STRUCT&gt; | News sentiment by theme group | Yes (~73%) |
 
 #### Array Structures
 
@@ -72,13 +96,52 @@ ARRAY<STRUCT<
 >>
 ```
 
-#### Data Quality
+#### Comparison: Production vs. Experimental Tables
 
-- ✅ **No nulls**: All scalar columns are forward-filled
+| Aspect | `unified_data` (Production) | `unified_data_no_imputation` (Experimental) |
+|--------|----------------------------|-------------------------------------------|
+| **Imputation** | All features forward-filled | Only `close` forward-filled |
+| **NULLs in VIX** | Never (forward-filled) | ~30% (weekends/holidays) |
+| **NULLs in FX (24 cols)** | Never (forward-filled) | ~30% (weekends/holidays) |
+| **NULLs in OHLV** | Never (forward-filled) | ~30% (weekends/holidays) |
+| **NULLs in weather** | Never (forward-filled) | Rare (API gaps) |
+| **NULLs in GDELT** | Never (forward-filled) | ~73% (days without articles) |
+| **Missingness flags** | ❌ No | ✅ Yes (3 composite flags) |
+| **Use case** | Production, stable pipelines | Experimentation, new models |
+| **Requires ImputationTransformer** | ❌ No | ✅ Yes |
+
+**Additional columns in `unified_data_no_imputation`**:
+- `has_market_data INT`: 1 if VIX + any FX + OHLV present (trading day), 0 otherwise
+- `has_weather_data INT`: 1 if weather_data array non-empty, 0 otherwise
+- `has_gdelt_data INT`: 1 if gdelt_themes array non-empty, 0 otherwise
+
+---
+
+#### Data Quality & Imputation Philosophy (unified_data_no_imputation ONLY)
+
+**Core Principle**: Imputation is a **modeling decision**, not a data layer decision.
+
 - ✅ **Continuous dates**: No gaps from 2015-07-07 to present
 - ✅ **Unique grain**: (date, commodity) is unique
 - ✅ **90% row reduction**: vs silver.unified_data (~7k vs ~75k rows)
 - ✅ **Validated**: See `research_agent/infrastructure/tests/validate_gold_unified_data.py`
+
+**Imputation Strategy (Minimal Assumptions)**:
+- ✅ **`close` price**: Forward-filled (target variable = market state on weekends)
+- ⚠️  **All other features**: NULL preserved where missing (VIX, FX, OHLV, weather, GDELT)
+  - Rationale: Different models need different imputation strategies
+  - Tree models (XGBoost): Can handle NULLs natively
+  - Linear models (SARIMAX): May want forward-fill, mean, or interpolation
+  - Forecast agent chooses imputation per model using `ImputationTransformer`
+
+**NULL Expectations by Feature Type**:
+- `open`, `high`, `low`, `volume`: NULL on weekends/holidays (~30% of rows)
+- `vix`: NULL on weekends/holidays (~30% of rows)
+- `vnd_usd`, `cop_usd`, ... (24 FX rates): NULL on weekends/holidays (~30% of rows)
+- `weather_data`: May have NULL values in struct fields if weather API had gaps
+- `gdelt_themes`: NULL for days without articles (~73% of rows)
+  - GDELT coverage: 2021-01-01 onwards (~2,051 dates with articles)
+  - Pre-2021 dates always have `gdelt_themes = NULL`
 
 #### Usage Pattern
 
@@ -115,11 +178,37 @@ agg_df = df.select(
 )
 ```
 
+#### Handling NULLs (Imputation)
+
+Since gold.unified_data preserves NULLs for all features except `close`, forecast_agent must handle imputation:
+
+```python
+# Option 1: Tree models (XGBoost) - use NULLs natively
+df = spark.table("commodity.gold.unified_data")
+# XGBoost handles NULLs automatically, no imputation needed
+
+# Option 2: Use ImputationTransformer (forecast_agent pattern)
+from forecast_agent.transformers import ImputationTransformer
+
+df = spark.table("commodity.gold.unified_data")
+imputer = ImputationTransformer(strategy='forward_fill')  # or 'mean', 'median', 'interpolate'
+df_imputed = imputer.transform(df)
+
+# Option 3: Custom per-feature imputation
+imputer = ImputationTransformer(strategies={
+    'vix': 'forward_fill',      # VIX changes slowly
+    'cop_usd': 'mean',           # FX: use mean
+    'temp_mean_c': 'interpolate' # Weather: interpolate
+})
+df_imputed = imputer.transform(df)
+```
+
 **When to use gold.unified_data**:
 - ✅ Training ML models with flexible regional aggregation
 - ✅ Models that need to choose how to aggregate regions (mean, weighted, separate features)
 - ✅ When you want fewer rows for faster processing (~90% reduction)
 - ✅ When you need GDELT sentiment data
+- ✅ When you want control over imputation strategy per model
 
 ---
 

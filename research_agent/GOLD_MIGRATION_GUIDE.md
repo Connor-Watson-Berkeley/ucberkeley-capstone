@@ -1,10 +1,82 @@
 # Migration Guide: Silver → Gold Unified Data
 
-**Purpose**: Guide for transitioning forecast models from `commodity.silver.unified_data` to `commodity.gold.unified_data`
+**Purpose**: Guide for transitioning forecast models from `commodity.silver.unified_data` to `commodity.gold.*`
 
 **Audience**: Forecast Agent developers
 
-**Status**: Gold table is production-ready (Dec 2024)
+**Status**: Two gold tables available (Dec 2024)
+
+---
+
+## ⚠️ IMPORTANT: Two Gold Tables Available
+
+**Choose the right table for your use case:**
+
+| Table | Imputation | Use Case | Status |
+|-------|-----------|----------|--------|
+| **`commodity.gold.unified_data`** | All features forward-filled | Production, existing models | ✅ Stable |
+| **`commodity.gold.unified_data_no_imputation`** | Only `close` forward-filled | Experimentation, new models | ⚠️ Experimental |
+
+**Quick Decision Tree:**
+- Building a **new model**? → Use `unified_data_no_imputation`
+- Running **existing production** models? → Use `unified_data`
+- Want **imputation flexibility**? → Use `unified_data_no_imputation`
+- Want **zero risk, proven data**? → Use `unified_data`
+
+---
+
+## Which Table Should I Use?
+
+### Use `commodity.gold.unified_data` (Production) if:
+
+✅ **You have existing models in production**
+- Models already tuned to forward-filled data
+- Don't want to revalidate performance
+- Stability is more important than flexibility
+
+✅ **You want proven, stable data**
+- All features forward-filled (no NULLs to handle)
+- Consistent behavior across all features
+- No imputation logic required in pipeline
+
+✅ **You don't need imputation flexibility**
+- Forward-fill is acceptable for all features
+- Not experimenting with different strategies
+- Want simple, predictable data
+
+✅ **You're minimizing risk**
+- Production forecasts must be reliable
+- Can't afford pipeline failures
+- Validated, proven data source
+
+---
+
+### Use `commodity.gold.unified_data_no_imputation` (Experimental) if:
+
+✅ **You're building a new model**
+- Starting fresh, can design pipeline for NULLs
+- Want to choose best imputation strategy per feature
+- Can experiment without production risk
+
+✅ **You want control over imputation strategy**
+- Different features need different strategies (forward-fill, mean, interpolate)
+- Want to experiment with imputation approaches
+- Need per-model imputation flexibility
+
+✅ **Your model handles NULLs natively**
+- Tree models (XGBoost, Random Forest) can split on missingness
+- Want to leverage "missing data" as a feature signal
+- Missingness may be informative (e.g., weekends)
+
+✅ **You want to leverage missingness indicators**
+- Table includes `has_market_data`, `has_weather_data`, `has_gdelt_data` flags
+- Can use flags as features (e.g., "is_weekend = !has_market_data")
+- Explicit about what's missing vs. imputed
+
+**Requirements if using `unified_data_no_imputation`:**
+- Must implement `ImputationTransformer` in your pipeline
+- Must handle NULLs explicitly (or use model that handles them)
+- Must validate performance vs. forward-filled baseline
 
 ---
 
@@ -18,6 +90,7 @@
 | **Regional flexibility** | Fixed (exploded rows) | Flexible (arrays) | Models choose aggregation |
 | **GDELT sentiment** | ❌ Not available | ✅ 7 theme groups | New feature source |
 | **Query performance** | Slower (large scans) | Faster (smaller table) | 90% fewer rows to scan |
+| **Imputation** | All forward-filled | Only `close` forward-filled | Models choose strategy |
 
 ---
 
@@ -51,6 +124,64 @@ Columns:
   weather_data,                       # ARRAY<STRUCT> - all regions
   gdelt_themes                        # ARRAY<STRUCT> - 7 theme groups
 ```
+
+---
+
+## Imputation Philosophy (CRITICAL CHANGE)
+
+**Gold table only forward-fills `close` price. All other features preserve NULLs.**
+
+### Why This Matters
+
+**Silver (Legacy)**:
+- All features forward-filled (VIX, FX, weather, etc.)
+- Imputation strategy hard-coded in data layer
+- Models cannot experiment with different imputation approaches
+
+**Gold (New)**:
+- Only `close` forward-filled (target variable = market state)
+- All other features: NULL on weekends/holidays (~30% of rows)
+- **Models choose imputation strategy** using `ImputationTransformer`
+
+### Migration Requirement
+
+**You must add imputation to your training pipeline:**
+
+```python
+# Option 1: Tree models (XGBoost) - no imputation needed
+df = spark.table("commodity.gold.unified_data")
+# XGBoost handles NULLs natively
+
+# Option 2: Time series models (SARIMAX) - use ImputationTransformer
+from forecast_agent.transformers import ImputationTransformer
+
+df = spark.table("commodity.gold.unified_data")
+imputer = ImputationTransformer(strategy='forward_fill')
+df_imputed = imputer.transform(df)
+
+# Option 3: Custom per-feature imputation (recommended)
+imputer = ImputationTransformer(strategies={
+    'vix': 'forward_fill',           # VIX changes slowly
+    'cop_usd': 'mean',                # FX: use mean over window
+    'temp_mean_c': 'interpolate',     # Weather: interpolate
+    'open': 'forward_fill',           # OHLV: forward-fill from last trading day
+    'high': 'forward_fill',
+    'low': 'forward_fill',
+    'volume': 'forward_fill'
+})
+df_imputed = imputer.transform(df)
+```
+
+### NULL Expectations
+
+| Feature Type | NULL % | When NULL |
+|--------------|--------|-----------|
+| `close` | 0% | Never (forward-filled) |
+| `open`, `high`, `low`, `volume` | ~30% | Weekends/holidays |
+| `vix` | ~30% | Weekends/holidays |
+| All FX rates (24 columns) | ~30% | Weekends/holidays |
+| `weather_data` struct fields | Rare | Weather API gaps |
+| `gdelt_themes` | ~73% | Days without articles |
 
 ---
 
@@ -179,6 +310,14 @@ gdelt_themes: ARRAY<STRUCT<
 >>
 ```
 
+**⚠️ IMPORTANT - GDELT is NOT Forward-Filled**:
+- Unlike prices/weather, **GDELT sentiment is NOT forward-filled** (it's time-sensitive)
+- Days without news articles have `gdelt_themes = NULL`
+- GDELT coverage: **2021-01-01 onwards** (~2,051 dates with articles out of ~7k total rows)
+- Pre-2021 dates: Always `gdelt_themes = NULL`
+- Your model must handle NULL sentiment (options: use 0s, interpolate, or ignore)
+- Weather data IS forward-filled (covers full range 2015-07-07 to present)
+
 **Usage**:
 ```python
 from pyspark.sql.functions import expr, explode_outer
@@ -201,13 +340,24 @@ df = spark.table("commodity.gold.unified_data") \
     )
 
 # Or aggregate (e.g., mean tone across all themes)
+# Use COALESCE to handle NULL arrays (days without articles)
 agg_df = spark.table("commodity.gold.unified_data") \
     .select(
         "date",
         "commodity",
         "close",
-        expr("aggregate(gdelt_themes, 0.0, (acc, t) -> acc + t.tone_avg) / size(gdelt_themes)").alias("avg_tone")
+        expr("""
+            CASE
+                WHEN gdelt_themes IS NULL THEN 0.0
+                WHEN size(gdelt_themes) = 0 THEN 0.0
+                ELSE aggregate(gdelt_themes, 0.0, (acc, t) -> acc + t.tone_avg) / size(gdelt_themes)
+            END
+        """).alias("avg_tone")
     )
+
+# Or filter to only dates with GDELT data
+gdelt_only_df = spark.table("commodity.gold.unified_data") \
+    .filter("gdelt_themes IS NOT NULL AND size(gdelt_themes) > 0")
 ```
 
 ---
