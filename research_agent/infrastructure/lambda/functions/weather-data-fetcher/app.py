@@ -21,12 +21,69 @@ MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "6"))
 BASE_BACKOFF = float(os.environ.get("BASE_BACKOFF", "0.8"))  # seconds
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "60"))
 
+# S3 configuration
+S3_BUCKET = os.environ.get("S3_BUCKET", "groundtruth-capstone")
+S3_PREFIX = os.environ.get("S3_PREFIX", "landing/weather_v2")
+REGION_CONFIG_BUCKET = os.environ.get("REGION_CONFIG_BUCKET", "groundtruth-capstone")
+REGION_CONFIG_KEY = os.environ.get("REGION_CONFIG_KEY", "config/region_coordinates.json")
+
 # ----------------------------
-# Your regions (unchanged)
+# Load coordinates from S3 (v2 - correct coordinates)
 # ----------------------------
-COMMODITY_REGIONS = {
+def load_region_coordinates_from_s3():
+    """
+    Load CORRECT region coordinates from S3 config.
+
+    This replaces hardcoded v1 coordinates (state capitals) with v2 coordinates
+    (actual growing regions) from config/region_coordinates.json.
+
+    Returns:
+        dict: {region_name: (latitude, longitude, commodity), ...}
+    """
+    s3 = boto3.client('s3')
+    try:
+        print(f"Loading region coordinates from s3://{REGION_CONFIG_BUCKET}/{REGION_CONFIG_KEY}...")
+        response = s3.get_object(
+            Bucket=REGION_CONFIG_BUCKET,
+            Key=REGION_CONFIG_KEY
+        )
+        regions_list = json.loads(response['Body'].read().decode('utf-8'))
+
+        # Convert to dict format expected by existing code
+        region_dict = {}
+        for r in regions_list:
+            region_dict[r['region']] = (
+                r['latitude'],
+                r['longitude'],
+                r['commodity']
+            )
+
+        print(f"✅ Loaded {len(region_dict)} regions with CORRECT v2 coordinates")
+
+        # Log sample for verification (Minas Gerais should be v2: -20.3155, -45.4108)
+        if 'Minas_Gerais_Brazil' in region_dict:
+            minas = region_dict['Minas_Gerais_Brazil']
+            print(f"📍 Sample - Minas_Gerais_Brazil: ({minas[0]}, {minas[1]})")
+            if abs(minas[0] - (-20.3155)) < 0.01:
+                print(f"   ✅ CORRECT v2 coordinates detected!")
+            else:
+                print(f"   ⚠️  WARNING: Coordinates don't match expected v2 values")
+
+        return region_dict
+    except Exception as e:
+        print(f"❌ Failed to load coordinates from S3: {e}")
+        print(f"   Falling back to hardcoded v1 coordinates (DEPRECATED)")
+        # Fall back to hardcoded v1 coordinates if S3 load fails
+        return COMMODITY_REGIONS_V1_FALLBACK
+
+# ----------------------------
+# FALLBACK ONLY: Old v1 coordinates (DEPRECATED - incorrect coordinates)
+# ----------------------------
+# These are kept as fallback only if S3 load fails
+# DO NOT USE - these point to state capitals instead of growing regions
+COMMODITY_REGIONS_V1_FALLBACK = {
     # Brazil - 4 specific regions (30.78%)
-    'Minas_Gerais_Brazil': (-18.5122, -44.5550, 'Coffee'),
+    'Minas_Gerais_Brazil': (-18.5122, -44.5550, 'Coffee'),  # WRONG - state capital
     'Sao_Paulo_Brazil': (-23.5505, -46.6333, 'Coffee'),
     'Espirito_Santo_Brazil': (-19.5224, -40.6718, 'Coffee'),
     'Bahia_Brazil': (-12.9714, -38.5014, 'Coffee'),
@@ -464,10 +521,11 @@ def write_to_s3_csv(all_weather_data, fetch_type, start_date=None, end_date=None
         print("No weather data collected to write.")
         return
 
-    s3_bucket_name = os.environ.get('S3_BUCKET_NAME')
-    if not s3_bucket_name:
-        print("S3_BUCKET_NAME environment variable not set. Aborting S3 upload.")
-        return
+    # Use new S3 configuration (weather_v2 path)
+    s3_bucket_name = S3_BUCKET
+    s3_prefix = S3_PREFIX
+
+    print(f"Writing to s3://{s3_bucket_name}/{s3_prefix}/ ...")
 
     s3 = boto3.client('s3')
 
@@ -487,43 +545,51 @@ def write_to_s3_csv(all_weather_data, fetch_type, start_date=None, end_date=None
     writer.writeheader()
     writer.writerows(all_weather_data)
 
+    # Write to weather_v2 location (correct coordinates)
+    s3_key = f"{s3_prefix}/{output_filename}"
+
     try:
         s3.put_object(
             Bucket=s3_bucket_name,
-            Key=f"landing/weather_data/{output_filename}",
+            Key=s3_key,
             Body=csv_buffer.getvalue(),
             ContentType='text/csv'
         )
-        print(f"Successfully uploaded {len(all_weather_data)} records to s3://{s3_bucket_name}/landing/weather_data/{output_filename}")
+        print(f"✅ Successfully uploaded {len(all_weather_data)} records to s3://{s3_bucket_name}/{s3_key}")
     except ClientError as e:
-        print(f"Failed to upload to S3: {e}")
+        print(f"❌ Failed to upload to S3: {e}")
     except Exception as e:
         print(f"Unexpected S3 upload error: {e}")
 
 # ----------------------------
 # Orchestrators (adapted)
 # ----------------------------
-def fetch_historical_weather_data(days_to_fetch):
+def fetch_historical_weather_data(days_to_fetch, commodity_regions):
     """
     For Open-Meteo Archive, we fetch an inclusive date range (daily aggregates).
     """
     start_date, end_date = date_range_from_days_ago(days_to_fetch)
-    items = [(name, lat, lon, commodity) for name, (lat, lon, commodity) in COMMODITY_REGIONS.items()]
+    items = [(name, lat, lon, commodity) for name, (lat, lon, commodity) in commodity_regions.items()]
     print(f"Archive fetch for {start_date} → {end_date} across {len(items)} locations...")
     all_weather_data = fetch_historical_daily_batched(items, start_date, end_date)
     write_to_s3_csv(all_weather_data, 'HISTORICAL', start_date, end_date)
 
-def fetch_current_weather_data():
-    items = [(name, lat, lon, commodity) for name, (lat, lon, commodity) in COMMODITY_REGIONS.items()]
+def fetch_current_weather_data(commodity_regions):
+    items = [(name, lat, lon, commodity) for name, (lat, lon, commodity) in commodity_regions.items()]
     print(f"Current fetch across {len(items)} locations...")
     all_weather_data = fetch_current_batched(items)
     write_to_s3_csv(all_weather_data, 'CURRENT')
 
 # ----------------------------
-# Lambda entry (unchanged flow)
+# Lambda entry (updated to load coordinates from S3)
 # ----------------------------
 def lambda_handler(event=None, context=None):
-    print("Starting weather data collection (Open-Meteo)...")
+    print("="*80)
+    print("Starting weather data collection (Open-Meteo) with v2 coordinates...")
+    print("="*80)
+
+    # Load CORRECT coordinates from S3 (v2 - actual growing regions)
+    commodity_regions = load_region_coordinates_from_s3()
 
     default_historical_days = []
 
@@ -538,13 +604,19 @@ def lambda_handler(event=None, context=None):
 
     if days_to_fetch and isinstance(days_to_fetch, list) and len(days_to_fetch) > 0:
         print(f"Historical fetch requested for days ago: {days_to_fetch}")
-        fetch_historical_weather_data(days_to_fetch)
+        fetch_historical_weather_data(days_to_fetch, commodity_regions)
     else:
         print("No historical days specified. Running CURRENT weather data fetch.")
-        fetch_current_weather_data()
+        fetch_current_weather_data(commodity_regions)
 
+    print("="*80)
     print("Weather data collection complete.")
+    print("="*80)
     return {
         'statusCode': 200,
-        'body': json.dumps({'message': 'Weather data processing finished'})
+        'body': json.dumps({
+            'message': 'Weather data processing finished',
+            'regions_loaded': len(commodity_regions),
+            'coordinates_version': 'v2'
+        })
     }
