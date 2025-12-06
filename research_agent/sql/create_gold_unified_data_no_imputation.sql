@@ -1,21 +1,37 @@
 -- =============================================================================
--- CREATE GOLD.UNIFIED_DATA - Array-based Multi-Regional Architecture
+-- CREATE GOLD.UNIFIED_DATA_NO_IMPUTATION - Raw Data with Minimal Forward-Fill
 -- =============================================================================
--- Purpose: Unified commodity data with weather/GDELT as arrays of structs
+-- Purpose: Experimental table with NULLs preserved for imputation flexibility
 -- Grain: (date, commodity) - ~7k rows
+--
+-- IMPUTATION PHILOSOPHY (EXPERIMENTAL):
+--   - ONLY forward-fill `close` price (target variable = market state on weekends)
+--   - ALL other features preserved as NULL where missing (VIX, FX, OHLV, weather, GDELT)
+--   - Rationale: Imputation is a MODELING decision, not a data layer decision
+--   - Benefit: forecast_agent can experiment with different imputation strategies per model
+--
+-- MISSINGNESS INDICATORS (3 composite flags):
+--   - has_market_data: 1 if VIX + any FX + OHLV present (trading day), 0 otherwise
+--   - has_weather_data: 1 if weather_data array non-empty, 0 otherwise
+--   - has_gdelt_data: 1 if gdelt_themes array non-empty, 0 otherwise
+--
 -- Benefits:
 --   - 90% fewer rows than silver.unified_data (~7k vs ~75k)
---   - Models can aggregate regions flexibly (mean, weighted, separate features)
+--   - Models choose imputation strategy (forward-fill, mean, interpolate, etc.)
+--   - Tree models can leverage missingness as signal
 --   - Clean array structure for PySpark transformers
---   - Forward-fill handles missing GDELT dates (not every day has articles)
+--
+-- COMPANION TABLE:
+--   - commodity.gold.unified_data: Production (all features forward-filled)
+--   - commodity.gold.unified_data_no_imputation: Experimental (NULLs preserved)
 -- =============================================================================
 
 -- Create gold schema if it doesn't exist
 CREATE SCHEMA IF NOT EXISTS commodity.gold
 COMMENT 'Gold layer: Production-ready aggregated data for ML models';
 
--- Create the unified_data table
-CREATE OR REPLACE TABLE commodity.gold.unified_data AS
+-- Create the unified_data_no_imputation table
+CREATE OR REPLACE TABLE commodity.gold.unified_data_no_imputation AS
 
 -- =============================================================================
 -- STEP 1: CREATE COMPLETE DATE SPINE
@@ -105,7 +121,11 @@ trading_days AS (
 ),
 
 -- =============================================================================
--- STEP 4: FORWARD FILL SCALAR DATA ONTO DATE SPINE
+-- STEP 4: JOIN SCALAR DATA ONTO DATE SPINE (MINIMAL FORWARD-FILL)
+-- =============================================================================
+-- DESIGN DECISION: Only forward-fill `close` price (target variable = market state)
+-- All other features (VIX, FX, OHLV) kept as NULL where missing
+-- This allows forecast_agent to choose imputation strategy per model
 -- =============================================================================
 
 commodities AS (
@@ -118,54 +138,39 @@ date_commodity_spine AS (
   CROSS JOIN commodities c
 ),
 
+-- Market data: ONLY forward-fill close price (target variable)
+-- Open, high, low, volume remain NULL on non-trading days
 market_filled AS (
   SELECT
     dcs.date,
     dcs.commodity,
-    LAST_VALUE(mc.open, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as open,
-    LAST_VALUE(mc.high, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as high,
-    LAST_VALUE(mc.low, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as low,
-    LAST_VALUE(mc.close, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as close,
-    LAST_VALUE(mc.volume, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as volume
+    mc.open,   -- NULL on weekends/holidays (model decides imputation)
+    mc.high,   -- NULL on weekends/holidays
+    mc.low,    -- NULL on weekends/holidays
+    LAST_VALUE(mc.close, true) OVER (PARTITION BY dcs.commodity ORDER BY dcs.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as close,  -- Forward-filled (target variable)
+    mc.volume  -- NULL on weekends/holidays
   FROM date_commodity_spine dcs
   LEFT JOIN market_clean mc ON dcs.date = mc.date AND dcs.commodity = mc.commodity
 ),
 
-vix_filled AS (
+-- VIX: NO forward-fill (model decides imputation strategy)
+vix_raw AS (
   SELECT
     ds.date,
-    LAST_VALUE(vc.vix, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as vix
+    vc.vix  -- NULL on weekends/holidays
   FROM date_spine ds
   LEFT JOIN vix_clean vc ON ds.date = vc.date
 ),
 
-macro_filled AS (
+-- Macro (FX rates): NO forward-fill (model decides imputation strategy)
+macro_raw AS (
   SELECT
     ds.date,
-    LAST_VALUE(mc.vnd_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as vnd_usd,
-    LAST_VALUE(mc.cop_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as cop_usd,
-    LAST_VALUE(mc.idr_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as idr_usd,
-    LAST_VALUE(mc.etb_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as etb_usd,
-    LAST_VALUE(mc.hnl_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as hnl_usd,
-    LAST_VALUE(mc.ugx_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as ugx_usd,
-    LAST_VALUE(mc.pen_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as pen_usd,
-    LAST_VALUE(mc.xaf_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as xaf_usd,
-    LAST_VALUE(mc.gtq_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as gtq_usd,
-    LAST_VALUE(mc.gnf_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as gnf_usd,
-    LAST_VALUE(mc.nio_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as nio_usd,
-    LAST_VALUE(mc.crc_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as crc_usd,
-    LAST_VALUE(mc.tzs_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as tzs_usd,
-    LAST_VALUE(mc.kes_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as kes_usd,
-    LAST_VALUE(mc.lak_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as lak_usd,
-    LAST_VALUE(mc.pkr_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as pkr_usd,
-    LAST_VALUE(mc.php_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as php_usd,
-    LAST_VALUE(mc.egp_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as egp_usd,
-    LAST_VALUE(mc.ars_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as ars_usd,
-    LAST_VALUE(mc.rub_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as rub_usd,
-    LAST_VALUE(mc.try_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as try_usd,
-    LAST_VALUE(mc.uah_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as uah_usd,
-    LAST_VALUE(mc.irr_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as irr_usd,
-    LAST_VALUE(mc.byn_usd, true) OVER (ORDER BY ds.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as byn_usd
+    mc.vnd_usd, mc.cop_usd, mc.idr_usd, mc.etb_usd, mc.hnl_usd,
+    mc.ugx_usd, mc.pen_usd, mc.xaf_usd, mc.gtq_usd, mc.gnf_usd,
+    mc.nio_usd, mc.crc_usd, mc.tzs_usd, mc.kes_usd, mc.lak_usd,
+    mc.pkr_usd, mc.php_usd, mc.egp_usd, mc.ars_usd, mc.rub_usd,
+    mc.try_usd, mc.uah_usd, mc.irr_usd, mc.byn_usd
   FROM date_spine ds
   LEFT JOIN macro_clean mc ON ds.date = mc.date
 ),
@@ -173,26 +178,11 @@ macro_filled AS (
 -- =============================================================================
 -- STEP 5: WEATHER DATA AS ARRAY OF STRUCTS (Multi-Regional)
 -- =============================================================================
-
-weather_with_forward_fill AS (
-  SELECT
-    date,
-    region,
-    commodity,
-    -- Forward fill all weather fields
-    LAST_VALUE(temp_max_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_max_c,
-    LAST_VALUE(temp_min_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_min_c,
-    LAST_VALUE(temp_mean_c, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as temp_mean_c,
-    LAST_VALUE(precipitation_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as precipitation_mm,
-    LAST_VALUE(rain_mm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as rain_mm,
-    LAST_VALUE(snowfall_cm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as snowfall_cm,
-    LAST_VALUE(humidity_mean_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_mean_pct,
-    LAST_VALUE(wind_speed_max_kmh, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_speed_max_kmh
-  FROM commodity.bronze.weather
-  WHERE date >= '2015-07-07'
-),
+-- NO FORWARD-FILL: Weather data kept raw (model decides imputation strategy)
+-- =============================================================================
 
 -- Aggregate weather data into array of structs (one per region)
+-- NULL values preserved (no forward-fill)
 weather_array AS (
   SELECT
     date,
@@ -200,17 +190,18 @@ weather_array AS (
     collect_list(
       struct(
         region,
-        temp_max_c,
-        temp_min_c,
-        temp_mean_c,
-        precipitation_mm,
-        rain_mm,
-        snowfall_cm,
-        humidity_mean_pct,
-        wind_speed_max_kmh
+        temp_max_c,     -- NULL if missing
+        temp_min_c,     -- NULL if missing
+        temp_mean_c,    -- NULL if missing
+        precipitation_mm,  -- NULL if missing
+        rain_mm,        -- NULL if missing
+        snowfall_cm,    -- NULL if missing
+        humidity_mean_pct,  -- NULL if missing
+        wind_speed_max_kmh  -- NULL if missing
       )
     ) as weather_data
-  FROM weather_with_forward_fill
+  FROM commodity.bronze.weather_v2
+  WHERE date >= '2015-07-07'
   GROUP BY date, commodity
 ),
 
@@ -255,16 +246,13 @@ gdelt_array AS (
   GROUP BY date, commodity
 ),
 
--- Forward-fill GDELT data (not every day has articles)
+-- NO FORWARD-FILL for GDELT (sentiment is time-sensitive, not like prices)
+-- Days without articles will have NULL gdelt_themes (let the model handle it)
 gdelt_filled AS (
   SELECT
     dcs.date,
     dcs.commodity,
-    LAST_VALUE(ga.gdelt_themes, true) OVER (
-      PARTITION BY dcs.commodity
-      ORDER BY dcs.date
-      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ) as gdelt_themes
+    ga.gdelt_themes  -- NULL for days without articles (no forward-fill)
   FROM date_commodity_spine dcs
   LEFT JOIN gdelt_array ga ON dcs.date = ga.date AND dcs.commodity = ga.commodity
 ),
@@ -279,32 +267,54 @@ final_join AS (
     mf.commodity,
     COALESCE(td.is_trading_day, 0) as is_trading_day,
 
-    -- Market data (scalar)
-    mf.open,
-    mf.high,
-    mf.low,
-    mf.close,
-    mf.volume,
+    -- Market data (close is forward-filled, others have NULLs)
+    mf.open,      -- NULL on weekends/holidays
+    mf.high,      -- NULL on weekends/holidays
+    mf.low,       -- NULL on weekends/holidays
+    mf.close,     -- Forward-filled (target variable)
+    mf.volume,    -- NULL on weekends/holidays
 
-    -- VIX (scalar)
-    vf.vix,
+    -- VIX (NULL on weekends/holidays - model decides imputation)
+    vr.vix,
 
-    -- Exchange rates (scalar - 24 columns)
-    macf.vnd_usd, macf.cop_usd, macf.idr_usd, macf.etb_usd, macf.hnl_usd,
-    macf.ugx_usd, macf.pen_usd, macf.xaf_usd, macf.gtq_usd, macf.gnf_usd,
-    macf.nio_usd, macf.crc_usd, macf.tzs_usd, macf.kes_usd, macf.lak_usd,
-    macf.pkr_usd, macf.php_usd, macf.egp_usd, macf.ars_usd, macf.rub_usd,
-    macf.try_usd, macf.uah_usd, macf.irr_usd, macf.byn_usd,
+    -- Exchange rates (NULL on weekends/holidays - model decides imputation)
+    mr.vnd_usd, mr.cop_usd, mr.idr_usd, mr.etb_usd, mr.hnl_usd,
+    mr.ugx_usd, mr.pen_usd, mr.xaf_usd, mr.gtq_usd, mr.gnf_usd,
+    mr.nio_usd, mr.crc_usd, mr.tzs_usd, mr.kes_usd, mr.lak_usd,
+    mr.pkr_usd, mr.php_usd, mr.egp_usd, mr.ars_usd, mr.rub_usd,
+    mr.try_usd, mr.uah_usd, mr.irr_usd, mr.byn_usd,
 
-    -- Weather data (array of structs - one per region)
+    -- Weather data (array of structs - one per region, NULLs preserved)
     wa.weather_data,
 
-    -- GDELT sentiment (array of structs - one per theme group)
-    gf.gdelt_themes
+    -- GDELT sentiment (array of structs - NULL for days without articles)
+    gf.gdelt_themes,
+
+    -- =============================================================================
+    -- MISSINGNESS INDICATORS (3 composite flags for feature engineering)
+    -- =============================================================================
+
+    -- Flag 1: Market data availability (VIX + FX + OHLV all NULL together on weekends)
+    CASE
+      WHEN vr.vix IS NOT NULL OR mf.open IS NOT NULL THEN 1
+      ELSE 0
+    END as has_market_data,
+
+    -- Flag 2: Weather data availability
+    CASE
+      WHEN wa.weather_data IS NOT NULL AND size(wa.weather_data) > 0 THEN 1
+      ELSE 0
+    END as has_weather_data,
+
+    -- Flag 3: GDELT data availability
+    CASE
+      WHEN gf.gdelt_themes IS NOT NULL AND size(gf.gdelt_themes) > 0 THEN 1
+      ELSE 0
+    END as has_gdelt_data
 
   FROM market_filled mf
-  INNER JOIN vix_filled vf ON mf.date = vf.date
-  INNER JOIN macro_filled macf ON mf.date = macf.date
+  INNER JOIN vix_raw vr ON mf.date = vr.date
+  INNER JOIN macro_raw mr ON mf.date = mr.date
   LEFT JOIN trading_days td ON mf.date = td.date AND mf.commodity = td.commodity
   LEFT JOIN weather_array wa ON mf.date = wa.date AND mf.commodity = wa.commodity
   LEFT JOIN gdelt_filled gf ON mf.date = gf.date AND mf.commodity = gf.commodity

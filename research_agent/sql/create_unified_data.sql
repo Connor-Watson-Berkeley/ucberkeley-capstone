@@ -183,7 +183,7 @@ weather_with_forward_fill AS (
     LAST_VALUE(snowfall_cm, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as snowfall_cm_filled,
     LAST_VALUE(humidity_mean_pct, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as humidity_mean_pct_filled,
     LAST_VALUE(wind_speed_max_kmh, true) OVER (PARTITION BY region, commodity ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as wind_speed_max_kmh_filled
-  FROM commodity.bronze.weather_v2
+  FROM commodity.bronze.weather
   WHERE date >= '2015-07-07'
 ),
 
