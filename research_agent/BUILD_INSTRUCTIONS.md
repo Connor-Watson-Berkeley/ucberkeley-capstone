@@ -6,15 +6,18 @@
 
 1. **Open Databricks SQL Editor** in your workspace
 2. **Attach to cluster**: Select `unity-catalog-cluster` (must be Unity Catalog enabled)
-3. **Build Production Table**:
-   - Copy contents of `research_agent/sql/create_gold_unified_data.sql`
-   - Paste into SQL Editor
-   - Run (takes ~1-2 minutes)
 
-4. **Build Experimental Table**:
+3. **Build Base Table FIRST** (experimental table with NULLs):
    - Copy contents of `research_agent/sql/create_gold_unified_data_no_imputation.sql`
    - Paste into SQL Editor
    - Run (takes ~1-2 minutes)
+   - **This is the single source of truth** - production table derives from this
+
+4. **Build Production Table** (forward-filled from base):
+   - Copy contents of `research_agent/sql/create_gold_unified_data.sql`
+   - Paste into SQL Editor
+   - Run (takes ~10 seconds - just applies forward-fill transformations)
+   - **This is a derived table** - built FROM `unified_data_no_imputation`
 
 5. **Validate**:
    ```bash
@@ -42,13 +45,39 @@ python research_agent/validate_gold_tables.py
 
 ---
 
+## Architecture (DRY Principle)
+
+**Single Source of Truth**: `commodity.gold.unified_data_no_imputation`
+- Base table built from bronze sources
+- All complex logic (date spine, deduplication, array aggregation) lives here
+- Only needs to be maintained in ONE place
+
+**Derived Table**: `commodity.gold.unified_data`
+- Built FROM `unified_data_no_imputation` via simple forward-fill transformations
+- Just 122 lines of SQL (vs 300+ if duplicated)
+- Rebuilds in ~10 seconds (vs ~1-2 minutes for base table)
+
+**Benefits**:
+- ✅ DRY: No duplicated logic
+- ✅ Maintainability: Fix bugs in one place
+- ✅ Clear lineage: Bronze → No Imputation → Forward-Filled
+- ✅ Performance: Production table rebuilds instantly
+
+---
+
 ## What Gets Created
 
-### Table 1: `commodity.gold.unified_data` (PRODUCTION)
+### Table 1: `commodity.gold.unified_data_no_imputation` (BASE TABLE - Build First)
 - **Rows**: ~7,000 (2 commodities × ~3,500 days)
+- **Imputation**: Only `close` forward-filled, all others preserve NULLs
+- **Use for**: New models, experimentation, imputation control
+- **Role**: **Single source of truth** - production table derives from this
+
+### Table 2: `commodity.gold.unified_data` (DERIVED TABLE - Build Second)
+- **Rows**: ~7,000 (same as base)
 - **Imputation**: All features forward-filled (no NULLs)
 - **Use for**: Production models, existing pipelines
-- **Benefits**: Proven, stable, no NULL handling needed
+- **Role**: **Derived transformation** - built FROM `unified_data_no_imputation`
 
 **Schema**:
 ```

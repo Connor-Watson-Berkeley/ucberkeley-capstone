@@ -25,6 +25,34 @@
 
 ---
 
+## 🏗️ Architecture: DRY Principle
+
+**Key Design Decision**: Production table is DERIVED from experimental table (not a duplicate build)
+
+```
+Bronze Sources (market, vix, macro, weather, GDELT)
+  ↓
+  ↓ [Complex logic: date spine, deduplication, array aggregation]
+  ↓
+commodity.gold.unified_data_no_imputation  ← SINGLE SOURCE OF TRUTH
+  ↓
+  ↓ [Simple transformation: forward-fill NULLs]
+  ↓
+commodity.gold.unified_data  ← DERIVED TABLE
+```
+
+**Benefits**:
+- ✅ **DRY**: All complex logic lives in ONE place (`unified_data_no_imputation`)
+- ✅ **Maintainability**: Fix bugs/add features in base table, production inherits automatically
+- ✅ **Performance**: Production table rebuilds in ~10 seconds (vs ~1-2 min for base)
+- ✅ **Clear Lineage**: Base table → Derived table (not parallel independent builds)
+
+**Build Order**:
+1. **First**: Build `unified_data_no_imputation` (base table, ~1-2 min)
+2. **Second**: Build `unified_data` FROM base table (derived, ~10 sec)
+
+---
+
 ## Which Table Should I Use?
 
 ### Use `commodity.gold.unified_data` (Production) if:
