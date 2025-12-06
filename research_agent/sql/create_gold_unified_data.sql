@@ -10,6 +10,11 @@
 --   - Forward-fill handles missing GDELT dates (not every day has articles)
 -- =============================================================================
 
+-- Create gold schema if it doesn't exist
+CREATE SCHEMA IF NOT EXISTS commodity.gold
+COMMENT 'Gold layer: Production-ready aggregated data for ML models';
+
+-- Create the unified_data table
 CREATE OR REPLACE TABLE commodity.gold.unified_data AS
 
 -- =============================================================================

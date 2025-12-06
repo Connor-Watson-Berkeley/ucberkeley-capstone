@@ -28,7 +28,12 @@ infrastructure/
 ├── unity_catalog_workaround.py             # SQL connector fallback
 ├── databricks/                             # Databricks configs
 │   ├── setup_unity_catalog_credentials.py  # Unity Catalog setup
-│   ├── databricks_unity_catalog_*.json     # Cluster configs
+│   ├── clusters/                           # ← Cluster management
+│   │   ├── README.md                       # Cluster setup guide
+│   │   ├── create_unity_catalog_cluster.py # Create UC cluster
+│   │   ├── list_databricks_clusters.py    # List all clusters
+│   │   ├── databricks_unity_catalog_cluster.json  # Cluster config
+│   │   └── UNITY_CATALOG_CLUSTER_RATIONALE.md     # Sizing rationale
 │   └── *.sql                               # SQL setup scripts
 ├── tests/                                  # All tests & validation
 │   ├── README.md                           # Test documentation
@@ -52,6 +57,20 @@ python backfill_historical_weather_v2.py --start-date 2015-07-07 --end-date 2025
 cd databricks
 python setup_unity_catalog_credentials.py
 ```
+
+### Cluster Management
+```bash
+# Create Unity Catalog-enabled cluster
+python databricks/clusters/create_unity_catalog_cluster.py
+
+# List all clusters and their Unity Catalog status
+python databricks/clusters/list_databricks_clusters.py
+```
+
+**Details**: See [databricks/clusters/README.md](databricks/clusters/README.md) for:
+- Cluster configuration rationale (sizing, cost analysis)
+- How to use clusters for SQL queries and notebooks
+- Troubleshooting guide
 
 ### Data Pipeline
 ```bash
