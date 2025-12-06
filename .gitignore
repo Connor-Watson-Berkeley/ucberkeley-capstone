@@ -28,7 +28,9 @@ rebuild_output*.log
 *_BACKFILL_FIX.md
 manifest.mf
 presentation_slides.html
+presentation_slides_index.html
 presentation_diagrams/
+content/
 
 # Test scripts for exploration (not needed in repo)
 test_connection.py

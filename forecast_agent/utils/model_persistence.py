@@ -195,7 +195,7 @@ def save_model(
     insert_sql = """
     INSERT INTO commodity.forecast.trained_models (
         model_id, commodity, model_name, model_version,
-        training_date, training_samples, training_start_date,
+        training_cutoff_date, training_samples, training_start_date,
         parameters, fitted_model_json, fitted_model_s3_path,
         model_size_bytes, created_at, created_by, is_active,
         year, month
