@@ -147,6 +147,19 @@ grep -r "pattern_name" --include="*.py"
 2. Check existing models in `forecast_agent/ground_truth/models/`
 3. Follow the train/predict separation pattern
 
+### 5. Research Best Practices
+When approaching a new task or technology:
+
+- **Search the web** for best practices, common patterns, or modern approaches
+- Look for current (2025) best practices and technologies
+- Consider if there's a better library, framework, or pattern than what's currently used
+- Share findings with the user and suggest improvements
+
+**Examples:**
+- "I found a newer approach to X using Y library - would you like to explore this?"
+- "Best practices for Z suggest using pattern A instead of B - should we refactor?"
+- "This technology has been superseded by X in 2025 - worth considering?"
+
 ---
 
 ## Data Architecture Quick Reference
