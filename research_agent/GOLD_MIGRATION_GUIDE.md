@@ -15,12 +15,12 @@
 | Table | Imputation | Use Case | Status |
 |-------|-----------|----------|--------|
 | **`commodity.gold.unified_data`** | All features forward-filled | Production, existing models | ✅ Stable |
-| **`commodity.gold.unified_data_no_imputation`** | Only `close` forward-filled | Experimentation, new models | ⚠️ Experimental |
+| **`commodity.gold.unified_data_raw`** | Only `close` forward-filled | Experimentation, new models | ⚠️ Experimental |
 
 **Quick Decision Tree:**
-- Building a **new model**? → Use `unified_data_no_imputation`
+- Building a **new model**? → Use `unified_data_raw`
 - Running **existing production** models? → Use `unified_data`
-- Want **imputation flexibility**? → Use `unified_data_no_imputation`
+- Want **imputation flexibility**? → Use `unified_data_raw`
 - Want **zero risk, proven data**? → Use `unified_data`
 
 ---
@@ -34,7 +34,7 @@ Bronze Sources (market, vix, macro, weather, GDELT)
   ↓
   ↓ [Complex logic: date spine, deduplication, array aggregation]
   ↓
-commodity.gold.unified_data_no_imputation  ← SINGLE SOURCE OF TRUTH
+commodity.gold.unified_data_raw  ← SINGLE SOURCE OF TRUTH
   ↓
   ↓ [Simple transformation: forward-fill NULLs]
   ↓
@@ -42,13 +42,13 @@ commodity.gold.unified_data  ← DERIVED TABLE
 ```
 
 **Benefits**:
-- ✅ **DRY**: All complex logic lives in ONE place (`unified_data_no_imputation`)
+- ✅ **DRY**: All complex logic lives in ONE place (`unified_data_raw`)
 - ✅ **Maintainability**: Fix bugs/add features in base table, production inherits automatically
 - ✅ **Performance**: Production table rebuilds in ~10 seconds (vs ~1-2 min for base)
 - ✅ **Clear Lineage**: Base table → Derived table (not parallel independent builds)
 
 **Build Order**:
-1. **First**: Build `unified_data_no_imputation` (base table, ~1-2 min)
+1. **First**: Build `unified_data_raw` (base table, ~1-2 min)
 2. **Second**: Build `unified_data` FROM base table (derived, ~10 sec)
 
 ---
@@ -79,7 +79,7 @@ commodity.gold.unified_data  ← DERIVED TABLE
 
 ---
 
-### Use `commodity.gold.unified_data_no_imputation` (Experimental) if:
+### Use `commodity.gold.unified_data_raw` (Experimental) if:
 
 ✅ **You're building a new model**
 - Starting fresh, can design pipeline for NULLs
@@ -101,7 +101,7 @@ commodity.gold.unified_data  ← DERIVED TABLE
 - Can use flags as features (e.g., "is_weekend = !has_market_data")
 - Explicit about what's missing vs. imputed
 
-**Requirements if using `unified_data_no_imputation`:**
+**Requirements if using `unified_data_raw`:**
 - Must implement `ImputationTransformer` in your pipeline
 - Must handle NULLs explicitly (or use model that handles them)
 - Must validate performance vs. forward-filled baseline

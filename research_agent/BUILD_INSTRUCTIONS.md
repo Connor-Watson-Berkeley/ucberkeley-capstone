@@ -8,7 +8,7 @@
 2. **Attach to cluster**: Select `unity-catalog-cluster` (must be Unity Catalog enabled)
 
 3. **Build Base Table FIRST** (experimental table with NULLs):
-   - Copy contents of `research_agent/sql/create_gold_unified_data_no_imputation.sql`
+   - Copy contents of `research_agent/sql/create_gold_unified_data_raw.sql`
    - Paste into SQL Editor
    - Run (takes ~1-2 minutes)
    - **This is the single source of truth** - production table derives from this
@@ -17,7 +17,7 @@
    - Copy contents of `research_agent/sql/create_gold_unified_data.sql`
    - Paste into SQL Editor
    - Run (takes ~10 seconds - just applies forward-fill transformations)
-   - **This is a derived table** - built FROM `unified_data_no_imputation`
+   - **This is a derived table** - built FROM `unified_data_raw`
 
 5. **Validate**:
    ```bash
@@ -47,13 +47,13 @@ python research_agent/validate_gold_tables.py
 
 ## Architecture (DRY Principle)
 
-**Single Source of Truth**: `commodity.gold.unified_data_no_imputation`
+**Single Source of Truth**: `commodity.gold.unified_data_raw`
 - Base table built from bronze sources
 - All complex logic (date spine, deduplication, array aggregation) lives here
 - Only needs to be maintained in ONE place
 
 **Derived Table**: `commodity.gold.unified_data`
-- Built FROM `unified_data_no_imputation` via simple forward-fill transformations
+- Built FROM `unified_data_raw` via simple forward-fill transformations
 - Just 122 lines of SQL (vs 300+ if duplicated)
 - Rebuilds in ~10 seconds (vs ~1-2 minutes for base table)
 
@@ -67,7 +67,7 @@ python research_agent/validate_gold_tables.py
 
 ## What Gets Created
 
-### Table 1: `commodity.gold.unified_data_no_imputation` (BASE TABLE - Build First)
+### Table 1: `commodity.gold.unified_data_raw` (BASE TABLE - Build First)
 - **Rows**: ~7,000 (2 commodities × ~3,500 days)
 - **Imputation**: Only `close` forward-filled, all others preserve NULLs
 - **Use for**: New models, experimentation, imputation control
@@ -77,7 +77,7 @@ python research_agent/validate_gold_tables.py
 - **Rows**: ~7,000 (same as base)
 - **Imputation**: All features forward-filled (no NULLs)
 - **Use for**: Production models, existing pipelines
-- **Role**: **Derived transformation** - built FROM `unified_data_no_imputation`
+- **Role**: **Derived transformation** - built FROM `unified_data_raw`
 
 **Schema**:
 ```
@@ -93,7 +93,7 @@ gdelt_themes ARRAY<STRUCT<...>>         -- Forward-filled
 
 ---
 
-### Table 2: `commodity.gold.unified_data_no_imputation` (EXPERIMENTAL)
+### Table 2: `commodity.gold.unified_data_raw` (EXPERIMENTAL)
 - **Rows**: ~7,000 (same as production)
 - **Imputation**: Only `close` forward-filled, all others preserve NULLs
 - **Use for**: New models, experimentation, imputation control
@@ -154,7 +154,7 @@ DATABRICKS_TOKEN=dapi<your_new_token>
 Drop and recreate:
 ```sql
 DROP TABLE IF EXISTS commodity.gold.unified_data;
-DROP TABLE IF EXISTS commodity.gold.unified_data_no_imputation;
+DROP TABLE IF EXISTS commodity.gold.unified_data_raw;
 ```
 
 ---
@@ -162,7 +162,7 @@ DROP TABLE IF EXISTS commodity.gold.unified_data_no_imputation;
 ## Next Steps
 
 1. **Read** `GOLD_MIGRATION_GUIDE.md` to choose which table to use
-2. **Update** forecast models to query `commodity.gold.unified_data` OR `commodity.gold.unified_data_no_imputation`
+2. **Update** forecast models to query `commodity.gold.unified_data` OR `commodity.gold.unified_data_raw`
 3. **For experimental table**: Implement `ImputationTransformer` in your pipeline (see `forecast_agent/ml_lib/transformers/imputation.py`)
 
 ---

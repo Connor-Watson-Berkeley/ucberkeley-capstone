@@ -38,9 +38,9 @@ cursor.execute("SELECT COUNT(*) FROM commodity.gold.unified_data")
 prod_rows = cursor.fetchone()[0]
 print(f'Production (unified_data):             {prod_rows:,} rows')
 
-cursor.execute("SELECT COUNT(*) FROM commodity.gold.unified_data_no_imputation")
+cursor.execute("SELECT COUNT(*) FROM commodity.gold.unified_data_raw")
 exp_rows = cursor.fetchone()[0]
-print(f'Experimental (unified_data_no_imputation): {exp_rows:,} rows')
+print(f'Experimental (unified_data_raw): {exp_rows:,} rows')
 
 if prod_rows == exp_rows:
     print(f'✅ PASS: Both tables have same row count ({prod_rows:,})')
@@ -101,7 +101,7 @@ cursor.execute("""
         SUM(CASE WHEN open IS NULL THEN 1 ELSE 0 END) as open_nulls,
         SUM(CASE WHEN close IS NULL THEN 1 ELSE 0 END) as close_nulls,
         SUM(CASE WHEN gdelt_themes IS NULL THEN 1 ELSE 0 END) as gdelt_nulls
-    FROM commodity.gold.unified_data_no_imputation
+    FROM commodity.gold.unified_data_raw
 """)
 row = cursor.fetchone()
 total, vix_nulls, open_nulls, close_nulls, gdelt_nulls = row
@@ -159,7 +159,7 @@ cursor.execute("""
         ROUND(100.0 * AVG(has_market_data), 1) as market_pct,
         ROUND(100.0 * AVG(has_weather_data), 1) as weather_pct,
         ROUND(100.0 * AVG(has_gdelt_data), 1) as gdelt_pct
-    FROM commodity.gold.unified_data_no_imputation
+    FROM commodity.gold.unified_data_raw
 """)
 market_pct, weather_pct, gdelt_pct = cursor.fetchone()
 
@@ -209,7 +209,7 @@ print(f'Production commodities with GDELT: {prod_commodities}')
 # Experimental table
 cursor.execute("""
     SELECT DISTINCT commodity
-    FROM commodity.gold.unified_data_no_imputation
+    FROM commodity.gold.unified_data_raw
     WHERE gdelt_themes IS NOT NULL AND size(gdelt_themes) > 0
     ORDER BY commodity
 """)
@@ -246,7 +246,7 @@ print('\nExperimental table (latest 3 Coffee rows with NULL indicators):')
 cursor.execute("""
     SELECT date, close, vix, open,
            has_market_data, has_weather_data, has_gdelt_data
-    FROM commodity.gold.unified_data_no_imputation
+    FROM commodity.gold.unified_data_raw
     WHERE commodity = 'Coffee'
     ORDER BY date DESC
     LIMIT 3

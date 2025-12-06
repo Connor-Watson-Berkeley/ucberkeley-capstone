@@ -5,20 +5,20 @@
 -- Grain: (date, commodity) - ~7k rows
 --
 -- ARCHITECTURE (DRY Principle):
---   - Built FROM commodity.gold.unified_data_no_imputation (base table)
+--   - Built FROM commodity.gold.unified_data_raw (base table)
 --   - Applies forward-fill to ALL features with NULLs
---   - Single source of truth: unified_data_no_imputation
+--   - Single source of truth: unified_data_raw
 --   - This table is a DERIVED transformation, not a duplicate build
 --
 -- Benefits:
 --   - DRY: No duplicate logic (date spine, deduplication, array aggregation)
---   - Maintainability: Fix bugs in one place (unified_data_no_imputation)
---   - Clear lineage: Raw data → No imputation → Forward-filled
---   - Simple: ~50 lines vs 300+ lines of duplicated SQL
+--   - Maintainability: Fix bugs in one place (unified_data_raw)
+--   - Clear lineage: Bronze → Raw (NULLs) → Production (forward-filled)
+--   - Simple: ~122 lines vs 300+ lines of duplicated SQL
 --
 -- PREREQUISITE:
---   - commodity.gold.unified_data_no_imputation must exist
---   - Run create_gold_unified_data_no_imputation.sql FIRST
+--   - commodity.gold.unified_data_raw must exist
+--   - Run create_gold_unified_data_raw.sql FIRST
 -- =============================================================================
 
 -- Create gold schema if it doesn't exist
@@ -118,5 +118,5 @@ SELECT
   -- NOTE: Missingness flags (has_market_data, has_weather_data, has_gdelt_data)
   -- are NOT included in production table - they're only useful for experimental models
 
-FROM commodity.gold.unified_data_no_imputation
+FROM commodity.gold.unified_data_raw
 ORDER BY commodity, date;
