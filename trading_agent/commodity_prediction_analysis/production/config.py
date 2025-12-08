@@ -108,8 +108,8 @@ OUTPUT_SCHEMA = "commodity.trading_agent"
 MARKET_TABLE = "commodity.silver.unified_data"
 FORECAST_TABLE = "commodity.forecast.distributions"
 
-# Volume paths for file storage
-VOLUME_PATH = "/Volumes/commodity/trading_agent/files"
+# File storage paths - using /dbfs/ prefix for Python file I/O on Databricks
+VOLUME_PATH = "/dbfs/production/files"
 
 # =============================================================================
 # ANALYSIS CONFIGURATION
@@ -205,6 +205,22 @@ def load_forecast_data(commodity, model_version, spark_session=None):
     predictions_wide = spark_df.toPandas()
 
     return predictions_wide
+
+
+def get_data_paths(commodity, model_version):
+    """
+    Get file paths for a commodity and model version
+
+    Args:
+        commodity: Commodity name (e.g., 'coffee')
+        model_version: Model version (e.g., 'arima_v1')
+
+    Returns:
+        dict: Dictionary of file paths
+    """
+    return {
+        'prediction_matrices_real': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_{model_version}.pkl"
+    }
 
 
 def load_price_data(commodity, start_date=None, spark_session=None):

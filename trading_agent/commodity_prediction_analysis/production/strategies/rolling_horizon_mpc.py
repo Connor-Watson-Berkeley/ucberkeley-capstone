@@ -1,12 +1,15 @@
 """
 Rolling Horizon Model Predictive Control (MPC) Strategy
 
-Implements limited foresight optimization as described in:
-"Optimizing Agricultural Inventory Liquidation: Perfect Foresight Benchmarks and Limited Horizon Realities"
+Implements limited foresight optimization based on operations research literature:
+- Secomandi, N. (2010). "Optimal Commodity Trading with a Capacitated Storage Asset."
+  Management Science, 56(3), 449-467. DOI: 10.1287/mnsc.1090.1049
+- Williams, J. C., & Wright, B. D. (1991). Storage and Commodity Markets.
+  Cambridge University Press. ISBN: 9780521326162
 
 This strategy:
 1. Observes a 14-day forward price window each day
-2. Solves a local optimization problem for that window
+2. Solves a local optimization problem for that window using Linear Programming
 3. Executes ONLY the first day's decision
 4. Rolls the window forward to the next day (Receding Horizon Control)
 
@@ -14,9 +17,15 @@ Key Features:
 - Uses Linear Programming for each window optimization
 - Includes terminal value correction to prevent "End-of-Horizon" effect
 - Mimics Model Predictive Control from control theory
+- Stage-dependent basestock policies adapted from Secomandi (2010)
 - Expected performance: 70-80% of Oracle (perfect foresight)
 
 With Shadow-Priced Terminal Value enhancement: 85-95% of Oracle
+
+Academic Foundation:
+Secomandi (2010) addresses the warehouse problem with capacity limits using dynamic
+programming with finite horizons and terminal boundary conditions. This implementation
+adapts those concepts for agricultural commodity liquidation with limited price foresight.
 """
 
 import numpy as np

@@ -45,7 +45,7 @@ def main():
                 commodity,
                 model_version,
                 forecast_start_date,
-                COUNT(DISTINCT run_id) as n_runs
+                COUNT(DISTINCT path_id) as n_runs
             FROM commodity.forecast.distributions
             WHERE is_actuals = false
             GROUP BY commodity, model_version, forecast_start_date
@@ -83,7 +83,7 @@ def main():
                     commodity,
                     model_version,
                     forecast_start_date,
-                    COUNT(DISTINCT run_id) as n_runs
+                    COUNT(DISTINCT path_id) as n_runs
                 FROM commodity.forecast.distributions
                 WHERE is_actuals = false
                 GROUP BY commodity, model_version, forecast_start_date
@@ -133,7 +133,6 @@ def main():
         print("   Consider using forecasts with MARGINAL quality for testing")
 
     print("\n" + "=" * 100)
-    return 0
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

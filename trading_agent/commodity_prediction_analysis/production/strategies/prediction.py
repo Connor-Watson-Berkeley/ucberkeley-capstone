@@ -15,6 +15,23 @@ Contains 5 prediction strategies:
 - Percentage-based decision framework (scale-invariant)
 - Full parameterization for grid search
 - Updated cost defaults (0.005% storage, 0.01% transaction)
+
+Academic References:
+- Expected Value strategy based on:
+  Williams, J. C., & Wright, B. D. (1991). Storage and Commodity Markets.
+  Cambridge University Press. ISBN: 9780521326162
+
+- Consensus strategy based on:
+  Clemen, R. T. (1989). "Combining forecasts: A review and annotated bibliography."
+  International Journal of Forecasting, 5(4), 559-583.
+
+- Risk-Adjusted strategy based on:
+  Markowitz, H. (1952). "Portfolio selection." Journal of Finance, 7(1), 77-91.
+
+- Predictive variants (Threshold/MA) extend baseline strategies with forecast confidence:
+  Marshall, B. R., Cahan, R. H., & Cahan, J. M. (2008) + Williams & Wright (1991)
+
+See docs/STRATEGY_ACADEMIC_REFERENCES.md for complete academic citations.
 """
 
 import numpy as np

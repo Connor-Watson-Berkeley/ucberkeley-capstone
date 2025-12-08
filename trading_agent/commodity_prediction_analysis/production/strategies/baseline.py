@@ -3,10 +3,22 @@ Baseline Trading Strategies
 Extracted from diagnostics/all_strategies_pct.py (improved version)
 
 Contains 4 baseline strategies:
-1. ImmediateSaleStrategy - Weekly liquidation
-2. EqualBatchStrategy - Fixed schedule batches
-3. PriceThresholdStrategy - Price trigger + historical indicators
-4. MovingAverageStrategy - MA crossover + historical indicators
+1. ImmediateSaleStrategy - Weekly liquidation (naive baseline, no citation)
+2. EqualBatchStrategy - Fixed schedule batches (systematic liquidation heuristic)
+3. PriceThresholdStrategy - Price trigger + technical indicators
+4. MovingAverageStrategy - MA crossover + technical indicators
+
+Academic References:
+- Price Threshold & Moving Average strategies based on:
+  Marshall, B. R., Cahan, R. H., & Cahan, J. M. (2008). "Can commodity futures
+  be profitably traded with quantitative market timing strategies?"
+  Journal of Banking & Finance, 32(9), 1810-1819.
+
+- Technical indicators (RSI, ADX) from:
+  Wilder, J. Welles (1978). New Concepts in Technical Trading Systems.
+  Trend Research.
+
+See docs/STRATEGY_ACADEMIC_REFERENCES.md for complete academic citations.
 """
 
 import numpy as np

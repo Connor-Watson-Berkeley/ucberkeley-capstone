@@ -91,7 +91,31 @@ def generate_calibrated_predictions(prices_df, model_version, target_accuracy=0.
                 continue
 
             if target_accuracy == 1.0:
-                # 100% accurate: perfect predictions
+                # ========================================================================
+                # SPECIAL CASE: 100% Accuracy (Perfect Foresight)
+                # ========================================================================
+                # For acc100, we simply copy the actual realized prices with zero noise.
+                # This creates "predictions" that are identical to what actually happened.
+                #
+                # Data Flow:
+                #   commodity.forecast.forecast_actuals (source of truth)
+                #     ↓
+                #   commodity.silver.unified_data (forward-filled, continuous daily)
+                #     ↓
+                #   prices_df (loaded in this script)
+                #     ↓
+                #   future_prices (extracted above from prices_df)
+                #     ↓
+                #   predicted_prices_matrix (perfect foresight "predictions")
+                #
+                # NOTE: Unlike acc60/70/80/90, there is NO predictions table for acc100
+                #       in commodity.trading_agent (e.g., no predictions_prepared_coffee_synthetic_acc100).
+                #       The acc100 "predictions" exist ONLY in the pickle file.
+                #       Results tables DO exist: results_{commodity}_synthetic_acc100
+                #
+                # Why: A predictions table would be redundant - it would just duplicate
+                #      the actuals that already exist in forecast_actuals.
+                # ========================================================================
                 predicted_prices_matrix = np.tile(future_prices, (n_runs, 1))
             else:
                 # v8 FIX: Center log-normal at ±target_mape for each timestamp

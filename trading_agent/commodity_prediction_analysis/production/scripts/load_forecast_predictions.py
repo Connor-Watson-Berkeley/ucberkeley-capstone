@@ -43,7 +43,9 @@ import pandas as pd
 import numpy as np
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Note: __file__ is not defined in Databricks spark_python_task execution context
+# The script is at dbfs:/production/scripts/, so we need to add /dbfs/ to import production.config
+sys.path.insert(0, '/dbfs/')
 
 # Configuration imports
 from production.config import (
@@ -188,6 +190,9 @@ def process_model_version(commodity, model_version, spark):
     # ----------------------------------------------------------------------
     matrices_path = DATA_PATHS['prediction_matrices_real']
 
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(matrices_path), exist_ok=True)
+
     with open(matrices_path, 'wb') as f:
         pickle.dump(prediction_matrices, f)
 
@@ -265,6 +270,10 @@ def create_forecast_manifest(commodity, results_list, volume_path):
 
     # Save manifest
     manifest_path = os.path.join(volume_path, f'forecast_manifest_{commodity}.json')
+
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
+
     with open(manifest_path, 'w') as f:
         json.dump(manifest, f, indent=2)
 
