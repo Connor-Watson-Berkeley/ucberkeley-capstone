@@ -2,7 +2,15 @@
 
 **Purpose:** Slide proposal for presenting trading agent results
 **Created:** 2024-12-04
-**Status:** Draft - Awaiting real backtest data
+**Updated:** 2024-12-04
+**Status:** ⚠️ TEMPLATE - All numbers are PLACEHOLDERS until real backtest data is available
+
+**IMPORTANT:**
+- All dollar amounts ($50K, $61K, etc.) are PLACEHOLDER examples
+- All percentages (18-22%, +1-2%, etc.) are PLACEHOLDER examples
+- All p-values are PLACEHOLDER examples
+- Replace with actual backtest results before presentation
+- See ACADEMIC_REFERENCES_BIBLIOGRAPHY.md for verified citations
 
 ---
 
@@ -21,80 +29,88 @@
 *Based on academic research:*
 
 - **Immediate Sale** (naive baseline)
-- **Equal Batches** [Chen 2019]
-- **Price Threshold** [Smith 2018]
-- **Moving Average** [Jones 2020]
+- **Equal Batches** (practitioner heuristic)
+- **Price Threshold** [Marshall et al. 2008]
+- **Moving Average** [Marshall et al. 2008]
 
 **🔮 Forecast-Enhanced (6)**
 *Integrating predictions:*
 
-- **Consensus** [Kahneman 1979]
-- **Expected Value** [von Neumann]
-- **Risk-Adjusted** [Markowitz]
-- **Threshold + Forecasts**
-- **Moving Avg + Forecasts**
-- **MPC Optimization**
+- **Consensus** [Clemen 1989]
+- **Expected Value** [Williams & Wright 1991]
+- **Risk-Adjusted** [Markowitz 1952]
+- **Threshold + Forecasts** [Marshall 2008 extended]
+- **Moving Avg + Forecasts** [Marshall 2008 extended]
+- **MPC Optimization** [Secomandi 2010]
+
+**See docs/ACADEMIC_REFERENCES_BIBLIOGRAPHY.md for complete verified citations**
 
 ---
 
 ### Column 2: Results (Horizontal Bar Chart)
 
+**⚠️ PLACEHOLDER DATA - Replace with actual backtest results**
+
 **Visual: Horizontal bars showing net earnings**
 
 ```
-Immediate Sale    ████ $50K (baseline)
-                        ↓ +22% ✓
-Price Threshold   █████████ $61K
-Moving Average    ██████████ $62K
-Equal Batches     █████████ $61K
-                        ↓ +1.5% (ns)
-MA + Forecasts    ██████████ $63K
-Consensus         ██████████ $63K
-Expected Value    ██████████ $62K
-Risk-Adjusted     ██████████ $63K
+Immediate Sale    ████ $50K (baseline) [PLACEHOLDER]
+                        ↓ +22% ✓ [PLACEHOLDER]
+Price Threshold   █████████ $61K [PLACEHOLDER]
+Moving Average    ██████████ $62K [PLACEHOLDER]
+Equal Batches     █████████ $61K [PLACEHOLDER]
+                        ↓ +1.5% (ns) [PLACEHOLDER]
+MA + Forecasts    ██████████ $63K [PLACEHOLDER]
+Consensus         ██████████ $63K [PLACEHOLDER]
+Expected Value    ██████████ $62K [PLACEHOLDER]
+Risk-Adjusted     ██████████ $63K [PLACEHOLDER]
 
 Legend:
 ✓ = p < 0.001 (statistically significant)
 ns = p > 0.05 (not significant)
 ```
 
-**NOTE:** These are placeholder numbers. Replace with actual backtest results.
+**⚠️ All numbers above are PLACEHOLDER examples for layout purposes only**
 
 ---
 
 ### Column 3: Key Findings
 
+**⚠️ PLACEHOLDER PERCENTAGES - Replace with actual results**
+
 **✅ Algorithms Drive Value**
-- Smart strategies beat naive by 18-22%
-- Highly significant (p < 0.001)
-- **Production-ready NOW**
+- Smart strategies beat naive by [18-22%] [PLACEHOLDER]
+- Highly significant (p < 0.001) [PLACEHOLDER]
+- **Production-ready NOW** [If results confirm]
 
 **⚠️ Forecasts: Limited Impact**
-- Add only +1-2% over baseline algorithms
-- Not statistically significant (p > 0.05)
-- Current forecast accuracy is limiting factor
+- Add only [+1-2%] over baseline algorithms [PLACEHOLDER]
+- Not statistically significant (p > 0.05) [PLACEHOLDER]
+- Current forecast accuracy is limiting factor [If confirmed]
 
 **🎯 Opportunity: Better Forecasts**
-- Sensitivity analysis shows:
-  - 90% accuracy → +8% projected gain
-  - vs current +2% at 75% accuracy
-- Forecast improvement = **4x ROI increase**
+- Sensitivity analysis shows: [PLACEHOLDER]
+  - 90% accuracy → [+8%] projected gain [PLACEHOLDER]
+  - vs current [+2%] at 75% accuracy [PLACEHOLDER]
+- Forecast improvement = [4x ROI increase] [PLACEHOLDER]
 
 ---
 
 ## Bottom Section: Forecast Sensitivity Chart
 
+**⚠️ PLACEHOLDER CHART - Replace with actual sensitivity analysis data**
+
 **Title:** "How Forecast Accuracy Affects Strategy Value"
 
 ```
-Net Earnings
+Net Earnings [ALL VALUES PLACEHOLDER]
       ↑
-  70K │                              ●────● 100% accuracy
+  70K │                              ●────● 100% accuracy [PLACEHOLDER]
       │                          ●──●
   65K │                      ●──●
       │                  ●──●
-  60K │              ●──●              Current (~75%)
-      │          ●──●                        ↓ +$2K
+  60K │              ●──●              Current (~75%) [PLACEHOLDER]
+      │          ●──●                        ↓ +$2K [PLACEHOLDER]
   55K │      ●──●                         (marginal)
       │═══════════════════════════════ Baseline (no forecasts)
   50K │
@@ -105,7 +121,9 @@ Net Earnings
          Viable     Even                          Maximum
 ```
 
-**Key Message:** Better forecasts unlock 4x more value than current accuracy provides
+**Key Message:** Better forecasts unlock [4x] more value than current accuracy provides [PLACEHOLDER]
+
+**NOTE:** Run sensitivity analysis with synthetic predictions at 60%, 70%, 80%, 90%, 100% accuracy levels to generate real data for this chart.
 
 ---
 
@@ -370,5 +388,28 @@ Paired Differences (Prediction - Baseline)
 ---
 
 **Last Updated:** 2024-12-04
-**Status:** Draft awaiting real backtest data
+**Status:** ⚠️ TEMPLATE with PLACEHOLDER data - All numbers must be replaced with actual backtest results
 **Next Action:** Run backtests after AWS account unlocked
+
+---
+
+## Academic Citations - VERIFIED REFERENCES
+
+**All academic citations in this document have been updated to use verified references.**
+
+For complete bibliographic information, see:
+- **`docs/ACADEMIC_REFERENCES_BIBLIOGRAPHY.md`** - Complete citations in APA and BibTeX format
+- **`docs/STRATEGY_ACADEMIC_REFERENCES.md`** - Detailed strategy-by-strategy analysis
+
+### Quick Reference Card:
+
+| Strategy | Citation |
+|----------|----------|
+| Price Threshold / Moving Average | Marshall, B. R., Cahan, R. H., & Cahan, J. M. (2008). Journal of Banking & Finance, 32(9), 1810-1819. |
+| Technical Indicators (RSI, ADX) | Wilder, J. Welles (1978). New Concepts in Technical Trading Systems. |
+| Expected Value | Williams, J. C., & Wright, B. D. (1991). Storage and Commodity Markets. Cambridge University Press. |
+| Consensus | Clemen, R. T. (1989). International Journal of Forecasting, 5(4), 559-583. |
+| Risk-Adjusted | Markowitz, H. (1952). Journal of Finance, 7(1), 77-91. **[Nobel Prize]** |
+| Rolling Horizon MPC | Secomandi, N. (2010). Management Science, 56(3), 449-467. |
+
+**All citations verified via web search 2024-12-04.**
