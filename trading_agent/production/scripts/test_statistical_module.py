@@ -10,7 +10,16 @@ import sys
 import os
 
 # Add trading_agent directory to Python path
-script_dir = os.path.dirname(os.path.abspath(__file__))
+# Handle both local and Databricks execution environments
+try:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    # __file__ not defined in Databricks spark_python_task
+    # Assume we're in /Workspace/Repos/.../trading_agent/production/scripts/
+    script_dir = os.getcwd()
+    if 'trading_agent' not in script_dir:
+        script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/production/scripts'
+
 trading_agent_dir = os.path.dirname(os.path.dirname(script_dir))
 if trading_agent_dir not in sys.path:
     sys.path.insert(0, trading_agent_dir)
