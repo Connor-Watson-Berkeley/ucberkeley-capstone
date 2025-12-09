@@ -109,15 +109,14 @@ def step_generate_manifests(spark, commodities):
 
 def step_load_predictions(spark, commodities):
     """Step 2: Load forecast predictions from database"""
-    from production.scripts.load_forecast_predictions import process_commodity
+    from production.scripts.load_forecast_predictions import run_forecast_predictions
 
-    results = {}
-    for commodity in commodities:
-        print(f"\nLoading predictions for {commodity.upper()}...")
-        result = process_commodity(spark, commodity, force=True)
-        results[commodity] = result
+    print(f"\nLoading predictions for commodities: {', '.join(commodities)}")
 
-    return results
+    # Call run_forecast_predictions which handles all commodities
+    result = run_forecast_predictions(commodities=commodities)
+
+    return result
 
 
 def step_optimize_parameters(spark, commodities, objective='efficiency'):
@@ -170,7 +169,8 @@ def step_run_backtests(spark, commodities, use_optimized_params=True):
 
 def step_run_statistical_tests(spark, commodities):
     """Step 5: Run statistical tests to validate profitability"""
-    from production.analysis.rigorous_statistical_tests import run_statistical_validation
+    from production.analysis.rigorous_statistical_tests import run_comprehensive_analysis
+    from production.strategies import STRATEGY_NAMES
 
     results = {}
     for commodity in commodities:
@@ -187,24 +187,37 @@ def step_run_statistical_tests(spark, commodities):
 
         commodity_results = {}
         for model in models:
-            try:
-                result = run_statistical_validation(
-                    spark=spark,
-                    commodity=commodity,
-                    model_version=model,
-                    significance_level=0.05
-                )
-                commodity_results[model] = result
+            print(f"\n  Testing {model}...")
+            model_results = {}
 
-                # Print summary
-                if result.get('significant_strategies'):
-                    print(f"    ✓ {model}: {len(result['significant_strategies'])} significant strategies")
-                else:
-                    print(f"    ⚠️  {model}: No statistically significant improvements")
+            # Test each prediction-based strategy against Immediate Sale baseline
+            for strategy in STRATEGY_NAMES:
+                if strategy == 'Immediate Sale':
+                    continue  # Skip baseline
 
-            except Exception as e:
-                print(f"    ✗ {model}: Failed - {e}")
-                commodity_results[model] = {'error': str(e)}
+                try:
+                    result = run_comprehensive_analysis(
+                        commodity=commodity,
+                        model_version=model,
+                        strategy_name=strategy,
+                        baseline_name='Immediate Sale',
+                        spark=spark,
+                        verbose=False
+                    )
+                    model_results[strategy] = result
+
+                    # Check if statistically significant
+                    hac_test = result.get('daily_returns_hac', {})
+                    if hac_test.get('significant', False):
+                        print(f"    ✓ {strategy}: Significant (p={hac_test.get('p_value', 0):.4f})")
+                    else:
+                        print(f"    - {strategy}: Not significant (p={hac_test.get('p_value', 1):.4f})")
+
+                except Exception as e:
+                    print(f"    ✗ {strategy}: Failed - {e}")
+                    model_results[strategy] = {'error': str(e)}
+
+            commodity_results[model] = model_results
 
         results[commodity] = commodity_results
 
