@@ -439,10 +439,22 @@ def main():
 
     overall_success = generate_summary_report(flow_results)
 
-    # Save results to JSON
+    # Save results to JSON (convert Timestamp keys to strings first)
+    def convert_timestamps_to_strings(obj):
+        """Recursively convert pandas Timestamp keys to strings for JSON serialization"""
+        if isinstance(obj, dict):
+            return {
+                str(k) if hasattr(k, 'isoformat') else k: convert_timestamps_to_strings(v)
+                for k, v in obj.items()
+            }
+        elif isinstance(obj, list):
+            return [convert_timestamps_to_strings(item) for item in obj]
+        else:
+            return obj
+
     output_file = Path(VOLUME_PATH) / f"complete_analysis_flow_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(output_file, 'w') as f:
-        json.dump(flow_results, f, indent=2, default=str)
+        json.dump(convert_timestamps_to_strings(flow_results), f, indent=2, default=str)
     print(f"\nDetailed results saved to: {output_file}")
 
     return overall_success
