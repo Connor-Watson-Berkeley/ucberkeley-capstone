@@ -159,10 +159,14 @@ def step_run_backtests(spark, commodities, use_optimized_params=True):
 
     results = runner.run_all_commodities(verbose=True)
 
+    # Get summary statistics
+    summary = runner.get_summary()
+
     print(f"\n✓ Backtests completed")
-    print(f"  Total combinations: {results['total_combinations']}")
-    print(f"  Successful: {results['successful_combinations']}")
-    print(f"  Failed: {results['failed_combinations']}")
+    print(f"  Total combinations: {summary['total_combinations']}")
+    print(f"  Commodities: {', '.join(summary['commodities'])}")
+    for commodity in summary['commodities']:
+        print(f"    - {commodity}: {summary[f'{commodity}_models']} models")
 
     return results
 
