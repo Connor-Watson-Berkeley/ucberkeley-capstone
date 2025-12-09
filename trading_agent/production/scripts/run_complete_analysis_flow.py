@@ -130,8 +130,7 @@ def step_optimize_parameters(spark, commodities, objective='efficiency'):
             spark=spark,
             commodity=commodity,
             objective=objective,
-            n_trials=100,  # Reduced for faster execution
-            verbose=True
+            n_trials=100  # Reduced for faster execution
         )
         results[commodity] = result
 
