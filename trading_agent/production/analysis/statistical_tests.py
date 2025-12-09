@@ -345,7 +345,8 @@ def test_strategy_vs_baseline(
     n_positive = np.sum(differences > 0)
     n_total = len(differences)
     # Binomial test: H0 = 50% probability of being positive
-    sign_p_value = stats.binom_test(n_positive, n_total, 0.5, alternative='greater')
+    # Use binomtest (binom_test was deprecated)
+    sign_p_value = stats.binomtest(n_positive, n_total, 0.5, alternative='greater').pvalue
 
     # Bootstrap confidence interval for robustness
     boot_ci = bootstrap_confidence_interval(strategy_values, baseline_values, n_bootstrap=10000)
