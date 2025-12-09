@@ -30,7 +30,8 @@ analyzer = DailyLevelAnalyzer()
 
 # Find available pickle files
 import glob
-pickle_pattern = "/Volumes/commodity/trading_agent/results/results_detailed_*.pkl"
+# Default volume path used by MultiCommodityRunner
+pickle_pattern = "/Volumes/commodity/trading_agent/files/results_detailed_*.pkl"
 
 print("\nSearching for detailed results files...")
 try:
@@ -40,13 +41,19 @@ try:
         for f in pickle_files[:10]:  # Show first 10
             print(f"  • {os.path.basename(f)}")
     else:
-        print("⚠️  No pickle files found in /Volumes/commodity/trading_agent/results/")
-        print("   Trying alternative path...")
-        # Try DBFS path
-        pickle_pattern = "/dbfs/mnt/commodity/trading_agent/results/results_detailed_*.pkl"
+        print("⚠️  No pickle files found in /Volumes/commodity/trading_agent/files/")
+        print("   Trying alternative paths...")
+        # Try results directory
+        pickle_pattern = "/Volumes/commodity/trading_agent/results/results_detailed_*.pkl"
         pickle_files = glob.glob(pickle_pattern)
         if pickle_files:
-            print(f"✓ Found {len(pickle_files)} files in DBFS mount")
+            print(f"✓ Found {len(pickle_files)} files in results directory")
+        else:
+            # Try DBFS path
+            pickle_pattern = "/dbfs/Volumes/commodity/trading_agent/files/results_detailed_*.pkl"
+            pickle_files = glob.glob(pickle_pattern)
+            if pickle_files:
+                print(f"✓ Found {len(pickle_files)} files in DBFS mount")
 except Exception as e:
     print(f"⚠️  Error searching for files: {e}")
     pickle_files = []
@@ -57,11 +64,12 @@ print("TEST CASE: Coffee - Naive Model")
 print("=" * 80)
 
 try:
-    # Try common pickle paths
+    # Try common pickle paths (default is /files/ not /results/)
     possible_paths = [
+        "/Volumes/commodity/trading_agent/files/results_detailed_coffee_naive.pkl",
         "/Volumes/commodity/trading_agent/results/results_detailed_coffee_naive.pkl",
-        "/dbfs/mnt/commodity/trading_agent/results/results_detailed_coffee_naive.pkl",
-        "/dbfs/Volumes/commodity/trading_agent/results/results_detailed_coffee_naive.pkl"
+        "/dbfs/Volumes/commodity/trading_agent/files/results_detailed_coffee_naive.pkl",
+        "/dbfs/mnt/commodity/trading_agent/files/results_detailed_coffee_naive.pkl"
     ]
 
     pickle_path = None
