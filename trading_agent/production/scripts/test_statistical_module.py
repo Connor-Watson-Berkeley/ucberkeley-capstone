@@ -5,6 +5,16 @@ Run this in a Databricks notebook to validate the statistical analysis module.
 Copy-paste into notebook cells or run as %run magic command.
 """
 
+# Setup Python path for imports
+import sys
+import os
+
+# Add trading_agent directory to Python path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+trading_agent_dir = os.path.dirname(os.path.dirname(script_dir))
+if trading_agent_dir not in sys.path:
+    sys.path.insert(0, trading_agent_dir)
+
 # ==============================================================================
 # CELL 1: Test Imports
 # ==============================================================================
