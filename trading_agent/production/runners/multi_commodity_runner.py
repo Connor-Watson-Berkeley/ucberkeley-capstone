@@ -27,7 +27,8 @@ class MultiCommodityRunner:
         volume_path: str = "/Volumes/commodity/trading_agent/files",
         output_schema: str = "commodity.trading_agent",
         use_optimized_params: bool = False,
-        optimization_objective: str = 'efficiency'
+        optimization_objective: str = 'efficiency',
+        run_statistical_tests: bool = True
     ):
         """
         Initialize multi-commodity runner
@@ -41,6 +42,7 @@ class MultiCommodityRunner:
             output_schema: Unity Catalog schema for Delta tables
             use_optimized_params: If True, automatically load optimized parameters when available
             optimization_objective: Which optimization objective to use ('efficiency', 'earnings', 'multi')
+            run_statistical_tests: If True, run statistical validation after backtests
         """
         self.spark = spark
         self.commodity_configs = commodity_configs
@@ -50,14 +52,23 @@ class MultiCommodityRunner:
         self.output_schema = output_schema
         self.use_optimized_params = use_optimized_params
         self.optimization_objective = optimization_objective
+        self.run_statistical_tests = run_statistical_tests
 
         # Initialize sub-modules
         self.data_loader = DataLoader(spark=spark, volume_path=volume_path)
         self.viz_generator = VisualizationGenerator(volume_path=volume_path)
         self.result_saver = ResultSaver(spark=spark)
 
+        # Initialize statistical analyzer (if enabled)
+        if self.run_statistical_tests:
+            from production.analysis import StatisticalAnalyzer
+            self.statistical_analyzer = StatisticalAnalyzer(spark=spark)
+        else:
+            self.statistical_analyzer = None
+
         # Storage for all results
         self.all_commodity_results = {}
+        self.all_statistical_results = {}
 
     def run_all_commodities(
         self,
