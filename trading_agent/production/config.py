@@ -219,7 +219,7 @@ def get_data_paths(commodity, model_version):
         dict: Dictionary of file paths
     """
     return {
-        'prediction_matrices_real': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_{model_version}.pkl"
+        'prediction_matrices_real': f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_{model_version}_real.pkl"
     }
 
 
