@@ -17,10 +17,12 @@ def generate_manifest_for_commodity(spark, commodity, volume_path):
     print(f"{'='*80}")
     
     # Get all model versions for this commodity
+    # Note: commodity column is capitalized in table ('Coffee', 'Sugar')
+    commodity_capitalized = commodity.capitalize()
     models_df = spark.sql(f"""
         SELECT DISTINCT model_version
         FROM commodity.forecast.distributions
-        WHERE commodity = '{commodity}'
+        WHERE commodity = '{commodity_capitalized}'
             AND is_actuals = false
         ORDER BY model_version
     """)
@@ -37,15 +39,15 @@ def generate_manifest_for_commodity(spark, commodity, volume_path):
     for model_version in model_versions:
         print(f"\nProcessing {model_version}...")
         
-        # Get prediction date coverage
+        # Get forecast date coverage (using forecast_start_date not prediction_date)
         coverage_df = spark.sql(f"""
             SELECT
-                MIN(prediction_date) as first_pred,
-                MAX(prediction_date) as last_pred,
-                COUNT(DISTINCT prediction_date) as n_dates,
-                COUNT(DISTINCT YEAR(prediction_date)) as n_years
+                MIN(forecast_start_date) as first_pred,
+                MAX(forecast_start_date) as last_pred,
+                COUNT(DISTINCT forecast_start_date) as n_dates,
+                COUNT(DISTINCT YEAR(forecast_start_date)) as n_years
             FROM commodity.forecast.distributions
-            WHERE commodity = '{commodity}'
+            WHERE commodity = '{commodity_capitalized}'
                 AND model_version = '{model_version}'
                 AND is_actuals = false
         """)
