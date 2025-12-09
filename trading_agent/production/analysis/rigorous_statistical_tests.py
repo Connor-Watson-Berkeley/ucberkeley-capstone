@@ -505,11 +505,10 @@ class RigorousStatisticalAnalyzer:
         verbose: bool = True
     ) -> Dict[str, Any]:
         """
-        Run all three complementary analyses on a strategy
+        Run rigorous statistical tests on a strategy using high-granularity data
 
-        1. Annual: Non-parametric tests (binomial, Wilcoxon)
-        2. Daily: HAC-adjusted t-test on returns
-        3. Monthly: Standard t-test on returns
+        1. Daily: HAC-adjusted t-test on returns (n~3,780)
+        2. Monthly: Standard t-test on returns (n~132)
 
         Args:
             commodity: Commodity name
@@ -523,7 +522,7 @@ class RigorousStatisticalAnalyzer:
         """
         if verbose:
             print("=" * 80)
-            print(f"COMPREHENSIVE STATISTICAL ANALYSIS")
+            print(f"RIGOROUS STATISTICAL ANALYSIS")
             print(f"Commodity: {commodity.upper()} | Model: {model_version}")
             print(f"Strategy: {strategy_name}")
             print(f"Baseline: {baseline_name}")
@@ -532,41 +531,13 @@ class RigorousStatisticalAnalyzer:
         results = {}
 
         # ====================================================================
-        # 1. ANNUAL ANALYSIS (Non-parametric)
+        # 1. DAILY RETURNS (HAC-adjusted)
         # ====================================================================
 
         if verbose:
             print("\n" + "=" * 80)
-            print("1. ANNUAL RETURNS (Non-Parametric Tests)")
-            print("   Best for: Small samples (n=11 years)")
-            print("   Tests: Binomial sign test, Wilcoxon signed-rank")
-            print("=" * 80)
-
-        year_df = self.load_year_by_year_results(commodity, model_version)
-
-        strategy_yearly = year_df[year_df['strategy'] == strategy_name].sort_values('year')
-        baseline_yearly = year_df[year_df['strategy'] == baseline_name].sort_values('year')
-
-        if len(strategy_yearly) > 0 and len(baseline_yearly) > 0:
-            strategy_values = strategy_yearly['net_earnings'].values
-            baseline_values = baseline_yearly['net_earnings'].values
-
-            results['annual'] = self.test_annual_nonparametric(
-                strategy_values, baseline_values, strategy_name, verbose
-            )
-        else:
-            results['annual'] = None
-            if verbose:
-                print("  ⚠️  No annual data found")
-
-        # ====================================================================
-        # 2. DAILY RETURNS (HAC-adjusted)
-        # ====================================================================
-
-        if verbose:
-            print("\n" + "=" * 80)
-            print("2. DAILY RETURNS (HAC-Adjusted Test)")
-            print("   Best for: Large samples with autocorrelation (n~3,780 days)")
+            print("1. DAILY RETURNS (HAC-Adjusted Test)")
+            print("   Sample: ~3,780 days")
             print("   Method: Newey-West HAC standard errors")
             print("=" * 80)
 
@@ -589,13 +560,13 @@ class RigorousStatisticalAnalyzer:
                 )
 
                 # ============================================================
-                # 3. MONTHLY RETURNS
+                # 2. MONTHLY RETURNS
                 # ============================================================
 
                 if verbose:
                     print("\n" + "=" * 80)
-                    print("3. MONTHLY RETURNS (Standard t-test)")
-                    print("   Best for: Middle ground (n~132 months)")
+                    print("2. MONTHLY RETURNS (Standard t-test)")
+                    print("   Sample: ~132 months")
                     print("   Method: Standard t-test (minimal autocorrelation)")
                     print("=" * 80)
 
@@ -622,45 +593,40 @@ class RigorousStatisticalAnalyzer:
 
         if verbose:
             print("\n" + "=" * 80)
-            print("SUMMARY: SIGNIFICANCE ACROSS ALL TESTS")
+            print("SUMMARY: STATISTICAL SIGNIFICANCE")
             print("=" * 80)
 
             sig_count = 0
             total_tests = 0
 
-            if results.get('annual'):
-                print(f"\nAnnual (n={results['annual']['n_years']} years):")
-                print(f"  Binomial: {'✓ p<0.05' if results['annual']['binomial_significant_05'] else '✗ not sig'} (p={results['annual']['binomial_p_value']:.4f})")
-                print(f"  Wilcoxon: {'✓ p<0.05' if results['annual']['wilcoxon_significant_05'] else '✗ not sig'} (p={results['annual']['wilcoxon_p_value']:.4f})")
-                if results['annual']['binomial_significant_05']:
-                    sig_count += 1
-                if results['annual']['wilcoxon_significant_05']:
-                    sig_count += 1
-                total_tests += 2
-
             if results.get('daily'):
                 print(f"\nDaily (n={results['daily']['n_days']:,} days):")
-                print(f"  HAC t-test: {'✓ p<0.05' if results['daily']['significant_05_hac'] else '✗ not sig'} (p={results['daily']['p_value_hac']:.4f})")
+                print(f"  HAC t-test: {'✓ SIGNIFICANT (p<0.05)' if results['daily']['significant_05_hac'] else '✗ Not significant'}")
+                print(f"  p-value: {results['daily']['p_value_hac']:.6f}")
+                print(f"  Annualized excess return: {results['daily']['annualized_excess_return']*100:.2f}%")
+                print(f"  Sharpe ratio: {results['daily']['sharpe_ratio']:.3f}")
                 if results['daily']['significant_05_hac']:
                     sig_count += 1
                 total_tests += 1
 
             if results.get('monthly'):
                 print(f"\nMonthly (n={results['monthly']['n_months']} months):")
-                print(f"  t-test: {'✓ p<0.05' if results['monthly']['significant_05'] else '✗ not sig'} (p={results['monthly']['p_value']:.4f})")
+                print(f"  t-test: {'✓ SIGNIFICANT (p<0.05)' if results['monthly']['significant_05'] else '✗ Not significant'}")
+                print(f"  p-value: {results['monthly']['p_value']:.6f}")
+                print(f"  Annualized excess return: {results['monthly']['annualized_excess_return']*100:.2f}%")
+                print(f"  Win rate: {results['monthly']['win_rate']:.1%}")
                 if results['monthly']['significant_05']:
                     sig_count += 1
                 total_tests += 1
 
             print(f"\n{'='*80}")
-            print(f"OVERALL: {sig_count}/{total_tests} tests show significance at p<0.05")
-
             if sig_count == total_tests and total_tests > 0:
-                print("✓ STRONG EVIDENCE: Significant across all tests")
-            elif sig_count >= total_tests / 2:
-                print("~ MIXED EVIDENCE: Significant in some tests")
+                print(f"✓ STATISTICALLY SIGNIFICANT: Both tests show p<0.05")
+            elif sig_count > 0:
+                print(f"~ MIXED EVIDENCE: {sig_count}/{total_tests} tests significant")
             else:
-                print("✗ WEAK EVIDENCE: Not significant in most tests")
+                print(f"✗ NOT SIGNIFICANT: Strategy does not beat baseline (p≥0.05)")
+            print("=" * 80)
 
         return results
 
