@@ -25,7 +25,7 @@ The grid search framework tests different parameter combinations for each tradin
 ### 1. Run Grid Search in Databricks
 
 ```python
-# Open commodity_prediction_analysis/parameter_grid_search_notebook.py in Databricks
+# Open archive/scripts/parameter_grid_search.py (archived - now using production/optimization/) in Databricks
 
 # Configure
 CURRENT_COMMODITY = 'coffee'
@@ -485,7 +485,7 @@ STRATEGIES_TO_OPTIMIZE = ['price_threshold', 'consensus']
 | File | Purpose |
 |------|---------|
 | `parameter_grid_search.py` | Standalone Python script for grid search |
-| `commodity_prediction_analysis/parameter_grid_search_notebook.py` | Databricks notebook version |
+| `archive/scripts/parameter_grid_search.py (archived - now using production/optimization/)` | Databricks notebook version |
 | `parameter_config.py` | Utilities for loading and applying optimal parameters |
 | `optimal_parameters_template.json` | Template showing expected structure |
 | `docs/PARAMETER_GRID_SEARCH_GUIDE.md` | This documentation |

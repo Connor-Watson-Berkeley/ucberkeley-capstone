@@ -867,9 +867,9 @@ Deploy algorithms immediately; scale forecast sophistication for potential addit
 - This document: `/trading_agent/docs/PRESENTATION_SLIDE_TRADING_RESULTS_REAL_DATA.md`
 
 **Supporting Analysis:**
-- Performance comparison: `/trading_agent/commodity_prediction_analysis/FORECAST_MODEL_COMPARISON.md`
-- Statistical tests: `/trading_agent/commodity_prediction_analysis/STATISTICAL_SIGNIFICANCE_ANALYSIS.md`
-- Synthetic bugs: `/trading_agent/commodity_prediction_analysis/production/SYNTHETIC_FORECAST_BUGS.md`
+- Performance comparison: `/trading_agent/archive/notebooks/FORECAST_MODEL_COMPARISON.md`
+- Statistical tests: `/trading_agent/archive/notebooks/STATISTICAL_SIGNIFICANCE_ANALYSIS.md`
+- Synthetic bugs: `/trading_agent/production/SYNTHETIC_FORECAST_BUGS.md`
 
 **Delta Tables (Databricks):**
 - Results: `commodity.trading_agent.results_coffee_naive`

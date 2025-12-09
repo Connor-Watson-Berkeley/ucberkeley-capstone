@@ -289,7 +289,7 @@ See [DATABRICKS_GUIDE.md](DATABRICKS_GUIDE.md)
 
 **For complete system context:** See [MASTER_SYSTEM_PLAN.md](../MASTER_SYSTEM_PLAN.md) Phase 2
 
-**For file inventory:** See [FILE_INVENTORY.md](../commodity_prediction_analysis/FILE_INVENTORY.md)
+**For file inventory:** See [FILE_INVENTORY.md](../archive/notebooks/FILE_INVENTORY.md)
 
 **For diagnostic details:** See [DIAGNOSTICS.md](DIAGNOSTICS.md)
 

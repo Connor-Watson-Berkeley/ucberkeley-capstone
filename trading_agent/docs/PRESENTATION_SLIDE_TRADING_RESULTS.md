@@ -179,7 +179,7 @@ When you run updated notebooks/production system, extract these metrics:
 # In 05_strategy_comparison.ipynb
 # Add imports to use production strategies
 import sys
-sys.path.append('/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
+sys.path.append('/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent')
 
 from production.strategies import (
     ImmediateSaleStrategy,

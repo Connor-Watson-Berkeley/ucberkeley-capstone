@@ -176,7 +176,7 @@ WhatsApp Delivery (Dual Path)
 - CSV exports: `detailed_strategy_results.csv`, `cross_model_commodity_summary.csv`
 - Visualizations: 220+ PNG charts (earnings, timelines, inventory, heatmaps)
 
-**Reference:** `trading_agent/commodity_prediction_analysis/COMPREHENSIVE_FILE_INVENTORY.md`
+**Reference:** `trading_agent/archive/notebooks/FILE_INVENTORY.md`
 
 ---
 
@@ -301,7 +301,7 @@ This phase was previously considered the critical blocker. However, the correct 
 
 **Blocked By:** Phase 2 (Automation) - need automated testing infrastructure before effective debugging
 
-**Reference:** `trading_agent/commodity_prediction_analysis/EXECUTIVE_SUMMARY.md` (bug documentation)
+**Reference:** `trading_agent/docs/ALGORITHM_ISSUES.md`, `trading_agent/archive/notebooks/diagnostics/BUG_FIX_SUMMARY.md` (bug documentation)
 
 ---
 
@@ -459,7 +459,7 @@ This phase is the **MAIN BLOCKER** for the entire project. The correct sequence 
 - **Enables Phase 1:** Provides reliable testing infrastructure for algorithm debugging
 - **Enables parameter optimization:** Can rapidly test different parameter combinations
 
-**Reference:** `trading_agent/commodity_prediction_analysis/diagnostics/DATABRICKS_OUTPUT_ACCESS_GUIDE.md` (Section 5)
+**Reference:** `trading_agent/docs/AUTOMATION_GUIDE.md`, `trading_agent/docs/DATABRICKS_GUIDE.md`
 
 ---
 
@@ -789,7 +789,7 @@ CREATE TABLE commodity.whatsapp_llm.active_strategy (
 - Historical tracking (archived snapshots)
 - Organized, not scattered
 
-**Reference:** `trading_agent/commodity_prediction_analysis/CONSOLIDATED_REVIEW_PROPOSAL.md`
+**Reference:** `trading_agent/archive/CONSOLIDATED_REVIEW_PROPOSAL.md`
 
 ---
 
@@ -1307,20 +1307,20 @@ Phase 4 (WhatsApp LLM)
 ### By Component
 - **Data Pipelines:** `research_agent/UNIFIED_DATA_ARCHITECTURE.md`
 - **Forecast Agent:** `forecast_agent/README.md`, `forecast_agent/docs/ARCHITECTURE.md`
-- **Trading Agent:** `trading_agent/commodity_prediction_analysis/COMPREHENSIVE_FILE_INVENTORY.md`
-- **Diagnostics:** `trading_agent/commodity_prediction_analysis/diagnostics/MASTER_DIAGNOSTIC_PLAN.md`
+- **Trading Agent:** `trading_agent/archive/notebooks/FILE_INVENTORY.md`, `trading_agent/production/README.md`
+- **Diagnostics:** `trading_agent/archive/notebooks/diagnostics/DEBUGGING_PLAN.md`
 - **WhatsApp LLM:** `trading_agent/whatsapp/LLM_IMPLEMENTATION_PLAN.md`
 
 ### By Phase
-- **Phase 1:** `trading_agent/commodity_prediction_analysis/EXECUTIVE_SUMMARY.md` (bug docs)
-- **Phase 2:** `trading_agent/commodity_prediction_analysis/diagnostics/DATABRICKS_OUTPUT_ACCESS_GUIDE.md` (automation pattern)
-- **Phase 3:** `trading_agent/commodity_prediction_analysis/CONSOLIDATED_REVIEW_PROPOSAL.md` (report structure)
+- **Phase 1:** `trading_agent/docs/ALGORITHM_ISSUES.md`, `trading_agent/archive/notebooks/diagnostics/BUG_FIX_SUMMARY.md` (bug docs)
+- **Phase 2:** `trading_agent/docs/AUTOMATION_GUIDE.md`, `trading_agent/docs/DATABRICKS_GUIDE.md` (automation pattern)
+- **Phase 3:** `trading_agent/archive/CONSOLIDATED_REVIEW_PROPOSAL.md` (report structure)
 - **Phase 4:** `trading_agent/whatsapp/LLM_IMPLEMENTATION_PLAN.md` (deployment details)
 
 ### Cross-Cutting
 - **Documentation Strategy:** `docs/DOCUMENTATION_STRATEGY.md`
 - **Workflow Instructions:** `CLAUDE.md` (root level)
-- **Refactoring Plan:** `trading_agent/REFACTORING_PLAN.md` (deferred)
+- **Refactoring Plan:** `trading_agent/archive/REFACTORING_PLAN.md` (archived - deferred)
 
 ---
 

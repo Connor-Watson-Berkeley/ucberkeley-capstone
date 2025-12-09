@@ -7,7 +7,7 @@
 >
 > **🤖 Automation Guide:** [docs/AUTOMATION_GUIDE.md](docs/AUTOMATION_GUIDE.md) - Job submission, orchestration, monitoring
 >
-> **📊 Technical Reference:** [commodity_prediction_analysis/FILE_INVENTORY.md](commodity_prediction_analysis/FILE_INVENTORY.md) - File inventory
+> **📊 Technical Reference:** [archive/notebooks/FILE_INVENTORY.md](archive/notebooks/FILE_INVENTORY.md) - File inventory
 
 ---
 
@@ -51,8 +51,8 @@ python operations/daily_recommendations.py \
 Run backtests across all models and commodities:
 
 ```bash
-# Run the multi-model notebook in Databricks
-# File: commodity_prediction_analysis/trading_prediction_analysis_multi_model.py
+# Run multi-model backtests using the production framework
+python production/runners/multi_commodity_runner.py --all-commodities --all-models
 ```
 
 ---
@@ -112,27 +112,49 @@ Run backtests across all models and commodities:
 ```
 trading_agent/
 ├── README.md                          # This file
+├── MASTER_SYSTEM_PLAN.md             # Complete system plan & status
 │
-├── operations/                        # Operational tools
+├── production/                        # Production framework (root level)
+│   ├── runners/                       # Multi-commodity backtesting
+│   ├── strategies/                    # 10 trading strategies
+│   │   ├── baseline.py                # 4 baseline strategies
+│   │   ├── prediction.py              # 5 prediction-based strategies
+│   │   └── mpc.py                     # 1 MPC strategy
+│   ├── optimization/                  # Optuna parameter optimization
+│   ├── analysis/                      # Efficiency analysis
+│   ├── core/                          # Backtest engine
+│   └── scripts/                       # Utility scripts
+│
+├── operations/                        # Operational tools (production)
 │   ├── README.md                      # Daily recommendations guide
-│   ├── daily_recommendations.py       # Generate daily trading signals
-│   └── __init__.py
+│   └── daily_recommendations.py       # Generate daily trading signals
 │
-├── data_access/                       # Unity Catalog interface
+├── whatsapp/                          # WhatsApp integration (production)
+│   ├── README.md                      # WhatsApp bot guide
+│   └── lambda_handler_real.py         # AWS Lambda handler
+│
+├── data_access/                       # Unity Catalog interface (production)
 │   ├── forecast_loader.py             # Load predictions & actuals
-│   └── __init__.py
-│
-├── commodity_prediction_analysis/     # Backtest notebooks
-│   ├── trading_prediction_analysis_multi_model.py  # All models
-│   └── trading_prediction_analysis.py              # Single model
+│   └── test_forecast_loader.py        # Tests
 │
 ├── docs/                              # Technical documentation
-│   ├── README.md                       # Index of technical docs
-│   └── MULTI_MODEL_ANALYSIS.md         # Multi-model framework guide
+│   ├── README.md                      # Index of technical docs
+│   ├── AUTOMATION_GUIDE.md            # Job submission & orchestration
+│   ├── ALGORITHM_ISSUES.md            # Known issues & workarounds
+│   └── DATABRICKS_GUIDE.md            # Databricks setup
 │
-└── analysis/                          # Analysis framework
-    ├── model_runner.py                # Multi-model orchestration
-    └── __init__.py
+├── databricks_notebooks/              # Databricks-specific notebooks
+│   └── Forecast_Performance_Dashboard.py
+│
+└── archive/                           # Archived code & documentation
+    ├── scripts/                       # Old root-level scripts
+    ├── notebooks/                     # Archived prototype notebooks
+    │   ├── monolithic/                # Original monolithic notebooks
+    │   ├── notebook_versions/         # Old synthetic prediction versions
+    │   ├── diagnostics/               # Diagnostic notebooks
+    │   ├── FILE_INVENTORY.md          # Notebook evolution history
+    │   └── README.md                  # Archive documentation
+    └── README.md                      # Archive overview
 ```
 
 ---
@@ -202,7 +224,7 @@ Structured JSON output ready for messaging services:
 
 ### Technical Documentation
 - **[docs/MULTI_MODEL_ANALYSIS.md](docs/MULTI_MODEL_ANALYSIS.md)** - Multi-model framework implementation & accuracy threshold analysis
-- **[commodity_prediction_analysis/FILE_INVENTORY.md](commodity_prediction_analysis/FILE_INVENTORY.md)** - Notebook and script inventory for backtesting
+- **[archive/notebooks/FILE_INVENTORY.md](archive/notebooks/FILE_INVENTORY.md)** - Notebook evolution history and archived prototypes
 
 ### WhatsApp Integration
 - **[whatsapp/LLM_IMPLEMENTATION_PLAN.md](whatsapp/LLM_IMPLEMENTATION_PLAN.md)** - LLM-powered conversational Q&A plan

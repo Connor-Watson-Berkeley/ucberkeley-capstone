@@ -1,6 +1,7 @@
 # Multi-Model Analysis Guide
 
-**File:** `commodity_prediction_analysis/trading_prediction_analysis_multi_model.py`
+**Archived File:** `archive/notebooks/monolithic/trading_prediction_analysis_multi_model.ipynb`
+**Current Implementation:** `production/runners/multi_commodity_runner.py`
 **Created:** 2025-11-10
 **Purpose:** Comprehensive backtest analysis for all commodity/model combinations with accuracy threshold analysis
 
@@ -240,8 +241,8 @@ Compares real models to synthetic benchmarks:
 ### Run Full Multi-Model Analysis
 
 ```bash
-# In Databricks notebook:
-# Run commodity_prediction_analysis/trading_prediction_analysis_multi_model.py
+# Run production multi-commodity analysis:
+python production/runners/multi_commodity_runner.py --all-commodities --all-models
 
 # Results stored in:
 all_results = {

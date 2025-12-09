@@ -1273,14 +1273,14 @@ try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
 except NameError:
     # Fallback to hardcoded path for Databricks jobs
-    script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics'
+    script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/diagnostics'
 
 # Use importlib for module loading (not direct imports)
 import importlib.util
 
 possible_paths = [
     os.path.join(script_dir, 'all_strategies_pct.py'),
-    '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics/all_strategies_pct.py',
+    '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/diagnostics/all_strategies_pct.py',
     'all_strategies_pct.py'
 ]
 
@@ -1381,7 +1381,7 @@ cat > /tmp/diagnostic_N_job.json << 'EOF'
   "tasks": [{
     "task_key": "diagnostic_N",
     "spark_python_task": {
-      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics/run_diagnostic_N.py"
+      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/diagnostics/run_diagnostic_N.py"
     },
     "existing_cluster_id": "1111-041828-yeu2ff2q",
     "timeout_seconds": 3600
@@ -1491,11 +1491,11 @@ try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
 except NameError:
     # __file__ not defined in Databricks jobs - use hardcoded path
-    script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics'
+    script_dir = '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/diagnostics'
 
 possible_paths = [
     os.path.join(script_dir, 'all_strategies_pct.py'),
-    '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/diagnostics/all_strategies_pct.py',
+    '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/diagnostics/all_strategies_pct.py',
 ]
 
 strategies_path = None

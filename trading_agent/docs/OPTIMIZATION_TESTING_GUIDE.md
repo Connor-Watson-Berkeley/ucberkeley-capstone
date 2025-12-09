@@ -178,7 +178,7 @@ cat > /tmp/job_name.json << 'EOF'
   "tasks": [{
     "task_key": "task_name",
     "spark_python_task": {
-      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/path/to/script.py"
+      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/path/to/script.py"
     },
     "existing_cluster_id": "1111-041828-yeu2ff2q",
     "timeout_seconds": 1800
@@ -224,7 +224,7 @@ cat > /tmp/job_test_lp_v4.json << 'EOF'
   "tasks": [{
     "task_key": "test_lp",
     "spark_python_task": {
-      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/production/test_lp_only.py"
+      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/production/test_lp_only.py"
     },
     "existing_cluster_id": "1111-041828-yeu2ff2q",
     "timeout_seconds": 900
@@ -243,7 +243,7 @@ cat > /tmp/job_test_optuna_v5.json << 'EOF'
   "tasks": [{
     "task_key": "test_optimizer",
     "spark_python_task": {
-      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis/production/test_optimizer.py"
+      "python_file": "file:///Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/production/test_optimizer.py"
     },
     "existing_cluster_id": "1111-041828-yeu2ff2q",
     "timeout_seconds": 1800
