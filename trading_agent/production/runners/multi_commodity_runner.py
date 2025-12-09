@@ -6,6 +6,8 @@ Replicates notebook 05 workflow in modular, automation-ready format
 """
 
 import pandas as pd
+import json
+import os
 from typing import Dict, List, Any, Optional, Tuple
 
 # Import production modules
@@ -156,17 +158,45 @@ class MultiCommodityRunner:
 
     def _discover_model_versions(self, commodity: str) -> List[str]:
         """
-        Discover all model versions for a commodity
+        Discover model versions for a commodity from forecast manifest
+
+        The manifest is created by load_forecast_predictions and contains only
+        models that passed quality checks (sufficient coverage and date range).
+        This ensures we only backtest models with adequate prediction data.
 
         Args:
             commodity: Commodity name
 
         Returns:
-            List of model version identifiers
+            List of model version identifiers from manifest
         """
-        synthetic_versions, real_versions = self.data_loader.discover_model_versions(commodity)
-        all_versions = list(set(synthetic_versions + real_versions))
-        return all_versions
+        manifest_path = os.path.join(self.volume_path, f'forecast_manifest_{commodity}.json')
+
+        try:
+            # Read manifest file created by load_forecast_predictions
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+
+            # Extract model names from manifest
+            if 'models' in manifest and manifest['models']:
+                model_versions = list(manifest['models'].keys())
+                print(f"  ✓ Loaded {len(model_versions)} models from manifest: {model_versions}")
+                return model_versions
+            else:
+                print(f"  ⚠️  Manifest exists but contains no models")
+                return []
+
+        except FileNotFoundError:
+            print(f"  ⚠️  Manifest not found: {manifest_path}")
+            print(f"  ℹ️  Run load_forecast_predictions first to generate manifest")
+            return []
+        except Exception as e:
+            print(f"  ✗ Error reading manifest: {e}")
+            print(f"  ℹ️  Falling back to database discovery...")
+            # Fallback to old method if manifest can't be read
+            synthetic_versions, real_versions = self.data_loader.discover_model_versions(commodity)
+            all_versions = list(set(synthetic_versions + real_versions))
+            return all_versions
 
     def _run_single_commodity_model(
         self,
