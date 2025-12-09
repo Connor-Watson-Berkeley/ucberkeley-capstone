@@ -1,5 +1,44 @@
 # Production System Changelog
 
+## 2025-12-09 - Manifest Generation Fix
+
+### Critical Fix
+
+**1. Manifest Generation Bug in generate_forecast_manifest.py**
+- **Issue:** Manifest generation found 0 models due to incorrect SQL query
+- **Root Cause 1:** Used lowercase commodity name ('coffee') instead of capitalized ('Coffee') in SQL WHERE clause
+- **Root Cause 2:** Queried non-existent column `prediction_date` instead of `forecast_start_date`
+- **Impact:** MultiCommodityRunner could not auto-discover models for backtesting
+- **Fix:**
+  - Added `commodity_capitalized = commodity.capitalize()` at production/scripts/generate_forecast_manifest.py:68
+  - Changed all queries from `prediction_date` to `forecast_start_date` at lines 88-97
+- **Files Modified:** `production/scripts/generate_forecast_manifest.py:68, 88-97`
+- **Commit:** `16b953b`
+
+### Validation Results
+
+**Post-Fix Manifest Generation:**
+- Coffee: 13 models discovered (was 0)
+- Sugar: 6 models discovered (was 0)
+- Quality ratings working correctly (EXCELLENT, GOOD, MARGINAL, SPARSE)
+
+### Cleanup
+
+**Removed Unnecessary Scripts:**
+- Deleted 5 experimental scripts created during troubleshooting:
+  - `archive_old_backtest_results.py`
+  - `check_backtest_results.py`
+  - `check_pickle_files.py`
+  - `delete_old_pickle_files.py`
+  - `run_fresh_backtest_flow.py`
+- Deleted diagnostic scripts:
+  - `diagnose_distributions_table.py`
+  - `quick_check_forecasts.py`
+
+**Status:** Scripts directory cleaned, only production-ready scripts remain
+
+---
+
 ## 2025-12-04 - Bug Fixes & Parameter Alignment
 
 ### Critical Fixes
