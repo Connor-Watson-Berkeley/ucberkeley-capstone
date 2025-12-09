@@ -4,9 +4,12 @@ Generate complete static website from extracted Wix content
 """
 import json
 
-# Load extracted content
+# Load extracted content and image mapping
 with open('content.json', 'r', encoding='utf-8') as f:
     content = json.load(f)
+
+with open('image_mapping.json', 'r', encoding='utf-8') as f:
+    images = json.load(f)
 
 # Common header/footer
 def header(page_name):
@@ -101,7 +104,7 @@ home_html += f'''
 
     <section class="image-banner">
         <div class="container">
-            <img src="clean/images/primer-plano-dos-tipos-de-fondo-de-granos-de-cafe_edited.jpg"
+            <img src="images/full/{images['hero'][0]}"
                  alt="Coffee beans" class="banner-image">
             <h2 class="banner-title">{home['h2'][0].replace(chr(10), '<br>')}</h2>
         </div>
@@ -278,16 +281,17 @@ team_html += f'''
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem;">
 '''
 
-# Add team members
+# Add team members with photos
 team_members = [
-    ("Stuart Holland", "Chief Executive Officer (CEO)"),
-    ("Francisco Muñoz", "Chief Financial Officer (CFO)"),
-    ("Tony Gibbons", "Chief Technology Officer (CTO)"),
-    ("Connor Watson", "Chief Executive Officer (CEO)")
+    ("Stuart Holland", "Chief Executive Officer (CEO)", images['team'][0]),
+    ("Francisco Muñoz", "Chief Financial Officer (CFO)", images['team'][1]),
+    ("Tony Gibbons", "Chief Technology Officer (CTO)", images['team'][2]),
+    ("Connor Watson", "Chief Executive Officer (CEO)", images['team'][3])
 ]
 
-for name, title in team_members:
+for name, title, photo in team_members:
     team_html += f'''                <div style="text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <img src="images/full/{photo}" alt="{name}" style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover; margin-bottom: 1rem;">
                     <h3 style="color: var(--primary-color); margin-bottom: 0.5rem;">{name}</h3>
                     <p style="color: var(--text-light); font-size: 0.9rem;">{title}</p>
                 </div>
