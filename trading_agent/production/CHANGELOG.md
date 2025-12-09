@@ -1,5 +1,61 @@
 # Production System Changelog
 
+## 2025-12-09 - Complete Analysis Flow Fixes
+
+### Critical Fixes
+
+**1. Filename Mismatch Between Data Loader and Runner**
+- **Issue:** `load_forecast_predictions` created `prediction_matrices_{commodity}_{model}.pkl` but `MultiCommodityRunner` expected `prediction_matrices_{commodity}_{model}_real.pkl`
+- **Root Cause:** Two different `get_data_paths()` implementations in different modules produced inconsistent filenames
+- **Impact:** Backtests failed with "FileNotFoundError" even after predictions were loaded successfully
+- **Fix:** Updated `production/config.py:222` to add `_real` suffix to align with runner expectations
+- **Files Modified:** `production/config.py:222`
+- **Commit:** `d01a335`
+
+**2. Database Query vs Manifest Mismatch in Model Discovery**
+- **Issue:** Runner queried database and found all 13 models, but only 3 had pickle files (those passing quality checks)
+- **Root Cause:** Model discovery decoupled from data availability - runner used database while loader created files only for quality models
+- **Impact:** Backtests attempted to run on 13 models but failed for 10 that lacked prediction data
+- **Fix:** Rewrote `MultiCommodityRunner._discover_model_versions()` to read from manifest file (single source of truth)
+- **Architecture:** Manifest-based discovery ensures runner only processes models with sufficient data quality
+- **Files Modified:** `production/runners/multi_commodity_runner.py:159-200`
+- **Commit:** `611d17c`
+
+**3. KeyError in Complete Analysis Flow Reporting**
+- **Issue:** `run_complete_analysis_flow.py:163` tried to access `results['total_combinations']` which doesn't exist
+- **Root Cause:** `MultiCommodityRunner.run_all_commodities()` returns `{commodity: {model: results}}` dict, not summary statistics
+- **Impact:** Backtests completed successfully but flow failed with INTERNAL_ERROR during reporting step
+- **Fix:** Call `runner.get_summary()` to get actual summary structure instead of accessing non-existent keys
+- **Files Modified:** `production/scripts/run_complete_analysis_flow.py:162-170`
+- **Commit:** `00af2b8`
+
+### Architectural Improvements
+
+**Manifest-Based Model Discovery Pattern:**
+- ✅ Single source of truth: `forecast_manifest_{commodity}.json`
+- ✅ Quality filtering at load time (≥90% coverage, ≥2 years data)
+- ✅ Automatic model discovery (no hardcoding)
+- ✅ Graceful fallback to database query if manifest unavailable
+- ✅ Clear user messaging about manifest status
+
+**File Naming Consistency:**
+- All real forecast data now uses `_real` suffix
+- Synthetic data uses model names like `synthetic_acc100`
+- Consistent across config.py, data_loader.py, and multi_commodity_runner.py
+
+### Validation Results
+
+**Complete Flow Test (Run ID: 62063848424427):**
+- ✅ Step 1: Manifest generation (10.2s) - found 13 models, 3 passed quality
+- ✅ Step 2: Prediction loading (169.5s) - created 3 pickle files with correct naming
+- ✅ Step 4: Backtests (81.2s) - completed 3 models × 10 strategies = 30 combinations
+- ❌ Step 4 reporting: Failed with KeyError (fixed in commit 00af2b8)
+- ⏸️  Step 5: Statistical tests not reached due to Step 4 failure
+
+**Next Run:** Will complete Steps 4-5 with all fixes applied
+
+---
+
 ## 2025-12-09 - Manifest Generation Fix
 
 ### Critical Fix
