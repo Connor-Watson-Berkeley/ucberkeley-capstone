@@ -824,7 +824,7 @@ send_slack(channel="#trading", message=slack_message)
 
 ## Related Documentation
 
-- **Backtest Analysis:** `../commodity_prediction_analysis/trading_prediction_analysis_multi_model.py`
-- **Strategy Implementations:** See Notebook 02 in backtest file
+- **Backtest Analysis:** `../production/runners/multi_commodity_runner.py`
+- **Multi-Model Analysis:** `../docs/MULTI_MODEL_ANALYSIS.md`
+- **Strategy Implementations:** `../production/strategies/`
 - **Data Access:** `../data_access/forecast_loader.py`
-- **Accuracy Analysis:** `../commodity_prediction_analysis/ACCURACY_THRESHOLD_ANALYSIS.md`

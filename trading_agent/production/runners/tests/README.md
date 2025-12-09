@@ -69,7 +69,7 @@ pip install pytest pytest-cov
 
 ```bash
 # From project root
-cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent/commodity_prediction_analysis
+cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent
 
 # Run all runner tests
 pytest production/runners/tests/ -v
@@ -262,7 +262,7 @@ pytest production/runners/tests/ -x
 
 1. **ImportError**: Ensure you're in the correct directory
    ```bash
-   cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent/commodity_prediction_analysis
+   cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent
    ```
 
 2. **Fixture not found**: Ensure `conftest.py` is in tests directory
@@ -480,7 +480,7 @@ jobs:
 
 ```bash
 # Ensure you're in correct directory
-cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent/commodity_prediction_analysis
+cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent
 
 # Verify Python path
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"

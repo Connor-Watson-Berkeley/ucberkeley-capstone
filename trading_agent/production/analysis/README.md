@@ -76,7 +76,7 @@ Main orchestrator for running comprehensive strategy analysis.
 ### Basic Analysis
 
 ```bash
-cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent/commodity_prediction_analysis
+cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent
 
 # Analyze specific commodity and model
 python analysis/run_strategy_analysis.py --commodity coffee --model arima_v1

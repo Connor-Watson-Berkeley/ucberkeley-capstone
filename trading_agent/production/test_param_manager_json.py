@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add repo path for Databricks jobs (fixed path, not using __file__)
-sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
+sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent')
 
 from production.parameter_manager import ParameterManager
 

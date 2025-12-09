@@ -24,11 +24,13 @@ import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import strategies
-from commodity_prediction_analysis.trading_prediction_analysis_multi_model import (
+from production.strategies.baseline import (
     ImmediateSaleStrategy,
     EqualBatchStrategy,
     PriceThresholdStrategy,
-    MovingAverageStrategy,
+    MovingAverageStrategy
+)
+from production.strategies.prediction import (
     ConsensusStrategy,
     ExpectedValueStrategy,
     RiskAdjustedStrategy,

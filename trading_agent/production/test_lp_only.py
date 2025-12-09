@@ -11,7 +11,7 @@ try:
     script_dir = Path(__file__).parent
     sys.path.insert(0, str(script_dir.parent))
 except NameError:
-    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
+    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent')
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F

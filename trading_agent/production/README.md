@@ -28,7 +28,7 @@ This production system provides **TWO DISTINCT WORKFLOWS**:
 ### Periodic Backtesting
 
 ```bash
-cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent/commodity_prediction_analysis
+cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent
 
 # Full workflow - all commodities
 python production/run_backtest_workflow.py --mode full
@@ -390,7 +390,7 @@ predictions                    strategies
 ### Run Test Suite
 
 ```bash
-cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent/commodity_prediction_analysis
+cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent
 
 # All tests
 pytest production/runners/tests/ -v
@@ -525,7 +525,7 @@ ModuleNotFoundError: No module named 'production.runners'
 ```
 **Solution:** Ensure you're in the correct directory and PYTHONPATH is set:
 ```bash
-cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent/commodity_prediction_analysis
+cd /Users/markgibbons/capstone/ucberkeley-capstone/trading_agent
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 ```
 

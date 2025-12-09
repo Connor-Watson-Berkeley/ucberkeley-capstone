@@ -16,7 +16,7 @@ try:
     sys.path.insert(0, str(script_dir.parent))
 except NameError:
     # __file__ not defined in Databricks jobs
-    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
+    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent')
 
 import pandas as pd
 from pyspark.sql import SparkSession

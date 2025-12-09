@@ -1,11 +1,19 @@
 """
-Trading Agent - Modern Analysis Suite
+Statistical Analysis Module
 
-NEW analysis framework using theoretical maximum benchmark approach.
-
-This is separate from diagnostics/ (OLD approach with paired t-tests).
+Provides statistical validation for trading strategy backtests
 """
 
-__version__ = '0.1.0'
-__status__ = 'Under Development'
-__date__ = '2025-11-24'
+from .statistical_tests import (
+    test_strategy_vs_baseline,
+    bootstrap_confidence_interval,
+    run_full_statistical_analysis,
+    StatisticalAnalyzer
+)
+
+__all__ = [
+    'test_strategy_vs_baseline',
+    'bootstrap_confidence_interval',
+    'run_full_statistical_analysis',
+    'StatisticalAnalyzer'
+]

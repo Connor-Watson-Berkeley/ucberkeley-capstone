@@ -242,7 +242,7 @@ class ParameterManager:
         # Run optimizer
         cmd = [
             python_cmd,
-            'analysis/optimization/run_parameter_optimization.py',
+            'production/optimization/run_parameter_optimization.py',
             '--commodity', self.commodity,
             '--model-version', self.model_version,
             '--n-trials', '50',  # Quick optimization

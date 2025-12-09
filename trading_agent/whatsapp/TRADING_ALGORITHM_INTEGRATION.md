@@ -552,7 +552,7 @@ python test_lambda_with_trading_algorithm.py
 
 1. **Check notebook source**:
    ```bash
-   cd trading_agent/commodity_prediction_analysis
+   cd trading_agent
    jupyter nbconvert --to python 03_strategy_implementations.ipynb
    grep -A 10 "class ExpectedValueStrategy" 03_strategy_implementations.py
    ```
@@ -621,7 +621,7 @@ python test_lambda_with_trading_algorithm.py
 - **Daily Recommendations**: `operations/daily_recommendations.py`
 
 ### Legacy References
-- **Original Implementation**: `commodity_prediction_analysis/Legacy/trading_prediction_analysis.py`
+- **Original Implementation**: `archive/notebooks/monolithic/trading_prediction_analysis.py`
 
 ---
 

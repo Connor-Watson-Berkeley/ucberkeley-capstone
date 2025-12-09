@@ -2,7 +2,7 @@
 Diagnostic script to check actual date formats in prices and prediction matrices
 """
 import sys
-sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
+sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent')
 
 import pandas as pd
 import pickle

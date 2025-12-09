@@ -17,7 +17,7 @@ try:
     sys.path.insert(0, str(script_dir.parent))
 except NameError:
     # __file__ not defined in Databricks jobs
-    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
+    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent')
 
 from pyspark.sql import SparkSession
 from production.config import COMMODITY_CONFIGS, get_model_versions

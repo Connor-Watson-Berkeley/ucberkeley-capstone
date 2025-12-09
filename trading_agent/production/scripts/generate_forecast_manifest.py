@@ -119,7 +119,7 @@ def main():
     spark = SparkSession.builder.getOrCreate()
     
     # Get config
-    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent/commodity_prediction_analysis')
+    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent')
     from production.config import VOLUME_PATH, COMMODITY_CONFIGS
     
     # Generate for all commodities

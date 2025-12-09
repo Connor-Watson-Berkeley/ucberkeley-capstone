@@ -11,7 +11,7 @@
 ## Executive Summary
 
 This plan completes the WhatsApp LLM integration by:
-1. Extracting backtesting data from `commodity_prediction_analysis/` into queryable Databricks tables
+1. Extracting backtesting data from `production/` into queryable Databricks tables
 2. Enhancing the LLM context builder to query trading strategy performance
 3. Integrating LLM modules into the Lambda handler
 4. Deploying to AWS Lambda with monitoring
@@ -276,7 +276,7 @@ COMMENT 'Individual trades from strategy backtesting (optional detail table)';
 
 ### 1.2 Build Data Extraction Module
 
-**File:** `trading_agent/commodity_prediction_analysis/llm_data_extractor.py`
+**File:** `trading_agent/llm_data_extractor.py`
 
 **Purpose:** Load data from CSV/pickle files and transform to table schemas
 
@@ -341,7 +341,7 @@ def parse_trade_reason(reason_text: str) -> dict:
 
 ### 1.3 Create Export Notebook
 
-**File:** `trading_agent/commodity_prediction_analysis/12_llm_data_export.ipynb`
+**File:** `trading_agent/12_llm_data_export.ipynb`
 
 **Purpose:** Run extraction and write to Delta tables
 
@@ -1625,7 +1625,7 @@ Metrics tracked:
 
 ### 5.2 Create Data Pipeline Docs
 
-**File:** `trading_agent/commodity_prediction_analysis/LLM_DATA_PIPELINE.md`
+**File:** `trading_agent/LLM_DATA_PIPELINE.md`
 
 ```markdown
 # LLM Data Pipeline Documentation
@@ -1787,9 +1787,9 @@ Expected Completion: 2025-11-25 (next day)
 3. ✅ `trading_agent/whatsapp/test_llm_integration.py` - Integration tests (has security issue)
 
 ### New Files To Create (Phase 1 - Planned):
-1. `trading_agent/commodity_prediction_analysis/llm_data_extractor.py` - Data extraction module
-2. `trading_agent/commodity_prediction_analysis/12_llm_data_export.ipynb` - Export notebook
-3. `trading_agent/commodity_prediction_analysis/LLM_DATA_PIPELINE.md` - Pipeline docs
+1. `trading_agent/llm_data_extractor.py` - Data extraction module
+2. `trading_agent/12_llm_data_export.ipynb` - Export notebook
+3. `trading_agent/LLM_DATA_PIPELINE.md` - Pipeline docs
 4. Databricks SQL scripts for table creation (inline in this doc)
 
 ### New Deployment Scripts To Create (Phase 3):
