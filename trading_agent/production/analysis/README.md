@@ -231,6 +231,94 @@ This should be migrated to `analysis/` and integrated with the theoretical max b
 
 ---
 
+---
+
+## Statistical Validation (NEW - 2025-12-08)
+
+### Purpose
+
+Answers the critical question:
+> **"Does the farmer actually make more money, or could this improvement be random chance?"**
+
+Provides rigorous statistical tests to determine if strategy improvements are statistically significant.
+
+### Components
+
+#### statistical_tests.py ✅
+Complete statistical validation framework.
+
+**Tests:**
+- **Paired t-tests:** Tests if strategy beats baseline across years
+- **Sign tests:** Non-parametric robustness check
+- **Effect sizes:** Cohen's d for practical significance
+- **Bootstrap CI:** Confidence intervals without normality assumptions
+- **Matched pair tests:** Isolates forecast contribution
+
+#### run_statistical_analysis.py ✅
+Standalone script to run statistical tests on existing results.
+
+### Quick Start
+
+**Integrated with backtests:**
+```python
+from production.runners.multi_commodity_runner import MultiCommodityRunner
+
+runner = MultiCommodityRunner(
+    spark=spark,
+    commodity_configs=COMMODITY_CONFIGS,
+    run_statistical_tests=True  # ← Auto-run statistical tests
+)
+results = runner.run_all_commodities()
+```
+
+**Standalone analysis:**
+```bash
+# Analyze existing results
+python production/scripts/run_statistical_analysis.py
+
+# Specific commodity
+python production/scripts/run_statistical_analysis.py --commodity coffee
+```
+
+### Output
+
+**Saves to:** `commodity.trading_agent.statistical_tests_{commodity}_{model}`
+
+**Includes:**
+- p-values (statistical significance)
+- Cohen's d (effect size)
+- 95% confidence intervals
+- Sign test results
+- Year-by-year win/loss counts
+
+### Example Output
+
+```
+🏆 Rolling Horizon MPC vs Immediate Sale
+
+Sample Size: 8 years (2018-2025)
+
+Descriptive Statistics:
+  Mean earnings (Rolling Horizon MPC): $201,509
+  Mean earnings (Immediate Sale): $187,468
+  Mean difference: $14,041
+
+Paired t-test:
+  p-value: 0.4345 ✗ Not significant
+
+Effect Size:
+  Cohen's d: 0.2931 (small)
+
+Sign Test (Non-Parametric):
+  Years positive: 7/8
+  p-value: 0.0352 ✓ SIGNIFICANT
+```
+
+See `production/analysis/statistical_tests.py` for full API documentation.
+
+---
+
 **Created:** 2025-11-24
-**Status:** Phase 1 Complete (Core Framework)
+**Updated:** 2025-12-08 (Added Statistical Validation)
+**Status:** Phase 1 Complete + Statistical Module
 **Owner:** Trading Agent Team

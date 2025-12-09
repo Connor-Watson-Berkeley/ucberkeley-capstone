@@ -145,6 +145,13 @@ class MultiCommodityRunner:
         if verbose:
             self._generate_cross_commodity_comparison()
 
+        # Run statistical validation if enabled
+        if self.run_statistical_tests and self.statistical_analyzer is not None:
+            print("\n" + "=" * 80)
+            print("RUNNING STATISTICAL VALIDATION")
+            print("=" * 80)
+            self._run_statistical_validation(verbose)
+
         return self.all_commodity_results
 
     def _discover_model_versions(self, commodity: str) -> List[str]:
@@ -384,6 +391,42 @@ class MultiCommodityRunner:
             'final_summary': f'{self.volume_path}/final_summary_{commodity.lower()}{model_suffix}.csv'
         }
 
+    def _run_statistical_validation(self, verbose: bool = True) -> None:
+        """Run statistical validation for all commodity-model combinations"""
+        for commodity in self.all_commodity_results:
+            for model_version in self.all_commodity_results[commodity]:
+                try:
+                    if verbose:
+                        print(f"\n{'#' * 80}")
+                        print(f"# Statistical Tests: {commodity.upper()} - {model_version}")
+                        print(f"{'#' * 80}")
+
+                    # Run full statistical analysis
+                    stats_results = self.statistical_analyzer.run_full_analysis(
+                        commodity=commodity,
+                        model_version=model_version,
+                        primary_baseline="Immediate Sale",
+                        verbose=verbose
+                    )
+
+                    # Save results
+                    self.statistical_analyzer.save_results(
+                        results=stats_results,
+                        save_to_delta=True
+                    )
+
+                    # Store in memory
+                    if commodity not in self.all_statistical_results:
+                        self.all_statistical_results[commodity] = {}
+                    self.all_statistical_results[commodity][model_version] = stats_results
+
+                except Exception as e:
+                    print(f"\n⚠️  Error running statistical tests for {commodity}/{model_version}: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+        print(f"\n✓ Statistical validation complete for {len(self.all_statistical_results)} commodities")
+
     def get_summary(self) -> Dict[str, Any]:
         """
         Get summary statistics for all processed commodities
@@ -396,12 +439,22 @@ class MultiCommodityRunner:
             'total_combinations': sum(
                 len(models) for models in self.all_commodity_results.values()
             ),
-            'commodities': list(self.all_commodity_results.keys())
+            'commodities': list(self.all_commodity_results.keys()),
+            'statistical_tests_run': len(self.all_statistical_results) > 0
         }
 
         # Add per-commodity counts
         for commodity, model_data in self.all_commodity_results.items():
             summary[f'{commodity}_models'] = len(model_data)
+
+        # Add statistical summary if available
+        if self.all_statistical_results:
+            summary['statistical_summary'] = {}
+            for commodity, models in self.all_statistical_results.items():
+                summary['statistical_summary'][commodity] = {
+                    'models_tested': len(models),
+                    'models': list(models.keys())
+                }
 
         return summary
 
