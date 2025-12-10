@@ -357,8 +357,6 @@ def main():
         default=False,
         help='Skip statistical testing step'
     )
-    parser.add_argument(
-    )
 
     args = parser.parse_args()
 
