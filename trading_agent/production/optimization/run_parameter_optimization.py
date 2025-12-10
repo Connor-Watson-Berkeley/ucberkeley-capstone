@@ -228,7 +228,7 @@ def calculate_theoretical_max(prices, predictions, config):
 
     # Generate harvest schedule using BacktestEngine (ensures consistency with actual strategies)
     dummy_engine = BacktestEngine(prices, predictions, config)
-    harvest_schedule = dummy_engine._generate_harvest_schedule()
+    harvest_schedule = dummy_engine._create_harvest_schedule()
 
     # Solve LP to get globally optimal solution
     result = solve_optimal_liquidation_lp(
