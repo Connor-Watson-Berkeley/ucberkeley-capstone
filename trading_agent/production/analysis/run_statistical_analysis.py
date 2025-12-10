@@ -30,16 +30,18 @@ Usage:
 
 import sys
 import argparse
-from pathlib import Path
 from datetime import datetime
-
-# Add parent directory to path
-script_dir = Path(__file__).parent
-sys.path.insert(0, str(script_dir.parent.parent))
 
 # Imports
 from pyspark.sql import SparkSession
-from production.analysis.statistical_tests import StatisticalAnalyzer
+
+# Handle imports for both local and Databricks environments
+try:
+    from production.analysis.statistical_tests import StatisticalAnalyzer
+except ImportError:
+    # Databricks repos path
+    sys.path.insert(0, '/Workspace/Repos/Project_Git/ucberkeley-capstone/trading_agent')
+    from production.analysis.statistical_tests import StatisticalAnalyzer
 
 
 def main():
