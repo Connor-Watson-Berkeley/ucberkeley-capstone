@@ -119,7 +119,7 @@ def step_load_predictions(spark, commodities):
     return result
 
 
-def step_optimize_parameters(spark, commodities, manifests, objective='efficiency'):
+def step_optimize_parameters(spark, commodities, manifests, objective='earnings'):
     """
     Step 3: Optimize strategy parameters (optional)
 
