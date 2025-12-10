@@ -282,7 +282,7 @@ def get_strategy_classes():
 def run_optimization(
     commodity,
     model_version='arima_v1',
-    objective='efficiency',
+    objective='earnings',
     n_trials=200,
     strategy_filter=None,
     spark=None
