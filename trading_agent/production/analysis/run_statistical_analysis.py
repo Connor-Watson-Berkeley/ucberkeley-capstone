@@ -105,17 +105,16 @@ def main():
         # Get all models for this commodity
         print(f"Discovering available models for {args.commodity}...")
 
-        # Query results tables
-        tables = spark.sql(f"""
-            SHOW TABLES IN commodity.trading_agent
-            LIKE 'results_{args.commodity}_by_year_%'
-        """).collect()
+        # Query all tables and filter in Python
+        # Note: LIKE with _ matches single char, so we filter in Python instead
+        all_tables = spark.sql("SHOW TABLES IN commodity.trading_agent").collect()
 
         model_versions = []
-        for row in tables:
+        prefix = f"results_{args.commodity}_by_year_"
+
+        for row in all_tables:
             table_name = row.tableName
             # Extract model version from table name: results_coffee_by_year_<model>
-            prefix = f"results_{args.commodity}_by_year_"
             if table_name.startswith(prefix):
                 model_version = table_name[len(prefix):]
                 model_versions.append(model_version)
