@@ -11,12 +11,10 @@ Migrated from diagnostics/run_diagnostic_16.py with enhancements:
 - Clean, modular architecture
 
 Usage:
-    # Optimize all strategies for efficiency
-    python analysis/optimization/run_parameter_optimization.py \\
-
-    # Multi-objective optimization
-    python analysis/optimization/run_parameter_optimization.py \\
+    python production/optimization/run_parameter_optimization.py --commodity coffee
+"""
 from pathlib import Path
+import sys
 import argparse
 import json
 import pandas as pd
