@@ -47,8 +47,8 @@ except NameError:
 from production.config import COMMODITY_CONFIGS, VOLUME_PATH
 # NOTE: TheoreticalMaxCalculator removed - using PerfectForesightStrategy instead
 # (old DP calculator didn't account for harvest cycles, produced wrong baselines)
-from production.analysis.optimization.optimizer import ParameterOptimizer
-from production.analysis.optimization.search_space import SearchSpaceRegistry
+from production.optimization.optimizer import ParameterOptimizer
+from production.optimization.search_space import SearchSpaceRegistry
 
 
 def load_data(spark, commodity, model_version='synthetic_acc90'):
