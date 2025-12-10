@@ -119,7 +119,7 @@ def step_load_predictions(spark, commodities):
     return result
 
 
-def step_optimize_parameters(spark, commodities, manifests, objective='earnings'):
+def step_optimize_parameters(spark, commodities, manifests):
     """
     Step 3: Optimize strategy parameters (optional)
 
@@ -130,7 +130,6 @@ def step_optimize_parameters(spark, commodities, manifests, objective='earnings'
         spark: SparkSession
         commodities: List of commodity names
         manifests: Dict of manifest results from Step 1 (contains available models)
-        objective: Optimization objective ('efficiency', 'earnings', 'multi')
 
     Returns:
         Dict of optimization results keyed by (commodity, model_version)
@@ -178,7 +177,6 @@ def step_optimize_parameters(spark, commodities, manifests, objective='earnings'
                     spark=spark,
                     commodity=commodity,
                     model_version=model_version,
-                    objective=objective,
                     n_trials=100  # Reduced for faster execution
                 )
                 commodity_results[model_version] = result
@@ -360,11 +358,6 @@ def main():
         help='Skip statistical testing step'
     )
     parser.add_argument(
-        '--objective',
-        type=str,
-        default='efficiency',
-        choices=['efficiency', 'earnings', 'multi'],
-        help='Optimization objective (only used with --optimize)'
     )
 
     args = parser.parse_args()
@@ -434,7 +427,6 @@ def main():
             spark,
             commodities,
             flow_results['steps']['manifests']['result'],  # Pass manifests from Step 1
-            args.objective
         )
         flow_results['steps']['optimization'] = {
             'success': success,

@@ -1,11 +1,10 @@
 """
 Strategy Parameter Optimizer
 
-Production-ready parameter optimization using Optuna with efficiency-aware objectives.
+Production-ready parameter optimization using Optuna.
 
 Key Features:
-- Multiple optimization objectives (earnings, efficiency ratio, multi-objective)
-- Integration with theoretical maximum benchmark
+- Earnings-based optimization (maximize profit)
 - Uses production backtest engine
 - Full logging and result tracking
 
@@ -36,10 +35,7 @@ class ParameterOptimizer:
     """
     Optimize strategy parameters using Optuna.
 
-    Supports multiple optimization objectives:
-    - 'earnings': Maximize raw net earnings (original approach)
-    - 'efficiency': Maximize efficiency ratio (Actual / Theoretical Max)
-    - 'multi': Multi-objective optimization (Pareto frontier)
+    Optimizes for earnings (profit maximization).
     """
 
     def __init__(
@@ -48,7 +44,6 @@ class ParameterOptimizer:
         prediction_matrices: Dict,
         config: Dict,
         backtest_engine_class: Optional[Callable] = None,
-        theoretical_max_earnings: Optional[float] = None,
         use_production_engine: bool = True,
         fixed_base_params: Optional[Dict[str, Dict]] = None
     ):
@@ -67,7 +62,6 @@ class ParameterOptimizer:
                 - max_holding_days: int (optional)
                 - min_inventory_to_trade: float (optional)
             backtest_engine_class: Backtest engine class (overrides use_production_engine if set)
-            theoretical_max_earnings: Theoretical maximum earnings for efficiency calculation
             use_production_engine: If True (default), use production BacktestEngine for accuracy
                                   If False, use SimpleBacktestEngine for speed
             fixed_base_params: Optional dict of fixed base parameters for matched pair optimization.
@@ -77,14 +71,12 @@ class ParameterOptimizer:
         Note:
             - Production engine recommended for final optimization (more accurate, harvest-aware)
             - Simple engine acceptable for rapid prototyping/testing
-            - If theoretical_max_earnings is None, optimizer will only support 'earnings' objective
             - For matched pair optimization: Pass 1 optimizes base strategies, Pass 2 uses
               fixed_base_params to optimize predictive strategies with same base parameters
         """
         self.prices = prices_df
         self.predictions = prediction_matrices
         self.config = config
-        self.theoretical_max = theoretical_max_earnings
 
         # Determine which engine to use
         if backtest_engine_class is not None:
@@ -109,7 +101,6 @@ class ParameterOptimizer:
         strategy_class: Callable,
         strategy_name: str,
         n_trials: int = 200,
-        objective: str = 'earnings',
         seed: int = 42,
         show_progress: bool = True
     ) -> Tuple[Dict, float, Optional[optuna.Study]]:
@@ -120,45 +111,27 @@ class ParameterOptimizer:
             strategy_class: Strategy class to instantiate
             strategy_name: Name of strategy (for search space lookup)
             n_trials: Number of optimization trials (default: 200)
-            objective: 'earnings', 'efficiency', or 'multi'
             seed: Random seed for reproducibility
             show_progress: Show progress bar
 
         Returns:
             Tuple of (best_params, best_value, study)
             - best_params: Dict of optimal parameters
-            - best_value: Best objective value achieved
+            - best_value: Best earnings value achieved
             - study: Optuna study object (for further analysis)
-
-        Raises:
-            ValueError: If objective requires theoretical_max but it's not provided
         """
-        if objective == 'efficiency' and self.theoretical_max is None:
-            raise ValueError(
-                "Efficiency optimization requires theoretical_max_earnings. "
-                "Pass it to __init__ or use objective='earnings'."
-            )
-
         print(f"\n{'='*80}")
         print(f"OPTIMIZING: {strategy_name}")
         print(f"{'='*80}")
-        print(f"Objective: {objective}")
+        print(f"Objective: earnings (profit maximization)")
         print(f"Trials: {n_trials}")
         print(f"Started: {datetime.now()}")
 
-        # Create study
-        if objective == 'multi':
-            # Multi-objective: maximize both earnings and Sharpe ratio
-            study = optuna.create_study(
-                directions=['maximize', 'maximize'],  # [earnings, sharpe]
-                sampler=TPESampler(seed=seed)
-            )
-        else:
-            # Single objective
-            study = optuna.create_study(
-                direction='maximize',
-                sampler=TPESampler(seed=seed)
-            )
+        # Create study (maximize earnings)
+        study = optuna.create_study(
+            direction='maximize',
+            sampler=TPESampler(seed=seed)
+        )
 
         # Define objective function
         def objective_function(trial):
@@ -178,34 +151,12 @@ class ParameterOptimizer:
                 # Run backtest
                 result = self.engine.run_backtest(strategy)
 
-                # Return objective value(s)
-                if objective == 'earnings':
-                    return result['net_earnings']
-
-                elif objective == 'efficiency':
-                    # Efficiency ratio = Actual / Theoretical Max
-                    if self.theoretical_max > 0:
-                        efficiency = result['net_earnings'] / self.theoretical_max
-                        return efficiency
-                    else:
-                        # Fallback to earnings if theoretical max is zero
-                        return result['net_earnings']
-
-                elif objective == 'multi':
-                    # Multi-objective: (earnings, Sharpe ratio)
-                    earnings = result['net_earnings']
-                    sharpe = result.get('sharpe_ratio', 0.0)
-                    return earnings, sharpe
-
-                else:
-                    raise ValueError(f"Unknown objective: {objective}")
+                # Return earnings
+                return result['net_earnings']
 
             except Exception as e:
                 print(f"  Trial {trial.number} failed: {e}")
-                if objective == 'multi':
-                    return -1e9, -1e9  # Return very bad values for multi-objective
-                else:
-                    return -1e9
+                return -1e9  # Return very bad value for failed trials
 
         # Run optimization
         study.optimize(
@@ -215,23 +166,11 @@ class ParameterOptimizer:
         )
 
         # Extract best results
-        if objective == 'multi':
-            # For multi-objective, return the best trial on the Pareto front
-            # (We'll return the one with highest earnings among Pareto-optimal)
-            pareto_trials = study.best_trials
-            if pareto_trials:
-                best_trial = max(pareto_trials, key=lambda t: t.values[0])  # Max earnings
-                best_params = best_trial.params
-                best_value = best_trial.values[0]  # Earnings
-            else:
-                best_params = {}
-                best_value = -1e9
-        else:
-            best_params = study.best_params
-            best_value = study.best_value
+        best_params = study.best_params
+        best_value = study.best_value
 
         print(f"✓ Optimization complete")
-        print(f"  Best value: {best_value:,.2f}")
+        print(f"  Best earnings: ${best_value:,.2f}")
         print(f"  Trials completed: {len(study.trials)}")
         print(f"Completed: {datetime.now()}")
 
@@ -241,7 +180,6 @@ class ParameterOptimizer:
         self,
         strategies: List[Tuple[Callable, str]],
         n_trials: int = 200,
-        objective: str = 'earnings',
         seed: int = 42
     ) -> Dict[str, Tuple[Dict, float]]:
         """
@@ -250,11 +188,10 @@ class ParameterOptimizer:
         Args:
             strategies: List of (strategy_class, strategy_name) tuples
             n_trials: Number of trials per strategy
-            objective: Optimization objective
             seed: Random seed
 
         Returns:
-            Dict mapping strategy_name -> (best_params, best_value)
+            Dict mapping strategy_name -> (best_params, best_earnings)
         """
         results = {}
 
@@ -265,7 +202,6 @@ class ParameterOptimizer:
                 strategy_class=strategy_class,
                 strategy_name=strategy_name,
                 n_trials=n_trials,
-                objective=objective,
                 seed=seed
             )
 
@@ -276,7 +212,7 @@ class ParameterOptimizer:
         print(f"ALL {len(strategies)} STRATEGIES OPTIMIZED")
         print("="*80)
         for name, (params, value) in sorted(results.items(), key=lambda x: x[1][1], reverse=True):
-            print(f"{name:35s}: {value:,.2f}")
+            print(f"{name:35s}: ${value:,.2f}")
 
         return results
 

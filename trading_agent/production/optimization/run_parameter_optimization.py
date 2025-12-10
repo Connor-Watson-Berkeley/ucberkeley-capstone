@@ -13,19 +13,9 @@ Migrated from diagnostics/run_diagnostic_16.py with enhancements:
 Usage:
     # Optimize all strategies for efficiency
     python analysis/optimization/run_parameter_optimization.py \\
-        --commodity coffee --objective efficiency --trials 200
-
-    # Optimize single strategy for raw earnings
-    python analysis/optimization/run_parameter_optimization.py \\
-        --commodity coffee --strategy consensus --objective earnings --trials 200
 
     # Multi-objective optimization
     python analysis/optimization/run_parameter_optimization.py \\
-        --commodity coffee --objective multi --trials 500
-"""
-
-import sys
-import os
 from pathlib import Path
 import argparse
 import json
@@ -282,7 +272,6 @@ def get_strategy_classes():
 def run_optimization(
     commodity,
     model_version='arima_v1',
-    objective='earnings',
     n_trials=200,
     strategy_filter=None,
     spark=None
@@ -293,7 +282,6 @@ def run_optimization(
     Args:
         commodity: str (e.g., 'coffee')
         model_version: str (default: 'arima_v1')
-        objective: 'earnings', 'efficiency', or 'multi'
         n_trials: Number of Optuna trials per strategy
         strategy_filter: Optional list of strategy names to optimize
         spark: SparkSession
@@ -309,7 +297,6 @@ def run_optimization(
     print(f"Started: {start_time}")
     print(f"Commodity: {commodity}")
     print(f"Model Version: {model_version}")
-    print(f"Objective: {objective}")
     print(f"Trials per Strategy: {n_trials}")
     print("=" * 80)
 
@@ -321,11 +308,6 @@ def run_optimization(
 
     # Load data
     prices, predictions = load_data(spark, commodity, model_version)
-
-    # Calculate theoretical max if using efficiency objective
-    theoretical_max = None
-    if objective in ['efficiency', 'multi']:
-        theoretical_max = calculate_theoretical_max(prices, predictions, config)
 
     # Get strategies to optimize
     all_strategies = get_strategy_classes()
@@ -378,7 +360,6 @@ def run_optimization(
         prices_df=prices,
         prediction_matrices=predictions,
         config=config,
-        theoretical_max_earnings=theoretical_max,
         use_production_engine=True
     )
 
@@ -386,8 +367,7 @@ def run_optimization(
     if pass1_strategies:
         pass1_results = pass1_optimizer.optimize_all_strategies(
             strategies=pass1_strategies,
-            n_trials=n_trials,
-            objective=objective
+            n_trials=n_trials
         )
         print(f"\n✓ Pass 1 complete - optimized {len(pass1_results)} strategies")
     else:
@@ -413,7 +393,7 @@ def run_optimization(
         prices_df=prices,
         prediction_matrices=predictions,
         config=config,
-        theoretical_max_earnings=theoretical_max,
+        
         use_production_engine=True,
         fixed_base_params=fixed_base_params  # KEY: Fixed base params for matched pairs
     )
@@ -423,7 +403,6 @@ def run_optimization(
         pass2_results = pass2_optimizer.optimize_all_strategies(
             strategies=predictive_strategies,
             n_trials=n_trials,
-            objective=objective
         )
         print(f"\n✓ Pass 2 complete - optimized {len(pass2_results)} predictive strategies")
     elif predictive_strategies and not fixed_base_params:
@@ -454,7 +433,7 @@ def run_optimization(
     os.makedirs(output_dir, exist_ok=True)
 
     # Save parameters pickle
-    params_file = f"{output_dir}/optimized_params_{commodity}_{model_version}_{objective}.pkl"
+    params_file = f"{output_dir}/optimized_params_{commodity}_{model_version}.pkl"
     with open(params_file, 'wb') as f:
         pickle.dump(best_params, f)
     print(f"✓ Saved parameters to: {params_file}")
@@ -464,27 +443,26 @@ def run_optimization(
         'execution_time': datetime.now(),
         'commodity': commodity,
         'model_version': model_version,
-        'objective': objective,
+        
         'n_trials': n_trials,
-        'theoretical_max': theoretical_max,
+        
         'results': results,
         'best_params': best_params
     }
 
-    results_file = f"{output_dir}/optimization_results_{commodity}_{model_version}_{objective}.pkl"
+    results_file = f"{output_dir}/optimization_results_{commodity}_{model_version}.pkl"
     with open(results_file, 'wb') as f:
         pickle.dump(results_data, f)
     print(f"✓ Saved full results to: {results_file}")
 
     # Save CSV summary
-    csv_file = f"{output_dir}/optimization_summary_{commodity}_{model_version}_{objective}.csv"
+    csv_file = f"{output_dir}/optimization_summary_{commodity}_{model_version}.csv"
     summary_rows = []
     for name, (params, value) in results.items():
         summary_rows.append({
             'strategy_name': name,
             'best_value': value,
-            'num_params': len(params),
-            'objective': objective
+            'num_params': len(params)
         })
     summary_df = pd.DataFrame(summary_rows).sort_values('best_value', ascending=False)
     summary_df.to_csv(csv_file, index=False)
@@ -506,9 +484,8 @@ def run_optimization(
         'execution_time': datetime.now().isoformat(),
         'commodity': commodity,
         'model_version': model_version,
-        'objective': objective,
+        
         'n_trials': n_trials,
-        'theoretical_max': float(theoretical_max) if theoretical_max else None,
         'duration_seconds': 0,  # Will be updated below
         'strategies': {}
     }
@@ -558,22 +535,14 @@ def run_optimization(
     print(f"Strategies optimized: {len(results)}")
     print(f"Total trials: {len(results) * n_trials}")
 
-    if objective == 'efficiency' and theoretical_max:
-        print(f"\nTheoretical Maximum: ${theoretical_max:,.2f}")
-        print("\nTop 3 by Efficiency:")
-        for name, (params, value) in sorted(results.items(), key=lambda x: x[1][1], reverse=True)[:3]:
-            efficiency_pct = (value * 100) if objective == 'efficiency' else ((value / theoretical_max) * 100 if theoretical_max > 0 else 0)
-            print(f"  {name:35s}: {efficiency_pct:5.1f}%")
-    else:
-        print("\nTop 3 by Earnings:")
-        for name, (params, value) in sorted(results.items(), key=lambda x: x[1][1], reverse=True)[:3]:
-            print(f"  {name:35s}: ${value:,.2f}")
+    print("\nTop 3 by Earnings:")
+    for name, (params, value) in sorted(results.items(), key=lambda x: x[1][1], reverse=True)[:3]:
+        print(f"  {name:35s}: ${value:,.2f}")
 
     print("=" * 80)
 
     return {
         'results': results,
-        'theoretical_max': theoretical_max,
         'duration_seconds': duration
     }
 
@@ -595,11 +564,6 @@ def main():
         help='Model version (default: synthetic_acc90)'
     )
     parser.add_argument(
-        '--objective',
-        type=str,
-        choices=['earnings', 'efficiency', 'multi'],
-        default='efficiency',
-        help='Optimization objective (default: efficiency)'
     )
     parser.add_argument(
         '--trials',
@@ -641,7 +605,6 @@ def main():
         result = run_optimization(
             commodity=args.commodity,
             model_version=args.model,
-            objective=args.objective,
             n_trials=args.trials,
             strategy_filter=strategy_filter,
             spark=spark
