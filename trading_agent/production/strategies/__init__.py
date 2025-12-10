@@ -33,6 +33,20 @@ from .indicators import (
     calculate_prediction_confidence
 )
 
+# Strategy names for statistical testing
+STRATEGY_NAMES = [
+    'Immediate Sale',
+    'Equal Batches',
+    'Price Threshold',
+    'Moving Average',
+    'Price Threshold Predictive',
+    'Moving Average Predictive',
+    'Expected Value',
+    'Consensus',
+    'Risk-Adjusted',
+    'RollingHorizonMPC'
+]
+
 __all__ = [
     # Base
     'Strategy',
@@ -56,5 +70,8 @@ __all__ = [
     # Indicators
     'calculate_rsi',
     'calculate_adx',
-    'calculate_prediction_confidence'
+    'calculate_prediction_confidence',
+
+    # Strategy names
+    'STRATEGY_NAMES'
 ]
