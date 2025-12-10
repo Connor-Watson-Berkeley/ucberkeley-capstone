@@ -119,20 +119,75 @@ def step_load_predictions(spark, commodities):
     return result
 
 
-def step_optimize_parameters(spark, commodities, objective='efficiency'):
-    """Step 3: Optimize strategy parameters (optional)"""
+def step_optimize_parameters(spark, commodities, manifests, objective='efficiency'):
+    """
+    Step 3: Optimize strategy parameters (optional)
+
+    Uses manifest from Step 1 to determine which models to optimize.
+    Runs optimization separately for each (commodity, model_version) combination.
+
+    Args:
+        spark: SparkSession
+        commodities: List of commodity names
+        manifests: Dict of manifest results from Step 1 (contains available models)
+        objective: Optimization objective ('efficiency', 'earnings', 'multi')
+
+    Returns:
+        Dict of optimization results keyed by (commodity, model_version)
+    """
     from production.optimization.run_parameter_optimization import run_optimization
 
     results = {}
+
     for commodity in commodities:
-        print(f"\nOptimizing parameters for {commodity.upper()}...")
-        result = run_optimization(
-            spark=spark,
-            commodity=commodity,
-            objective=objective,
-            n_trials=100  # Reduced for faster execution
-        )
-        results[commodity] = result
+        print(f"\n{'='*80}")
+        print(f"OPTIMIZING PARAMETERS FOR {commodity.upper()}")
+        print(f"{'='*80}")
+
+        # Load manifest to get available models
+        manifest_path = manifests.get(commodity)
+        if not manifest_path:
+            print(f"  ⚠️  No manifest found for {commodity}, skipping optimization")
+            continue
+
+        try:
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+        except Exception as e:
+            print(f"  ✗ Failed to load manifest: {e}")
+            continue
+
+        models = manifest.get('models', {})
+        if not models:
+            print(f"  ⚠️  No models in manifest for {commodity}")
+            continue
+
+        print(f"\nFound {len(models)} models to optimize:")
+        for model_name, model_info in models.items():
+            quality = model_info.get('quality', 'UNKNOWN')
+            meets_criteria = model_info.get('meets_criteria', False)
+            status = '✓' if meets_criteria else '⚠️'
+            print(f"  {status} {model_name}: {quality}")
+
+        # Optimize each model separately
+        commodity_results = {}
+        for model_version in models.keys():
+            print(f"\n  Optimizing {model_version}...")
+            try:
+                result = run_optimization(
+                    spark=spark,
+                    commodity=commodity,
+                    model_version=model_version,
+                    objective=objective,
+                    n_trials=100  # Reduced for faster execution
+                )
+                commodity_results[model_version] = result
+                print(f"    ✓ {model_version} optimization complete")
+            except Exception as e:
+                print(f"    ✗ {model_version} optimization failed: {e}")
+                commodity_results[model_version] = {'error': str(e)}
+
+        results[commodity] = commodity_results
 
     return results
 
@@ -378,6 +433,7 @@ def main():
             step_optimize_parameters,
             spark,
             commodities,
+            flow_results['steps']['manifests']['result'],  # Pass manifests from Step 1
             args.objective
         )
         flow_results['steps']['optimization'] = {
