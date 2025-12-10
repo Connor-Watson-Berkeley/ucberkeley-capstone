@@ -4,8 +4,8 @@
 title: "Caramanta"
 description: "Commodity Trading Agent with AI-Powered Forecasting"
 baseurl: ""
-url: "https://connor-watson-berkeley.github.io/ucberkeley-capstone"
-repository: "Connor-Watson-Berkeley/ucberkeley-capstone"
+url: "https://gibbonstony.github.io/ucberkeley-capstone"
+repository: "gibbonstony/ucberkeley-capstone"
 
 # Theme
 remote_theme: just-the-docs/just-the-docs
