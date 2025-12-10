@@ -89,9 +89,35 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
     # Load ALL predictions for this model (no hardcoded date filter)
     print(f"\n2. Loading predictions for {commodity} - {model_version}...")
     pred_table = f"commodity.trading_agent.predictions_{commodity}"
+
+    # First, check if this model_version exists
     pred_df = spark.table(pred_table).filter(
         f"model_version = '{model_version}'"
     ).toPandas()
+
+    # If no predictions found for this model_version, try to find the latest available
+    if len(pred_df) == 0:
+        print(f"   ⚠ No predictions found for model_version '{model_version}'")
+        print(f"   Checking for other available model versions...")
+
+        available_versions = spark.table(pred_table).select("model_version").distinct().toPandas()
+        if len(available_versions) == 0:
+            raise ValueError(
+                f"No predictions found in {pred_table}. "
+                f"Please ensure predictions have been generated and loaded into the database. "
+                f"Run the prediction loading step (Step 2) before optimization."
+            )
+
+        available_list = available_versions['model_version'].tolist()
+        print(f"   Available model versions: {available_list}")
+
+        # Use the latest version (alphabetically last, assuming version naming like v1, v2, etc.)
+        latest_version = max(available_list)
+        print(f"   → Using latest available version: '{latest_version}'")
+
+        pred_df = spark.table(pred_table).filter(
+            f"model_version = '{latest_version}'"
+        ).toPandas()
 
     # Convert to matrix format
     pred_df['timestamp'] = pd.to_datetime(pred_df['timestamp']).dt.normalize()
@@ -109,6 +135,15 @@ def load_data(spark, commodity, model_version='synthetic_acc90'):
         all_prediction_matrices[date_key] = matrix
 
     print(f"   ✓ Loaded {len(all_prediction_matrices)} total prediction matrices")
+
+    # Check if we have any predictions
+    if len(all_prediction_matrices) == 0:
+        raise ValueError(
+            f"No predictions found for commodity '{commodity}' with model version '{model_version}'. "
+            f"Please ensure predictions have been generated and loaded into the database. "
+            f"Run the prediction loading step (Step 2) before optimization."
+        )
+
     print(f"   Full prediction range: {min(all_prediction_matrices.keys())} to {max(all_prediction_matrices.keys())}")
 
     # Find overlap between price dates and prediction dates
