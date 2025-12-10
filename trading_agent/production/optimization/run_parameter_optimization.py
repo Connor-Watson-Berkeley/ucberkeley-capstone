@@ -559,6 +559,32 @@ def run_optimization(
     }
 
 
+def get_available_models(commodity):
+    """
+    Auto-discover available models from pickle files.
+
+    Args:
+        commodity: Commodity name (e.g., 'coffee')
+
+    Returns:
+        List of model names with available pickle files
+    """
+    import os
+    import glob
+
+    pickle_pattern = f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_*_real.pkl"
+    pickle_files = glob.glob(pickle_pattern)
+
+    models = []
+    for pf in pickle_files:
+        # Extract model name: prediction_matrices_coffee_{model}_real.pkl
+        basename = os.path.basename(pf)
+        model = basename.replace(f'prediction_matrices_{commodity.lower()}_', '').replace('_real.pkl', '')
+        models.append(model)
+
+    return sorted(models)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Optimize trading strategy parameters using Optuna'
@@ -570,12 +596,10 @@ def main():
         help='Commodity to optimize (e.g., coffee, sugar)'
     )
     parser.add_argument(
-        '--model',
+        '--model-version',
         type=str,
-        default='synthetic_acc90',
-        help='Model version (default: synthetic_acc90)'
-    )
-    parser.add_argument(
+        default=None,
+        help='Model version to optimize. Use "all" to run for all available models, or omit to auto-discover.'
     )
     parser.add_argument(
         '--trials',
@@ -612,21 +636,52 @@ def main():
         print(f"Error initializing Spark: {e}")
         return 1
 
-    # Run optimization
-    try:
-        result = run_optimization(
-            commodity=args.commodity,
-            model_version=args.model,
-            n_trials=args.trials,
-            strategy_filter=strategy_filter,
-            spark=spark
-        )
-        return 0
-    except Exception as e:
-        print(f"\n✗ Optimization failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+    # Determine which models to run
+    if args.model_version is None or args.model_version.lower() == 'all':
+        print(f"\n🔍 Auto-discovering available models for {args.commodity}...")
+        model_versions = get_available_models(args.commodity)
+
+        if not model_versions:
+            print(f"❌ No models found with pickle files for {args.commodity}")
+            print(f"   Looking for: {VOLUME_PATH}/prediction_matrices_{args.commodity.lower()}_*_real.pkl")
+            return 1
+
+        print(f"✓ Found {len(model_versions)} models: {', '.join(model_versions)}")
+    else:
+        model_versions = [args.model_version]
+
+    # Run optimization for each model
+    all_results = {}
+    for model_version in model_versions:
+        print(f"\n{'='*80}")
+        print(f"OPTIMIZING MODEL: {model_version}")
+        print(f"{'='*80}")
+
+        try:
+            result = run_optimization(
+                commodity=args.commodity,
+                model_version=model_version,
+                n_trials=args.trials,
+                strategy_filter=strategy_filter,
+                spark=spark
+            )
+            all_results[model_version] = {'status': 'success', 'result': result}
+        except Exception as e:
+            print(f"\n✗ Optimization failed for {model_version}: {e}")
+            import traceback
+            traceback.print_exc()
+            all_results[model_version] = {'status': 'failed', 'error': str(e)}
+
+    # Summary
+    print(f"\n{'='*80}")
+    print("OPTIMIZATION SUMMARY")
+    print(f"{'='*80}")
+    print(f"Total models processed: {len(model_versions)}")
+    successful = sum(1 for r in all_results.values() if r['status'] == 'success')
+    print(f"Successful: {successful}")
+    print(f"Failed: {len(model_versions) - successful}")
+
+    return 0 if successful == len(model_versions) else 1
 
 
 if __name__ == "__main__":
