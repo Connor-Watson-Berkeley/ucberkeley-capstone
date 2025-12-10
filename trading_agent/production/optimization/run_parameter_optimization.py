@@ -561,7 +561,8 @@ def run_optimization(
 
 def get_available_models(commodity):
     """
-    Auto-discover available models from pickle files.
+    Get available models from Step 2 manifest (uses prior discovery).
+    Falls back to scanning pickle files if manifest not available.
 
     Args:
         commodity: Commodity name (e.g., 'coffee')
@@ -572,6 +573,41 @@ def get_available_models(commodity):
     import os
     import glob
 
+    # Try reading manifest first (benefits from Step 2 discovery)
+    manifest_path = f"{VOLUME_PATH}/forecast_manifest_{commodity.lower()}.json"
+
+    try:
+        print(f"   Reading manifest: {manifest_path}")
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+
+        # Extract model names from manifest
+        # Manifest format: {'models': [model_name1, model_name2, ...]} or
+        #                  {'models': [{'model_version': name, ...}, ...]}
+        models_data = manifest.get('models', [])
+
+        if models_data and isinstance(models_data[0], dict):
+            # List of dicts with model info
+            models = [m.get('model_version', m.get('model', '')) for m in models_data]
+        else:
+            # Simple list of strings
+            models = models_data
+
+        models = [m for m in models if m]  # Remove empty strings
+
+        if models:
+            print(f"   ✓ Found {len(models)} models in manifest: {', '.join(models)}")
+            return sorted(models)
+        else:
+            print(f"   ⚠️  Manifest exists but contains no models, falling back to file scan")
+
+    except FileNotFoundError:
+        print(f"   ⚠️  Manifest not found, falling back to file scan")
+    except Exception as e:
+        print(f"   ⚠️  Error reading manifest: {e}, falling back to file scan")
+
+    # Fallback: scan for pickle files
+    print(f"   Scanning for pickle files: {VOLUME_PATH}/prediction_matrices_{commodity.lower()}_*_real.pkl")
     pickle_pattern = f"{VOLUME_PATH}/prediction_matrices_{commodity.lower()}_*_real.pkl"
     pickle_files = glob.glob(pickle_pattern)
 
@@ -581,6 +617,9 @@ def get_available_models(commodity):
         basename = os.path.basename(pf)
         model = basename.replace(f'prediction_matrices_{commodity.lower()}_', '').replace('_real.pkl', '')
         models.append(model)
+
+    if models:
+        print(f"   ✓ Found {len(models)} models via file scan: {', '.join(sorted(models))}")
 
     return sorted(models)
 
