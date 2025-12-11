@@ -215,17 +215,25 @@ class StatisticalAnalyzer:
                 if not daily_df.empty:
                     daily_df['strategy'] = strategy
 
+                    # Check if daily_df has required columns for multi-granularity analysis
+                    required_cols = ['date', 'cash', 'inventory', 'price']
+                    missing_cols = [col for col in required_cols if col not in daily_df.columns]
+
+                    if missing_cols:
+                        print(f"⚠️  Strategy '{strategy}' missing columns: {missing_cols}")
+                        print(f"   Available columns: {list(daily_df.columns)}")
+                        print(f"   Skipping this strategy for multi-granularity analysis")
+                        continue
+
                     # Calculate daily portfolio value (cash + inventory * price)
-                    if 'cash' in daily_df.columns and 'inventory' in daily_df.columns and 'price' in daily_df.columns:
-                        daily_df['portfolio_value'] = daily_df['cash'] + (daily_df['inventory'] * daily_df['price'])
+                    daily_df['portfolio_value'] = daily_df['cash'] + (daily_df['inventory'] * daily_df['price'])
 
-                        # Calculate net_earnings as portfolio value minus initial capital
-                        # Use first row's cash as initial capital (before any trades)
-                        initial_capital = daily_df.iloc[0]['cash'] if len(daily_df) > 0 else 0
-                        daily_df['net_earnings'] = daily_df['portfolio_value'] - initial_capital
+                    # Calculate net_earnings as portfolio value minus initial capital
+                    # Use first row's cash as initial capital (before any trades)
+                    initial_capital = daily_df.iloc[0]['cash'] if len(daily_df) > 0 else 0
+                    daily_df['net_earnings'] = daily_df['portfolio_value'] - initial_capital
 
-                    if 'date' in daily_df.columns:
-                        all_daily_data.append(daily_df)
+                    all_daily_data.append(daily_df)
 
         if not all_daily_data:
             print(f"❌ No daily_state data found in pickle file")
