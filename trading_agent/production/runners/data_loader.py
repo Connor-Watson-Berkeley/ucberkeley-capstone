@@ -91,6 +91,32 @@ class DataLoader:
         )
         print(f"  ✓ Loaded {len(prediction_matrices)} prediction matrices")
 
+        # CRITICAL: Filter data to manifest date range for this model
+        if manifest and 'models' in manifest:
+            model_info = manifest['models'].get(model_version)
+            if model_info:
+                start_date = pd.to_datetime(model_info['date_range']['start'])
+                end_date = pd.to_datetime(model_info['date_range']['end'])
+
+                # Filter prices to manifest date range
+                original_price_count = len(prices)
+                prices = prices[(prices['date'] >= start_date) & (prices['date'] <= end_date)].copy()
+
+                # Filter prediction matrices to manifest date range
+                original_pred_count = len(prediction_matrices)
+                prediction_matrices = {
+                    k: v for k, v in prediction_matrices.items()
+                    if start_date <= k <= end_date
+                }
+
+                print(f"  ✓ Filtered to manifest date range: {start_date.date()} to {end_date.date()}")
+                print(f"    • Prices: {original_price_count} → {len(prices)} days")
+                print(f"    • Predictions: {original_pred_count} → {len(prediction_matrices)} matrices")
+            else:
+                print(f"  ⚠️  Model {model_version} not in manifest - using all available data")
+        else:
+            print(f"  ⚠️  No manifest available - using all available data")
+
         # Validate data
         self._validate_data(prices, prediction_matrices, model_version)
 
