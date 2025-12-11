@@ -214,7 +214,16 @@ class StatisticalAnalyzer:
                 daily_df = strategy_results['daily_state'].copy()
                 if not daily_df.empty:
                     daily_df['strategy'] = strategy
-                    # Calculate daily net position value (inventory * price + cash)
+
+                    # Calculate daily portfolio value (cash + inventory * price)
+                    if 'cash' in daily_df.columns and 'inventory' in daily_df.columns and 'price' in daily_df.columns:
+                        daily_df['portfolio_value'] = daily_df['cash'] + (daily_df['inventory'] * daily_df['price'])
+
+                        # Calculate net_earnings as portfolio value minus initial capital
+                        # Use first row's cash as initial capital (before any trades)
+                        initial_capital = daily_df.iloc[0]['cash'] if len(daily_df) > 0 else 0
+                        daily_df['net_earnings'] = daily_df['portfolio_value'] - initial_capital
+
                     if 'date' in daily_df.columns:
                         all_daily_data.append(daily_df)
 
@@ -640,8 +649,10 @@ def aggregate_results_by_period(
         raise ValueError(f"Unknown granularity: {granularity}")
 
     # Aggregate by period and strategy
-    agg_df = df.groupby(['period', 'year', 'strategy']).agg({
-        'net_earnings': 'sum'
+    # For net_earnings (cumulative), take the last value in the period
+    # which represents the total earnings up to that point
+    agg_df = df.sort_values('date').groupby(['period', 'year', 'strategy']).agg({
+        'net_earnings': 'last'  # Take final value for the period
     }).reset_index()
 
     return agg_df
