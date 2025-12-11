@@ -140,6 +140,8 @@ class BacktestEngine:
         self.trades = []
         self.daily_state = []
         self.total_storage_costs = 0.0
+        self.cumulative_revenue = 0.0  # Track cumulative revenue for daily_state
+        self.cumulative_transaction_costs = 0.0  # Track cumulative transaction costs
 
         for idx in range(len(self.prices)):
             current_date = self.prices.loc[idx, 'date']
@@ -190,6 +192,9 @@ class BacktestEngine:
             daily_storage_cost = self.inventory * price_per_ton * (storage_cost_pct / 100)
             self.total_storage_costs += daily_storage_cost
 
+            # Calculate cash position (revenue - costs)
+            cash = self.cumulative_revenue - self.cumulative_transaction_costs - self.total_storage_costs
+
             # Track daily state
             self.daily_state.append({
                 'date': current_date,
@@ -200,7 +205,10 @@ class BacktestEngine:
                 'is_harvest_window': schedule['is_harvest_day'],
                 'harvest_year': schedule['harvest_year'],
                 'daily_storage_cost': daily_storage_cost,
-                'cumulative_storage_cost': self.total_storage_costs
+                'cumulative_storage_cost': self.total_storage_costs,
+                'cumulative_revenue': self.cumulative_revenue,
+                'cumulative_transaction_costs': self.cumulative_transaction_costs,
+                'cash': cash  # Net cash position
             })
 
         # Final liquidation
@@ -250,6 +258,10 @@ class BacktestEngine:
         # Calculate transaction cost (percentage-based)
         transaction_cost_pct = self.config['transaction_cost_pct']
         transaction_cost = amount * price_per_ton * (transaction_cost_pct / 100)
+
+        # Track cumulative totals for daily_state
+        self.cumulative_revenue += revenue
+        self.cumulative_transaction_costs += transaction_cost
 
         net_revenue = revenue - transaction_cost
 
