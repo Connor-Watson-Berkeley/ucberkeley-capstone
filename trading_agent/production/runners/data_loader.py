@@ -92,7 +92,8 @@ class DataLoader:
         print(f"  ✓ Loaded {len(prediction_matrices)} prediction matrices")
 
         # CRITICAL: Filter data to manifest date range for this model
-        if manifest and 'models' in manifest:
+        # TEMPORARILY DISABLED FOR TESTING - to check if this causes performance difference
+        if False and manifest and 'models' in manifest:
             model_info = manifest['models'].get(model_version)
             if model_info:
                 start_date = pd.to_datetime(model_info['date_range']['start'])
@@ -115,7 +116,7 @@ class DataLoader:
             else:
                 print(f"  ⚠️  Model {model_version} not in manifest - using all available data")
         else:
-            print(f"  ⚠️  No manifest available - using all available data")
+            print(f"  ⚠️  Manifest filtering DISABLED for testing - using all available data")
 
         # Validate data
         self._validate_data(prices, prediction_matrices, model_version)
