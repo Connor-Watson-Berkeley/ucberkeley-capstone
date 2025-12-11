@@ -145,6 +145,20 @@ def run_multi_commodity_granular_analysis(
             print(f"COMMODITY: {commodity.upper()}")
             print(f"{'=' * 80}")
 
+        # Refresh Spark catalog to ensure we see latest tables created by Step 4
+        # This prevents catalog caching issues where newly created tables aren't visible
+        try:
+            # Refresh all by_year tables for this commodity
+            temp_tables = spark.sql(f"SHOW TABLES IN {schema}").toPandas()
+            by_year_pattern = f'results_{commodity}_by_year_'
+            refresh_tables = temp_tables[temp_tables['tableName'].str.startswith(by_year_pattern)]
+            for _, row in refresh_tables.iterrows():
+                spark.catalog.refreshTable(f"{schema}.{row['tableName']}")
+        except Exception as e:
+            # If refresh fails, log but continue - table discovery will still work
+            if verbose:
+                print(f"  Warning: Catalog refresh failed: {e}")
+
         # Discover models from by_year tables
         # Use Python filter instead of SQL LIKE (LIKE pattern doesn't work reliably with underscores)
         all_tables = spark.sql(f"SHOW TABLES IN {schema}").toPandas()
