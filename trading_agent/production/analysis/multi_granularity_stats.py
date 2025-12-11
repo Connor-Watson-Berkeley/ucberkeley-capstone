@@ -146,12 +146,15 @@ def run_multi_commodity_granular_analysis(
             print(f"{'=' * 80}")
 
         # Discover models from by_year tables
-        tables = spark.sql(f"""
-            SHOW TABLES IN {schema}
-            LIKE 'results_{commodity}_by_year_%'
-        """).collect()
+        # Use Python filter instead of SQL LIKE (LIKE pattern doesn't work reliably with underscores)
+        all_tables = spark.sql(f"SHOW TABLES IN {schema}").toPandas()
+        pattern = f'results_{commodity}_by_year_'
+        by_year_tables = all_tables[all_tables['tableName'].str.startswith(pattern)]
 
-        models = [t.tableName.replace(f'results_{commodity}_by_year_', '') for t in tables]
+        models = [
+            name.replace(pattern, '')
+            for name in by_year_tables['tableName'].tolist()
+        ]
 
         if verbose:
             print(f"  Models found: {models}")
