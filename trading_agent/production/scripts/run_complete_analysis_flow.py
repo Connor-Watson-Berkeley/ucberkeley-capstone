@@ -224,58 +224,62 @@ def step_run_backtests(spark, commodities, use_optimized_params=True):
 
 
 def step_run_statistical_tests(spark, commodities):
-    """Step 5: Run statistical tests to validate profitability"""
-    from production.analysis.rigorous_statistical_tests import run_comprehensive_analysis
-    from production.strategies import STRATEGY_NAMES
+    """Step 5: Run multi-granularity statistical tests"""
+    from production.analysis.multi_granularity_stats import (
+        run_multi_commodity_granular_analysis,
+        print_granular_summary
+    )
 
-    results = {}
+    print_section("5. Multi-Granularity Statistical Tests")
+    print("Testing strategy performance at year/quarter/month granularities")
+    print(f"Commodities: {', '.join(commodities)}")
+
+    # Run analysis for all commodities and models
+    results = run_multi_commodity_granular_analysis(
+        spark=spark,
+        commodities=commodities,
+        schema=OUTPUT_SCHEMA,
+        verbose=True
+    )
+
+    # Print summary
+    print_granular_summary(results)
+
+    # Check for filtering validation: verify years match manifest ranges
+    print(f"\n{'=' * 80}")
+    print("FILTERING VALIDATION")
+    print(f"{'=' * 80}")
+
     for commodity in commodities:
-        print(f"\nRunning statistical tests for {commodity.upper()}...")
+        # Load manifest to check expected date ranges
+        manifest_path = f'{VOLUME_PATH}/forecast_manifest_{commodity}.json'
+        try:
+            import json
+            import os
+            if os.path.exists(manifest_path):
+                with open(manifest_path, 'r') as f:
+                    manifest = json.load(f)
 
-        # Get all models for this commodity from backtest results
-        tables = spark.sql(f"""
-            SHOW TABLES IN {OUTPUT_SCHEMA}
-            LIKE 'results_{commodity}_by_year_%'
-        """).collect()
+                print(f"\n{commodity.upper()}:")
+                for model, model_results in results[commodity].items():
+                    if model in manifest['models']:
+                        expected_years = manifest['models'][model]['years_available']
+                        year_result = model_results.get('year', {})
 
-        models = [t.tableName.replace(f'results_{commodity}_by_year_', '') for t in tables]
-        print(f"  Found {len(models)} models with backtest results")
+                        if year_result.get('status') == 'success':
+                            actual_years = [int(y) for y in year_result['periods']]
+                            years_match = sorted(actual_years) == sorted(expected_years)
 
-        commodity_results = {}
-        for model in models:
-            print(f"\n  Testing {model}...")
-            model_results = {}
-
-            # Test each prediction-based strategy against Immediate Sale baseline
-            for strategy in STRATEGY_NAMES:
-                if strategy == 'Immediate Sale':
-                    continue  # Skip baseline
-
-                try:
-                    result = run_comprehensive_analysis(
-                        commodity=commodity,
-                        model_version=model,
-                        strategy_name=strategy,
-                        baseline_name='Immediate Sale',
-                        spark=spark,
-                        verbose=False
-                    )
-                    model_results[strategy] = result
-
-                    # Check if statistically significant
-                    hac_test = result.get('daily_returns_hac', {})
-                    if hac_test.get('significant', False):
-                        print(f"    ✓ {strategy}: Significant (p={hac_test.get('p_value', 0):.4f})")
-                    else:
-                        print(f"    - {strategy}: Not significant (p={hac_test.get('p_value', 1):.4f})")
-
-                except Exception as e:
-                    print(f"    ✗ {strategy}: Failed - {e}")
-                    model_results[strategy] = {'error': str(e)}
-
-            commodity_results[model] = model_results
-
-        results[commodity] = commodity_results
+                            if years_match:
+                                print(f"  ✓ {model}: Years match manifest {expected_years}")
+                            else:
+                                print(f"  ✗ {model}: Year mismatch!")
+                                print(f"      Expected: {expected_years}")
+                                print(f"      Actual: {actual_years}")
+                        else:
+                            print(f"  ⚠️  {model}: No year data ({year_result.get('status')})")
+        except Exception as e:
+            print(f"  ⚠️  Could not validate filtering: {e}")
 
     return results
 
