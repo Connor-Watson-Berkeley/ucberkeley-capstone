@@ -180,36 +180,93 @@ class ParameterOptimizer:
         self,
         strategies: List[Tuple[Callable, str]],
         n_trials: int = 200,
-        seed: int = 42
+        seed: int = 42,
+        checkpoint_path: str = None,
+        n_parallel: int = 4
     ) -> Dict[str, Tuple[Dict, float]]:
         """
-        Optimize parameters for all provided strategies.
+        Optimize parameters for all provided strategies with parallelization and checkpointing.
 
         Args:
             strategies: List of (strategy_class, strategy_name) tuples
             n_trials: Number of trials per strategy
             seed: Random seed
+            checkpoint_path: Path to save/load checkpoint file (enables fault tolerance)
+            n_parallel: Number of strategies to optimize in parallel (default: 4)
 
         Returns:
             Dict mapping strategy_name -> (best_params, best_earnings)
         """
+        import pickle
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Load checkpoint if exists
         results = {}
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            try:
+                with open(checkpoint_path, 'rb') as f:
+                    results = pickle.load(f)
+                print(f"✓ Loaded checkpoint with {len(results)} completed strategies")
+            except Exception as e:
+                print(f"⚠️  Failed to load checkpoint: {e}")
+                results = {}
 
-        for i, (strategy_class, strategy_name) in enumerate(strategies, 1):
-            print(f"\n[{i}/{len(strategies)}] {strategy_name}")
+        # Filter out already completed strategies
+        remaining_strategies = [
+            (cls, name) for cls, name in strategies
+            if name not in results
+        ]
 
-            best_params, best_value, _ = self.optimize_strategy(
-                strategy_class=strategy_class,
-                strategy_name=strategy_name,
-                n_trials=n_trials,
-                seed=seed
-            )
+        if not remaining_strategies:
+            print("✓ All strategies already completed (from checkpoint)")
+        else:
+            print(f"✓ Optimizing {len(remaining_strategies)} strategies in parallel (workers={n_parallel})")
 
-            results[strategy_name] = (best_params, best_value)
+            def optimize_single(strategy_tuple):
+                """Optimize a single strategy (for parallel execution)"""
+                strategy_class, strategy_name = strategy_tuple
+                try:
+                    print(f"\n[STARTED] {strategy_name}")
+                    best_params, best_value, _ = self.optimize_strategy(
+                        strategy_class=strategy_class,
+                        strategy_name=strategy_name,
+                        n_trials=n_trials,
+                        seed=seed
+                    )
+                    print(f"[COMPLETED] {strategy_name}: ${best_value:,.2f}")
+                    return strategy_name, (best_params, best_value), None
+                except Exception as e:
+                    print(f"[FAILED] {strategy_name}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return strategy_name, None, str(e)
+
+            # Parallel execution with ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=n_parallel) as executor:
+                futures = {
+                    executor.submit(optimize_single, s): s
+                    for s in remaining_strategies
+                }
+
+                for future in as_completed(futures):
+                    strategy_name, result, error = future.result()
+
+                    if error is None:
+                        results[strategy_name] = result
+
+                        # Save checkpoint after each completed strategy
+                        if checkpoint_path:
+                            try:
+                                os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+                                with open(checkpoint_path, 'wb') as f:
+                                    pickle.dump(results, f)
+                                print(f"✓ Checkpoint saved ({len(results)}/{len(strategies)} complete)")
+                            except Exception as e:
+                                print(f"⚠️  Failed to save checkpoint: {e}")
 
         # Print summary
         print("\n" + "="*80)
-        print(f"ALL {len(strategies)} STRATEGIES OPTIMIZED")
+        print(f"ALL {len(results)} STRATEGIES OPTIMIZED")
         print("="*80)
         for name, (params, value) in sorted(results.items(), key=lambda x: x[1][1], reverse=True):
             print(f"{name:35s}: ${value:,.2f}")

@@ -20,6 +20,7 @@ import json
 import pandas as pd
 import numpy as np
 import pickle
+import os
 from datetime import datetime
 from pyspark.sql import functions as F
 
@@ -377,9 +378,14 @@ def run_optimization(
 
     pass1_results = {}
     if pass1_strategies:
+        # Set up checkpoint for fault tolerance
+        checkpoint_file = f"{VOLUME_PATH}/optimization/checkpoint_{commodity}_{model_version}_pass1.pkl"
+
         pass1_results = pass1_optimizer.optimize_all_strategies(
             strategies=pass1_strategies,
-            n_trials=n_trials
+            n_trials=n_trials,
+            checkpoint_path=checkpoint_file,
+            n_parallel=4  # Optimize 4 strategies in parallel
         )
         print(f"\n✓ Pass 1 complete - optimized {len(pass1_results)} strategies")
     else:
@@ -412,9 +418,14 @@ def run_optimization(
 
     pass2_results = {}
     if predictive_strategies and fixed_base_params:
+        # Set up checkpoint for fault tolerance
+        checkpoint_file = f"{VOLUME_PATH}/optimization/checkpoint_{commodity}_{model_version}_pass2.pkl"
+
         pass2_results = pass2_optimizer.optimize_all_strategies(
             strategies=predictive_strategies,
             n_trials=n_trials,
+            checkpoint_path=checkpoint_file,
+            n_parallel=2  # Optimize 2 predictive strategies in parallel
         )
         print(f"\n✓ Pass 2 complete - optimized {len(pass2_results)} predictive strategies")
     elif predictive_strategies and not fixed_base_params:
