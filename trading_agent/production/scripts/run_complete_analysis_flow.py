@@ -511,4 +511,6 @@ def main():
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1)
+    if not success:
+        raise RuntimeError("Complete analysis flow failed - check logs for details")
+    # Success - exit normally (no sys.exit() needed for Databricks)
