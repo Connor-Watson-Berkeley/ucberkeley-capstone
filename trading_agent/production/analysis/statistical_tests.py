@@ -215,8 +215,8 @@ class StatisticalAnalyzer:
                 if not daily_df.empty:
                     daily_df['strategy'] = strategy
 
-                    # Check if daily_df has required columns for multi-granularity analysis
-                    required_cols = ['date', 'cash', 'inventory', 'price']
+                    # Check for required columns
+                    required_cols = ['date', 'inventory', 'price', 'cumulative_storage_cost']
                     missing_cols = [col for col in required_cols if col not in daily_df.columns]
 
                     if missing_cols:
@@ -225,13 +225,17 @@ class StatisticalAnalyzer:
                         print(f"   Skipping this strategy for multi-granularity analysis")
                         continue
 
-                    # Calculate daily portfolio value (cash + inventory * price)
-                    daily_df['portfolio_value'] = daily_df['cash'] + (daily_df['inventory'] * daily_df['price'])
+                    # Calculate sales from inventory changes (decrease = sale)
+                    daily_df = daily_df.sort_values('date').reset_index(drop=True)
+                    daily_df['inventory_change'] = daily_df['inventory'].diff().fillna(0)
+                    daily_df['quantity_sold'] = -daily_df['inventory_change'].clip(upper=0)  # Negative change = sale
 
-                    # Calculate net_earnings as portfolio value minus initial capital
-                    # Use first row's cash as initial capital (before any trades)
-                    initial_capital = daily_df.iloc[0]['cash'] if len(daily_df) > 0 else 0
-                    daily_df['net_earnings'] = daily_df['portfolio_value'] - initial_capital
+                    # Calculate revenue from sales (quantity sold * price on sale day)
+                    daily_df['revenue'] = daily_df['quantity_sold'] * daily_df['price']
+                    daily_df['cumulative_revenue'] = daily_df['revenue'].cumsum()
+
+                    # Net earnings = cumulative revenue - cumulative storage costs
+                    daily_df['net_earnings'] = daily_df['cumulative_revenue'] - daily_df['cumulative_storage_cost']
 
                     all_daily_data.append(daily_df)
 
