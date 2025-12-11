@@ -239,7 +239,7 @@ class MultiCommodityRunner:
             prediction_params=prediction_params
         )
 
-        results_dict, metrics_df, metrics_by_year_df = strategy_runner.run_all_strategies(
+        results_dict, metrics_df, metrics_by_year_df, metrics_by_quarter_df, metrics_by_month_df = strategy_runner.run_all_strategies(
             commodity, model_version, verbose
         )
 
@@ -272,7 +272,7 @@ class MultiCommodityRunner:
             output_organized=False  # Set to True for Phase 3 organized structure
         )
 
-        # 7. Save results (including year-by-year metrics)
+        # 7. Save results (including year/quarter/month metrics)
         saved_paths = self.result_saver.save_results(
             commodity=commodity,
             model_version=model_version,
@@ -280,6 +280,8 @@ class MultiCommodityRunner:
             results_dict=results_dict,
             data_paths=data_paths,
             metrics_by_year_df=metrics_by_year_df,
+            metrics_by_quarter_df=metrics_by_quarter_df,
+            metrics_by_month_df=metrics_by_month_df,
             verbose=verbose
         )
 
@@ -292,6 +294,8 @@ class MultiCommodityRunner:
             'model_version': model_version,
             'results_df': metrics_df,
             'results_by_year_df': metrics_by_year_df,
+            'results_by_quarter_df': metrics_by_quarter_df,
+            'results_by_month_df': metrics_by_month_df,
             'results_dict': results_dict,
             'best_baseline': analysis['best_baseline'],
             'best_prediction': analysis['best_prediction'],

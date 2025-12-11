@@ -393,7 +393,10 @@ def calculate_metrics_by_year(results: Dict) -> Dict[int, Dict]:
         # Calculate storage costs for this year
         year_storage_costs = 0.0
         for state in year_daily:
-            if 'storage_cost' in state:
+            # Handle both old format (storage_cost) and new format (daily_storage_cost)
+            if 'daily_storage_cost' in state:
+                year_storage_costs += state['daily_storage_cost']
+            elif 'storage_cost' in state:
                 year_storage_costs += state['storage_cost']
 
         year_net_earnings = year_revenue - year_transaction_costs - year_storage_costs
@@ -442,3 +445,177 @@ def calculate_metrics_by_year(results: Dict) -> Dict[int, Dict]:
         }
 
     return metrics_by_year
+
+
+def calculate_metrics_by_quarter(results: Dict) -> Dict[str, Dict]:
+    """
+    Calculate performance metrics broken down by quarter.
+
+    Args:
+        results: Output from BacktestEngine.run()
+
+    Returns:
+        Dict mapping {quarter_key: metrics_dict} where quarter_key is "YYYY-QN"
+    """
+    import pandas as pd
+
+    trades = results['trades']
+    daily_state = results['daily_state']
+
+    # Group trades by quarter
+    trades_by_quarter = {}
+    for trade in trades:
+        quarter_key = f"{trade['date'].year}-Q{(trade['date'].month - 1) // 3 + 1}"
+        if quarter_key not in trades_by_quarter:
+            trades_by_quarter[quarter_key] = []
+        trades_by_quarter[quarter_key].append(trade)
+
+    # Group daily state by quarter
+    daily_by_quarter = {}
+    daily_state_records = daily_state.to_dict('records') if isinstance(daily_state, pd.DataFrame) else daily_state
+    for state in daily_state_records:
+        quarter_key = f"{state['date'].year}-Q{(state['date'].month - 1) // 3 + 1}"
+        if quarter_key not in daily_by_quarter:
+            daily_by_quarter[quarter_key] = []
+        daily_by_quarter[quarter_key].append(state)
+
+    # Calculate metrics for each quarter
+    metrics_by_quarter = {}
+
+    for quarter_key in sorted(set(list(trades_by_quarter.keys()) + list(daily_by_quarter.keys()))):
+        quarter_trades = trades_by_quarter.get(quarter_key, [])
+        quarter_daily = daily_by_quarter.get(quarter_key, [])
+
+        # Calculate quarter totals
+        quarter_revenue = sum(t['revenue'] for t in quarter_trades)
+        quarter_transaction_costs = sum(t['transaction_cost'] for t in quarter_trades)
+
+        # Calculate storage costs for this quarter
+        quarter_storage_costs = 0.0
+        for state in quarter_daily:
+            if 'daily_storage_cost' in state:
+                quarter_storage_costs += state['daily_storage_cost']
+            elif 'storage_cost' in state:
+                quarter_storage_costs += state['storage_cost']
+
+        quarter_net_earnings = quarter_revenue - quarter_transaction_costs - quarter_storage_costs
+
+        # Trading metrics
+        n_trades = len(quarter_trades)
+
+        if n_trades > 0:
+            total_volume = sum(t['amount'] for t in quarter_trades)
+            avg_sale_price = quarter_revenue / total_volume if total_volume > 0 else 0
+            first_sale_price = quarter_trades[0]['price']
+            last_sale_price = quarter_trades[-1]['price']
+        else:
+            avg_sale_price = 0.0
+            first_sale_price = 0.0
+            last_sale_price = 0.0
+
+        year, quarter = quarter_key.split('-Q')
+        metrics_by_quarter[quarter_key] = {
+            'year': int(year),
+            'quarter': int(quarter),
+            'quarter_key': quarter_key,
+            'strategy': results['strategy_name'],
+            'net_earnings': quarter_net_earnings,
+            'total_revenue': quarter_revenue,
+            'total_costs': quarter_transaction_costs + quarter_storage_costs,
+            'transaction_costs': quarter_transaction_costs,
+            'storage_costs': quarter_storage_costs,
+            'avg_sale_price': avg_sale_price,
+            'first_sale_price': first_sale_price,
+            'last_sale_price': last_sale_price,
+            'n_trades': n_trades,
+            'n_days_in_quarter': len(quarter_daily)
+        }
+
+    return metrics_by_quarter
+
+
+def calculate_metrics_by_month(results: Dict) -> Dict[str, Dict]:
+    """
+    Calculate performance metrics broken down by month.
+
+    Args:
+        results: Output from BacktestEngine.run()
+
+    Returns:
+        Dict mapping {month_key: metrics_dict} where month_key is "YYYY-MM"
+    """
+    import pandas as pd
+
+    trades = results['trades']
+    daily_state = results['daily_state']
+
+    # Group trades by month
+    trades_by_month = {}
+    for trade in trades:
+        month_key = f"{trade['date'].year}-{trade['date'].month:02d}"
+        if month_key not in trades_by_month:
+            trades_by_month[month_key] = []
+        trades_by_month[month_key].append(trade)
+
+    # Group daily state by month
+    daily_by_month = {}
+    daily_state_records = daily_state.to_dict('records') if isinstance(daily_state, pd.DataFrame) else daily_state
+    for state in daily_state_records:
+        month_key = f"{state['date'].year}-{state['date'].month:02d}"
+        if month_key not in daily_by_month:
+            daily_by_month[month_key] = []
+        daily_by_month[month_key].append(state)
+
+    # Calculate metrics for each month
+    metrics_by_month = {}
+
+    for month_key in sorted(set(list(trades_by_month.keys()) + list(daily_by_month.keys()))):
+        month_trades = trades_by_month.get(month_key, [])
+        month_daily = daily_by_month.get(month_key, [])
+
+        # Calculate month totals
+        month_revenue = sum(t['revenue'] for t in month_trades)
+        month_transaction_costs = sum(t['transaction_cost'] for t in month_trades)
+
+        # Calculate storage costs for this month
+        month_storage_costs = 0.0
+        for state in month_daily:
+            if 'daily_storage_cost' in state:
+                month_storage_costs += state['daily_storage_cost']
+            elif 'storage_cost' in state:
+                month_storage_costs += state['storage_cost']
+
+        month_net_earnings = month_revenue - month_transaction_costs - month_storage_costs
+
+        # Trading metrics
+        n_trades = len(month_trades)
+
+        if n_trades > 0:
+            total_volume = sum(t['amount'] for t in month_trades)
+            avg_sale_price = month_revenue / total_volume if total_volume > 0 else 0
+            first_sale_price = month_trades[0]['price']
+            last_sale_price = month_trades[-1]['price']
+        else:
+            avg_sale_price = 0.0
+            first_sale_price = 0.0
+            last_sale_price = 0.0
+
+        year, month = month_key.split('-')
+        metrics_by_month[month_key] = {
+            'year': int(year),
+            'month': int(month),
+            'month_key': month_key,
+            'strategy': results['strategy_name'],
+            'net_earnings': month_net_earnings,
+            'total_revenue': month_revenue,
+            'total_costs': month_transaction_costs + month_storage_costs,
+            'transaction_costs': month_transaction_costs,
+            'storage_costs': month_storage_costs,
+            'avg_sale_price': avg_sale_price,
+            'first_sale_price': first_sale_price,
+            'last_sale_price': last_sale_price,
+            'n_trades': n_trades,
+            'n_days_in_month': len(month_daily)
+        }
+
+    return metrics_by_month

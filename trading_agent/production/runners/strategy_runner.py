@@ -19,7 +19,13 @@ from production.strategies import (
     RiskAdjustedStrategy,
     RollingHorizonMPC
 )
-from production.core.backtest_engine import BacktestEngine, calculate_metrics, calculate_metrics_by_year
+from production.core.backtest_engine import (
+    BacktestEngine,
+    calculate_metrics,
+    calculate_metrics_by_year,
+    calculate_metrics_by_quarter,
+    calculate_metrics_by_month
+)
 
 
 class StrategyRunner:
@@ -141,6 +147,8 @@ class StrategyRunner:
         results_dict = {}
         metrics_list = []
         metrics_by_year_dict = {}  # Store year-by-year metrics
+        metrics_by_quarter_dict = {}  # Store quarter-by-quarter metrics
+        metrics_by_month_dict = {}  # Store month-by-month metrics
 
         for i, strategy in enumerate(all_strategies, 1):
             if verbose:
@@ -152,13 +160,17 @@ class StrategyRunner:
             # Calculate overall metrics
             metrics = calculate_metrics(results)
 
-            # Calculate year-by-year metrics
+            # Calculate multi-granularity metrics
             year_metrics = calculate_metrics_by_year(results)
+            quarter_metrics = calculate_metrics_by_quarter(results)
+            month_metrics = calculate_metrics_by_month(results)
 
             # Store results
             results_dict[strategy.name] = results
             metrics_list.append(metrics)
             metrics_by_year_dict[strategy.name] = year_metrics
+            metrics_by_quarter_dict[strategy.name] = quarter_metrics
+            metrics_by_month_dict[strategy.name] = month_metrics
 
             if verbose:
                 print(f"  Total Revenue:  ${metrics['total_revenue']:,.2f}")
@@ -202,7 +214,39 @@ class StrategyRunner:
             metrics_by_year_df['commodity'] = commodity
             metrics_by_year_df['model_version'] = model_version
 
-        return results_dict, metrics_df, metrics_by_year_df
+        # Create quarter-by-quarter DataFrame
+        quarter_metrics_list = []
+        for strategy_name, quarter_dict in metrics_by_quarter_dict.items():
+            for quarter_key, metrics in quarter_dict.items():
+                quarter_metrics_list.append(metrics)
+
+        metrics_by_quarter_df = pd.DataFrame(quarter_metrics_list) if quarter_metrics_list else pd.DataFrame()
+
+        if not metrics_by_quarter_df.empty:
+            # Add metadata
+            metrics_by_quarter_df['type'] = metrics_by_quarter_df['strategy'].apply(
+                lambda x: 'Baseline' if x in baseline_names else 'Prediction'
+            )
+            metrics_by_quarter_df['commodity'] = commodity
+            metrics_by_quarter_df['model_version'] = model_version
+
+        # Create month-by-month DataFrame
+        month_metrics_list = []
+        for strategy_name, month_dict in metrics_by_month_dict.items():
+            for month_key, metrics in month_dict.items():
+                month_metrics_list.append(metrics)
+
+        metrics_by_month_df = pd.DataFrame(month_metrics_list) if month_metrics_list else pd.DataFrame()
+
+        if not metrics_by_month_df.empty:
+            # Add metadata
+            metrics_by_month_df['type'] = metrics_by_month_df['strategy'].apply(
+                lambda x: 'Baseline' if x in baseline_names else 'Prediction'
+            )
+            metrics_by_month_df['commodity'] = commodity
+            metrics_by_month_df['model_version'] = model_version
+
+        return results_dict, metrics_df, metrics_by_year_df, metrics_by_quarter_df, metrics_by_month_df
 
     def analyze_best_performers(
         self,

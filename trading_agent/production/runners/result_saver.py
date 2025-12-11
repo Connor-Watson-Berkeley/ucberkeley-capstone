@@ -29,6 +29,8 @@ class ResultSaver:
         results_dict: Dict[str, Any],
         data_paths: Dict[str, str],
         metrics_by_year_df: Optional[pd.DataFrame] = None,
+        metrics_by_quarter_df: Optional[pd.DataFrame] = None,
+        metrics_by_month_df: Optional[pd.DataFrame] = None,
         verbose: bool = True
     ) -> Dict[str, str]:
         """
@@ -41,6 +43,8 @@ class ResultSaver:
             results_dict: Full results dictionary
             data_paths: Data paths from config
             metrics_by_year_df: Year-by-year metrics DataFrame (optional)
+            metrics_by_quarter_df: Quarter-by-quarter metrics DataFrame (optional)
+            metrics_by_month_df: Month-by-month metrics DataFrame (optional)
             verbose: Print save messages
 
         Returns:
@@ -67,7 +71,29 @@ class ResultSaver:
                 metrics_by_year_df, year_table_name, verbose
             )
 
-        # 3. Save detailed results to pickle
+        # 3. Save quarter-by-quarter metrics to Delta table (if provided)
+        if metrics_by_quarter_df is not None and not metrics_by_quarter_df.empty:
+            # Use same table name with _by_quarter suffix
+            quarter_table_name = data_paths['results'].replace(
+                f"results_{commodity}",
+                f"results_{commodity}_by_quarter"
+            )
+            saved_paths['delta_metrics_by_quarter'] = self._save_metrics_to_delta(
+                metrics_by_quarter_df, quarter_table_name, verbose
+            )
+
+        # 4. Save month-by-month metrics to Delta table (if provided)
+        if metrics_by_month_df is not None and not metrics_by_month_df.empty:
+            # Use same table name with _by_month suffix
+            month_table_name = data_paths['results'].replace(
+                f"results_{commodity}",
+                f"results_{commodity}_by_month"
+            )
+            saved_paths['delta_metrics_by_month'] = self._save_metrics_to_delta(
+                metrics_by_month_df, month_table_name, verbose
+            )
+
+        # 5. Save detailed results to pickle
         saved_paths['pickle_detailed'] = self._save_detailed_to_pickle(
             results_dict, data_paths['results_detailed'], verbose
         )
