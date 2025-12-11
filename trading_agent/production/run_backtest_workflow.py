@@ -581,4 +581,6 @@ if __name__ == "__main__":
     print(json.dumps(result, indent=2))
 
     # Exit with appropriate code
-    sys.exit(0 if result.get('status') == 'success' else 1)
+    # Accept both 'success' and 'partial' as successful outcomes
+    # 'partial' means workflow completed but some steps had warnings
+    sys.exit(0 if result.get('status') in ['success', 'partial'] else 1)
