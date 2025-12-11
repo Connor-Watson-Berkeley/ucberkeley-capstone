@@ -4,47 +4,31 @@ Downloaded from: https://studiomios.wixstudio.com/caramanta
 
 ## What's Here
 
-This is a scraped copy of the Wix Studio site. It includes:
-- Main HTML page (`index.html`)
-- JavaScript libraries (React, lodash, Wix components)
+This is a downloaded copy of the Wix Studio site. It includes:
+- 4 HTML pages (homepage, problem, solution, team)
+- JavaScript libraries (React, Wix Thunderbolt framework)
 - Fonts (Google Fonts, Wix fonts)
 - Images and media assets
 
+## Files
+
+- `index.html` - Homepage
+- `about.html` - Problem page
+- `solutions.html` - Solution page
+- `contact.html` - Team page
+- `assets/` - Downloaded resources (JS, CSS, fonts, images)
+
 ## Viewing Locally
 
-Open `index.html` in your browser:
+Open any HTML file in your browser:
 
 ```bash
 open index.html
 ```
 
-Or start a simple HTTP server:
-
-```bash
-python3 -m http.server 8000
-# Then visit http://localhost:8000
-```
-
 ## Limitations
 
-- Some CSS files failed to download (likely 404s from Wix)
-- The site is heavily JavaScript-dependent (Wix Thunderbolt framework)
+- The site uses Wix's proprietary JavaScript framework (not easily editable)
 - Some dynamic features may not work offline
-- External API calls will fail
-
-## Next Steps
-
-To make this truly editable and deployable:
-
-1. **Extract the actual content** (text, images, layout)
-2. **Rebuild as a static site** using:
-   - Plain HTML/CSS/JavaScript
-   - Or a static site generator (Jekyll, 11ty, Hugo)
-3. **Replace Wix dependencies** with modern alternatives
-4. **Version control** and deploy to GitHub Pages, Netlify, etc.
-
-## Files
-
-- `index.html` - Main page
-- `assets/` - Downloaded resources (JS, CSS, fonts, images)
-- `scrape_wix.py` - Script used to download this site
+- Content is embedded in JavaScript, not in standard HTML
+- Cannot be easily modified without understanding Wix's internal structure

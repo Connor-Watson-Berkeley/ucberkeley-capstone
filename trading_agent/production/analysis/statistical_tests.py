@@ -45,7 +45,10 @@ class StatisticalAnalyzer:
         model_version: str
     ) -> pd.DataFrame:
         """
-        Load year-by-year results from Delta table
+        Load year-by-year results from Delta table, filtering to valid years only
+
+        Valid years are those where ALL strategies have net_earnings > 0
+        (excludes incomplete/failed backtest years)
 
         Args:
             commodity: Commodity name (e.g., 'coffee')
@@ -53,6 +56,7 @@ class StatisticalAnalyzer:
 
         Returns:
             DataFrame with columns [year, strategy, net_earnings, ...]
+            Filtered to valid years only
         """
         if self.spark is None:
             raise ValueError("Spark session required to load results")
@@ -60,8 +64,25 @@ class StatisticalAnalyzer:
         table_name = f"commodity.trading_agent.results_{commodity}_by_year_{model_version}"
 
         try:
-            df = self.spark.table(table_name).toPandas()
+            # Load all data
+            df_spark = self.spark.table(table_name)
+
+            # Find valid years (where ALL strategies have earnings > 0)
+            from pyspark.sql.functions import min as spark_min
+            valid_years_df = df_spark.groupBy('year').agg(
+                spark_min('net_earnings').alias('min_earnings')
+            ).filter('min_earnings > 0')
+
+            valid_years = [row.year for row in valid_years_df.collect()]
+
+            # Filter to valid years
+            df = df_spark.filter(df_spark.year.isin(valid_years)).toPandas()
+
+            total_rows = self.spark.table(table_name).count()
             print(f"✓ Loaded {len(df)} year-strategy combinations from {table_name}")
+            print(f"  Valid years: {sorted(valid_years)}")
+            print(f"  Filtered out {total_rows - len(df)} invalid rows")
+
             return df
         except Exception as e:
             raise ValueError(f"Could not load results table {table_name}: {e}")
@@ -297,7 +318,7 @@ class StatisticalAnalyzer:
         prediction_strategies = [
             s for s in strategies if any([
                 'Predictive' in s,
-                s in ['Consensus', 'Expected Value', 'Risk-Adjusted', 'Rolling Horizon MPC']
+                s in ['Consensus', 'Expected Value', 'Risk-Adjusted', 'RollingHorizonMPC']
             ])
         ]
 
