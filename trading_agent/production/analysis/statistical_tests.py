@@ -14,7 +14,12 @@ Key tests:
 import pandas as pd
 import numpy as np
 from scipy import stats
+from statsmodels.stats.multitest import multipletests
+from statsmodels.regression.linear_model import OLS
+from statsmodels.stats.sandwich_covariance import cov_cluster
 from typing import Dict, Tuple, List, Optional, Any
+import pickle
+import os
 
 
 class StatisticalAnalyzer:
@@ -61,6 +66,180 @@ class StatisticalAnalyzer:
         except Exception as e:
             raise ValueError(f"Could not load results table {table_name}: {e}")
 
+    def load_detailed_results(
+        self,
+        commodity: str,
+        model_version: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Load detailed results from pickle file (contains daily_state DataFrames)
+
+        Args:
+            commodity: Commodity name (e.g., 'coffee')
+            model_version: Model version (e.g., 'naive')
+
+        Returns:
+            Dict mapping {strategy_name: results_dict} where results_dict contains:
+                - 'daily_state': DataFrame with daily data
+                - 'trades': List of trades
+                - 'net_earnings': Total earnings
+                - etc.
+            Returns None if pickle file not found
+        """
+        # Try multiple possible file locations
+        possible_paths = [
+            f"/dbfs/volumes/commodity/trading_agent/results/results_detailed_{commodity}_{model_version}.pkl",
+            f"/Volumes/commodity/trading_agent/results/results_detailed_{commodity}_{model_version}.pkl",
+            f"/dbfs/FileStore/trading_agent/results_detailed_{commodity}_{model_version}.pkl"
+        ]
+
+        for file_path in possible_paths:
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, 'rb') as f:
+                        results_dict = pickle.load(f)
+                    print(f"✓ Loaded detailed results from {file_path}")
+                    print(f"  Contains {len(results_dict)} strategies")
+                    return results_dict
+                except Exception as e:
+                    print(f"⚠️  Error loading {file_path}: {e}")
+                    continue
+
+        print(f"⚠️  No pickle file found for {commodity}/{model_version}")
+        print(f"    Tried: {possible_paths}")
+        return None
+
+    def run_multi_granularity_analysis(
+        self,
+        commodity: str,
+        model_version: str,
+        strategy_name: str,
+        baseline_name: str,
+        granularities: List[str] = ['year', 'quarter', 'month'],
+        verbose: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Run analysis at multiple time granularities and compare
+
+        This addresses the small sample size problem (n=5 years) by also
+        analyzing at finer granularities (monthly: n=60, quarterly: n=20)
+        with proper clustered standard errors.
+
+        Args:
+            commodity: Commodity name
+            model_version: Model version
+            strategy_name: Strategy to test
+            baseline_name: Baseline to compare against
+            granularities: List of granularities to test
+            verbose: Print results
+
+        Returns:
+            Dict with results at each granularity
+        """
+        if verbose:
+            print(f"\n{'=' * 80}")
+            print(f"MULTI-GRANULARITY ANALYSIS: {strategy_name} vs {baseline_name}")
+            print(f"{'=' * 80}")
+
+        # Load detailed results from pickle
+        results_dict = self.load_detailed_results(commodity, model_version)
+
+        if results_dict is None:
+            print(f"❌ Could not load detailed results for multi-granularity analysis")
+            print(f"   Pickle files not available - multi-granularity analysis skipped")
+            return {'error': 'Pickle files not found'}
+
+        # Convert pickle data to DataFrame format for aggregation
+        # Each strategy has a 'daily_state' DataFrame
+        all_daily_data = []
+
+        for strategy, strategy_results in results_dict.items():
+            if 'daily_state' in strategy_results and strategy_results['daily_state'] is not None:
+                daily_df = strategy_results['daily_state'].copy()
+                if not daily_df.empty:
+                    daily_df['strategy'] = strategy
+                    # Calculate daily net position value (inventory * price + cash)
+                    if 'date' in daily_df.columns:
+                        all_daily_data.append(daily_df)
+
+        if not all_daily_data:
+            print(f"❌ No daily_state data found in pickle file")
+            return {'error': 'No daily_state data in pickle'}
+
+        # Combine all strategies
+        detailed_df = pd.concat(all_daily_data, ignore_index=True)
+        print(f"  Converted {len(detailed_df)} daily observations across {len(results_dict)} strategies")
+
+        results = {}
+
+        for gran in granularities:
+            if verbose:
+                print(f"\n{'-' * 80}")
+                print(f"GRANULARITY: {gran.upper()}")
+                print(f"{'-' * 80}")
+
+            # Aggregate to this granularity
+            period_df = aggregate_results_by_period(detailed_df, granularity=gran)
+
+            if gran == 'year':
+                # Use standard paired t-test for annual
+                test_result = test_strategy_vs_baseline(
+                    strategy_name=strategy_name,
+                    baseline_name=baseline_name,
+                    year_df=period_df.rename(columns={'period': 'year'}),
+                    verbose=verbose
+                )
+            else:
+                # Use clustered SE for finer granularities
+                test_result = test_with_clustered_se(
+                    strategy_name=strategy_name,
+                    baseline_name=baseline_name,
+                    period_df=period_df,
+                    cluster_var='year',
+                    verbose=verbose
+                )
+
+            results[gran] = test_result
+
+        # Compare across granularities
+        if verbose:
+            print(f"\n{'=' * 80}")
+            print("COMPARISON ACROSS GRANULARITIES")
+            print(f"{'=' * 80}")
+            print(f"\n{'Granularity':<12} {'n':<6} {'Mean Diff':<15} {'p-value':<10} {'Significant'}")
+            print(f"{'-' * 60}")
+
+            for gran in granularities:
+                res = results[gran]
+                if 'error' not in res:
+                    n = res.get('n_years', res.get('n_periods', 'N/A'))
+                    diff = res['mean_difference']
+                    p = res['p_value']
+                    sig = "✓" if p < 0.05 else "✗"
+                    print(f"{gran:<12} {n:<6} ${diff:>12,.0f} {p:>9.4f}  {sig}")
+
+        return {
+            'strategy': strategy_name,
+            'baseline': baseline_name,
+            'results_by_granularity': results,
+            'interpretation': self._interpret_multi_granularity(results)
+        }
+
+    def _interpret_multi_granularity(self, results: Dict[str, Any]) -> str:
+        """Interpret multi-granularity results"""
+        significant_at = []
+
+        for gran, res in results.items():
+            if 'error' not in res and res.get('p_value', 1.0) < 0.05:
+                significant_at.append(gran)
+
+        if len(significant_at) == 0:
+            return "No significant difference at any granularity"
+        elif len(significant_at) == len(results):
+            return f"Significant at ALL granularities ({', '.join(significant_at)}) - robust result"
+        else:
+            return f"Significant at: {', '.join(significant_at)}"
+
     def run_full_analysis(
         self,
         commodity: str,
@@ -87,6 +266,29 @@ class StatisticalAnalyzer:
 
         # Load data
         year_df = self.load_year_by_year_results(commodity, model_version)
+
+        # Validate data quality BEFORE running tests
+        if verbose:
+            print(f"\n{'=' * 80}")
+            print("DATA VALIDATION")
+            print("=" * 80)
+
+        validation = validate_backtest_data(year_df)
+
+        if verbose:
+            for check_name, passed in validation['checks'].items():
+                status = "✓" if passed else "✗"
+                print(f"  {status} {check_name}")
+
+            if validation['warnings']:
+                print(f"\n⚠️  Warnings:")
+                for warning in validation['warnings']:
+                    print(f"     - {warning}")
+
+            if not validation['passed']:
+                print(f"\n⚠️  Data validation failed - results may be unreliable!")
+            else:
+                print(f"\n✓ Data validation passed")
 
         # Get all strategies
         strategies = year_df['strategy'].unique().tolist()
@@ -155,6 +357,37 @@ class StatisticalAnalyzer:
                 )
                 results['matched_pair_tests'].append(test_result)
 
+        # Apply multiple testing correction (critical for rigor)
+        if verbose:
+            print(f"\n{'=' * 80}")
+            print("MULTIPLE TESTING CORRECTION")
+            print("=" * 80)
+
+        mtest_correction = apply_multiple_testing_correction(
+            results['strategy_vs_baseline_tests'],
+            method='holm',
+            alpha=0.05
+        )
+        results['multiple_testing_correction'] = mtest_correction
+
+        if verbose:
+            print(f"  Method: {mtest_correction['method'].upper()}")
+            print(f"  Family-wise error rate (α): {mtest_correction['alpha']}")
+            print(f"  Number of tests: {mtest_correction['n_tests']}")
+            print(f"  Significant (raw): {mtest_correction['n_significant_raw']}")
+            print(f"  Significant (adjusted): {mtest_correction['n_significant_adjusted']}")
+            if mtest_correction['n_lost_significance'] > 0:
+                print(f"  ⚠️  {mtest_correction['n_lost_significance']} tests lost significance after correction")
+            else:
+                print(f"  ✓ All significant tests remain significant after correction")
+
+            print(f"\n  Corrected Results:")
+            for res in mtest_correction['corrected_results']:
+                status = "✓" if res['significant_adjusted'] else "✗"
+                lost = " (LOST)" if res['lost_significance'] else ""
+                print(f"    {status} {res['strategy']}: p_raw={res['p_value_raw']:.4f} → "
+                      f"p_adj={res['p_value_adjusted']:.4f}{lost}")
+
         # Identify best prediction strategy and analyze it
         if results['strategy_vs_baseline_tests']:
             best_pred = max(
@@ -168,6 +401,26 @@ class StatisticalAnalyzer:
                 print("BEST PREDICTION STRATEGY")
                 print("=" * 80)
                 self._print_detailed_analysis(best_pred)
+
+            # Run multi-granularity analysis on best strategy
+            # This tests at quarterly (n=44) and monthly (n=132) levels
+            # to leverage more observations while accounting for within-year correlation
+            try:
+                multi_gran_results = self.run_multi_granularity_analysis(
+                    commodity=commodity,
+                    model_version=model_version,
+                    strategy_name=best_pred['strategy'],
+                    baseline_name=primary_baseline,
+                    granularities=['year', 'quarter', 'month'],
+                    verbose=verbose
+                )
+                results['multi_granularity_analysis'] = multi_gran_results
+            except Exception as e:
+                if verbose:
+                    print(f"\n⚠️  Multi-granularity analysis failed: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                results['multi_granularity_analysis'] = {'error': str(e)}
 
         return results
 
@@ -210,6 +463,22 @@ class StatisticalAnalyzer:
             print(" ✓ SIGNIFICANT")
         else:
             print(" ✗ Not significant")
+
+        print(f"\nPermutation Test (Random Chance):")
+        print(f"  {test_result['permutation_explanation']}")
+        print(f"  p-value: {test_result['permutation_p_value']:.4f}", end="")
+        if test_result['permutation_significant']:
+            print(" ✓ SIGNIFICANT (NOT random chance)")
+        else:
+            print(" ✗ Could be random chance")
+
+        print(f"\nAssumption Checks:")
+        print(f"  Normality (Shapiro-Wilk): {test_result['normality_interpretation']}")
+        if test_result['normality_shapiro_p'] is not None:
+            print(f"    p-value: {test_result['normality_shapiro_p']:.4f}")
+        print(f"    Skewness: {test_result['normality_skewness']:.3f}")
+        print(f"    Kurtosis: {test_result['normality_kurtosis']:.3f}")
+        print(f"  Recommendation: {test_result['normality_recommendation']}")
 
     def save_results(
         self,
@@ -281,6 +550,158 @@ class StatisticalAnalyzer:
             return None
 
 
+def aggregate_results_by_period(
+    detailed_df: pd.DataFrame,
+    granularity: str = 'year'
+) -> pd.DataFrame:
+    """
+    Aggregate trading results by different time periods
+
+    Args:
+        detailed_df: DataFrame with columns [date, strategy, net_earnings, ...]
+        granularity: 'year', 'quarter', or 'month'
+
+    Returns:
+        DataFrame aggregated by period with columns [period, year, strategy, net_earnings]
+    """
+    df = detailed_df.copy()
+
+    # Ensure date column is datetime
+    if 'date' in df.columns and not pd.api.types.is_datetime64_any_dtype(df['date']):
+        df['date'] = pd.to_datetime(df['date'])
+
+    # Create period column
+    if granularity == 'year':
+        df['period'] = df['date'].dt.year
+        df['year'] = df['date'].dt.year
+    elif granularity == 'quarter':
+        df['period'] = df['date'].dt.to_period('Q').astype(str)
+        df['year'] = df['date'].dt.year
+    elif granularity == 'month':
+        df['period'] = df['date'].dt.to_period('M').astype(str)
+        df['year'] = df['date'].dt.year
+    else:
+        raise ValueError(f"Unknown granularity: {granularity}")
+
+    # Aggregate by period and strategy
+    agg_df = df.groupby(['period', 'year', 'strategy']).agg({
+        'net_earnings': 'sum'
+    }).reset_index()
+
+    return agg_df
+
+
+def test_with_clustered_se(
+    strategy_name: str,
+    baseline_name: str,
+    period_df: pd.DataFrame,
+    cluster_var: str = 'year',
+    verbose: bool = True
+) -> Dict[str, Any]:
+    """
+    Test strategy vs baseline with clustered standard errors
+
+    Accounts for within-cluster correlation (e.g., months within same year
+    are correlated). Uses robust covariance matrix.
+
+    Args:
+        strategy_name: Strategy to test
+        baseline_name: Baseline to compare against
+        period_df: DataFrame with [period, year, strategy, net_earnings]
+        cluster_var: Variable to cluster by (typically 'year')
+        verbose: Print results
+
+    Returns:
+        Dict with test results including clustered SE
+    """
+    # Get strategy and baseline earnings
+    strategy_earnings = period_df[period_df['strategy'] == strategy_name].sort_values('period')
+    baseline_earnings = period_df[period_df['strategy'] == baseline_name].sort_values('period')
+
+    # Find common periods
+    common_periods = set(strategy_earnings['period']).intersection(set(baseline_earnings['period']))
+
+    if len(common_periods) < 3:
+        return {
+            'error': f'Insufficient overlapping periods: {len(common_periods)}',
+            'strategy': strategy_name,
+            'baseline': baseline_name,
+            'n_periods': len(common_periods)
+        }
+
+    # Filter to common periods and align
+    strategy_data = strategy_earnings[strategy_earnings['period'].isin(common_periods)].set_index('period')
+    baseline_data = baseline_earnings[baseline_earnings['period'].isin(common_periods)].set_index('period')
+
+    # Create regression dataset
+    reg_df = pd.DataFrame({
+        'earnings': pd.concat([strategy_data['net_earnings'], baseline_data['net_earnings']]),
+        'is_strategy': [1] * len(strategy_data) + [0] * len(baseline_data),
+        cluster_var: pd.concat([strategy_data[cluster_var], baseline_data[cluster_var]])
+    })
+
+    # Run OLS regression: earnings ~ is_strategy
+    # Coefficient on is_strategy = mean difference
+    model = OLS(reg_df['earnings'],
+                pd.DataFrame({'const': 1, 'strategy': reg_df['is_strategy']}))
+
+    # Fit with clustered standard errors
+    results = model.fit(cov_type='cluster',
+                       cov_kwds={'groups': reg_df[cluster_var].values})
+
+    # Extract results
+    coef = results.params['strategy']
+    se_clustered = results.bse['strategy']
+    t_stat = results.tvalues['strategy']
+    p_value = results.pvalues['strategy']
+    ci = results.conf_int(alpha=0.05).loc['strategy']
+
+    # Compute naive SE for comparison
+    differences = strategy_data['net_earnings'].values - baseline_data['net_earnings'].values
+    se_naive = np.std(differences, ddof=1) / np.sqrt(len(differences))
+
+    # Number of clusters
+    n_clusters = reg_df[cluster_var].nunique()
+
+    result = {
+        'strategy': strategy_name,
+        'baseline': baseline_name,
+        'n_periods': len(common_periods),
+        'n_clusters': n_clusters,
+        'periods': sorted(common_periods),
+
+        # Point estimate
+        'mean_difference': float(coef),
+
+        # Standard errors
+        'se_clustered': float(se_clustered),
+        'se_naive': float(se_naive),
+        'se_inflation_factor': float(se_clustered / se_naive) if se_naive > 0 else np.nan,
+
+        # Test statistics
+        't_statistic': float(t_stat),
+        'p_value': float(p_value),
+        'significant_05': bool(p_value < 0.05),
+
+        # Confidence interval (clustered)
+        'ci_95_lower': float(ci[0]),
+        'ci_95_upper': float(ci[1]),
+        'ci_includes_zero': bool(ci[0] <= 0 <= ci[1])
+    }
+
+    if verbose:
+        print(f"\n{strategy_name} vs {baseline_name}:")
+        print(f"  n={len(common_periods)} periods, {n_clusters} clusters ({cluster_var})")
+        print(f"  Δ=${coef:,.0f}, SE_clustered=${se_clustered:,.0f}, p={p_value:.4f}", end="")
+        if p_value < 0.05:
+            print(" ✓")
+        else:
+            print(" ✗")
+        print(f"  SE inflation: {se_clustered/se_naive:.2f}x (clustering effect)")
+
+    return result
+
+
 def test_strategy_vs_baseline(
     strategy_name: str,
     baseline_name: str,
@@ -325,6 +746,9 @@ def test_strategy_vs_baseline(
     baseline_values = baseline_years.loc[common_years].values
     differences = strategy_values - baseline_values
 
+    # Check normality assumption for t-test
+    normality = check_normality_assumptions(differences)
+
     # Paired t-test
     t_stat, p_value = stats.ttest_rel(strategy_values, baseline_values)
 
@@ -350,6 +774,9 @@ def test_strategy_vs_baseline(
 
     # Bootstrap confidence interval for robustness
     boot_ci = bootstrap_confidence_interval(strategy_values, baseline_values, n_bootstrap=10000)
+
+    # Permutation test (easy-to-explain random chance test)
+    perm_result = permutation_test(strategy_values, baseline_values, n_permutations=10000)
 
     result = {
         'strategy': strategy_name,
@@ -386,7 +813,21 @@ def test_strategy_vs_baseline(
         'n_years_positive': int(n_positive),
         'n_years_negative': int(n_total - n_positive),
         'sign_test_p_value': float(sign_p_value),
-        'sign_test_significant': bool(sign_p_value < 0.05)
+        'sign_test_significant': bool(sign_p_value < 0.05),
+
+        # Permutation test (easy-to-explain random chance test)
+        'permutation_p_value': perm_result['p_value'],
+        'permutation_n_extreme': perm_result['n_extreme'],
+        'permutation_explanation': perm_result['explanation'],
+        'permutation_significant': bool(perm_result['p_value'] < 0.05),
+
+        # Normality assumption check
+        'normality_shapiro_p': normality['shapiro_p_value'],
+        'normality_is_normal': normality['is_normal'],
+        'normality_skewness': normality['skewness'],
+        'normality_kurtosis': normality['kurtosis'],
+        'normality_interpretation': normality['interpretation'],
+        'normality_recommendation': normality['recommendation']
     }
 
     if verbose:
@@ -400,6 +841,267 @@ def test_strategy_vs_baseline(
             print(" ✗")
 
     return result
+
+
+def permutation_test(
+    strategy_earnings: np.ndarray,
+    baseline_earnings: np.ndarray,
+    n_permutations: int = 10000
+) -> Dict[str, Any]:
+    """
+    Permutation test: Could we get these results by random chance?
+
+    EASY TO EXPLAIN: "If strategy labels were meaningless, shuffling them
+    randomly shouldn't matter. We shuffled 10,000 times - how many random
+    shuffles beat the real result?"
+
+    This directly tests the null hypothesis that strategy assignment is random.
+
+    Args:
+        strategy_earnings: Array of strategy earnings by year
+        baseline_earnings: Array of baseline earnings by year
+        n_permutations: Number of random shuffles
+
+    Returns:
+        Dict with permutation test results
+    """
+    # Observed difference
+    observed_diff = np.mean(strategy_earnings) - np.mean(baseline_earnings)
+
+    # Combine all values
+    all_values = np.concatenate([strategy_earnings, baseline_earnings])
+    n_strategy = len(strategy_earnings)
+
+    # Generate null distribution by random shuffling
+    random_diffs = []
+    for _ in range(n_permutations):
+        # Shuffle and split
+        shuffled = np.random.permutation(all_values)
+        fake_strategy = shuffled[:n_strategy]
+        fake_baseline = shuffled[n_strategy:]
+        random_diffs.append(np.mean(fake_strategy) - np.mean(fake_baseline))
+
+    random_diffs = np.array(random_diffs)
+
+    # Two-tailed p-value: how many random shuffles matched or beat observed?
+    p_value = np.mean(np.abs(random_diffs) >= np.abs(observed_diff))
+
+    # Count extreme values
+    n_extreme = np.sum(np.abs(random_diffs) >= np.abs(observed_diff))
+
+    return {
+        'observed_difference': float(observed_diff),
+        'p_value': float(p_value),
+        'n_permutations': n_permutations,
+        'n_extreme': int(n_extreme),
+        'random_diffs': random_diffs,  # For visualization
+        'explanation': f'Out of {n_permutations} random shuffles, only {n_extreme} '
+                      f'matched or beat observed result ({p_value*100:.2f}%)'
+    }
+
+
+def check_normality_assumptions(differences: np.ndarray) -> Dict[str, Any]:
+    """
+    Check if paired differences satisfy normality assumption for t-test
+
+    Uses Shapiro-Wilk test (best for n<50) and reports:
+    - Normality test result
+    - Skewness and kurtosis
+    - Recommendation on which test to trust
+
+    Args:
+        differences: Array of paired differences (strategy - baseline)
+
+    Returns:
+        Dict with normality test results and interpretation
+    """
+    n = len(differences)
+
+    # Shapiro-Wilk test (H0: data is normally distributed)
+    if n >= 3:
+        shapiro_stat, shapiro_p = stats.shapiro(differences)
+    else:
+        shapiro_stat, shapiro_p = np.nan, np.nan
+
+    # Descriptive statistics
+    skewness = stats.skew(differences)
+    kurtosis = stats.kurtosis(differences)  # Excess kurtosis (normal = 0)
+
+    # Interpretation
+    is_normal = shapiro_p > 0.05 if not np.isnan(shapiro_p) else None
+
+    if is_normal is None:
+        interpretation = "Sample too small for normality test (n<3)"
+        recommendation = "Use non-parametric tests only"
+    elif is_normal:
+        interpretation = "Differences appear normally distributed"
+        recommendation = "t-test is appropriate"
+    else:
+        interpretation = f"Differences may not be normal (Shapiro-Wilk p={shapiro_p:.4f})"
+        if abs(skewness) > 1 or abs(kurtosis) > 1:
+            recommendation = "Trust non-parametric tests (sign test, permutation) over t-test"
+        else:
+            recommendation = "t-test likely robust despite slight non-normality"
+
+    return {
+        'n': n,
+        'shapiro_statistic': float(shapiro_stat) if not np.isnan(shapiro_stat) else None,
+        'shapiro_p_value': float(shapiro_p) if not np.isnan(shapiro_p) else None,
+        'is_normal': is_normal,
+        'skewness': float(skewness),
+        'kurtosis': float(kurtosis),
+        'interpretation': interpretation,
+        'recommendation': recommendation
+    }
+
+
+def apply_multiple_testing_correction(
+    test_results: List[Dict[str, Any]],
+    method: str = 'holm',
+    alpha: float = 0.05
+) -> Dict[str, Any]:
+    """
+    Apply multiple testing correction to family of hypothesis tests
+
+    CRITICAL for avoiding Type I errors when testing multiple strategies.
+
+    Methods available:
+    - 'bonferroni': Most conservative, controls FWER
+    - 'holm': Less conservative than Bonferroni, still controls FWER (recommended)
+    - 'fdr_bh': Benjamini-Hochberg, controls FDR (false discovery rate)
+
+    Args:
+        test_results: List of test result dicts (each must have 'p_value' key)
+        method: Correction method
+        alpha: Family-wise error rate
+
+    Returns:
+        Dict with corrected p-values and significance decisions
+    """
+    # Extract p-values
+    p_values = np.array([r.get('p_value', 1.0) for r in test_results])
+    strategy_names = [r.get('strategy', f'Test {i}') for i, r in enumerate(test_results)]
+
+    if len(p_values) == 0:
+        return {
+            'method': method,
+            'alpha': alpha,
+            'n_tests': 0,
+            'corrected_results': []
+        }
+
+    # Apply correction
+    reject, p_adjusted, alphacSidak, alphacBonf = multipletests(
+        p_values,
+        alpha=alpha,
+        method=method
+    )
+
+    # Build corrected results
+    corrected_results = []
+    for i, (name, p_raw, p_adj, sig) in enumerate(zip(strategy_names, p_values, p_adjusted, reject)):
+        corrected_results.append({
+            'strategy': name,
+            'p_value_raw': float(p_raw),
+            'p_value_adjusted': float(p_adj),
+            'significant_raw': bool(p_raw < alpha),
+            'significant_adjusted': bool(sig),
+            'lost_significance': bool(p_raw < alpha and not sig)
+        })
+
+    # Summary statistics
+    n_significant_raw = sum(p_values < alpha)
+    n_significant_adjusted = sum(reject)
+    n_lost = sum((p_values < alpha) & (~reject))
+
+    return {
+        'method': method,
+        'alpha': alpha,
+        'n_tests': len(p_values),
+        'n_significant_raw': int(n_significant_raw),
+        'n_significant_adjusted': int(n_significant_adjusted),
+        'n_lost_significance': int(n_lost),
+        'corrected_results': corrected_results,
+        'interpretation': f"After {method} correction: {n_significant_adjusted}/{len(p_values)} "
+                         f"tests remain significant (lost {n_lost} due to multiple testing)"
+    }
+
+
+def validate_backtest_data(year_df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Data validation checks before running statistical tests
+
+    Checks for:
+    - Missing values
+    - Duplicate year-strategy combinations
+    - Complete coverage (all strategies in all years)
+    - Reasonable earnings values
+    - Outlier years
+
+    Args:
+        year_df: DataFrame with columns [year, strategy, net_earnings]
+
+    Returns:
+        Dict with validation results and warnings
+    """
+    validation = {
+        'passed': True,
+        'warnings': [],
+        'checks': {}
+    }
+
+    # Check for nulls
+    null_count = year_df['net_earnings'].isna().sum()
+    validation['checks']['no_nulls'] = null_count == 0
+    if null_count > 0:
+        validation['warnings'].append(f'{null_count} null values in net_earnings')
+        validation['passed'] = False
+
+    # Check for duplicates
+    duplicates = year_df.duplicated(subset=['year', 'strategy']).sum()
+    validation['checks']['no_duplicates'] = duplicates == 0
+    if duplicates > 0:
+        validation['warnings'].append(f'{duplicates} duplicate year-strategy combinations')
+        validation['passed'] = False
+
+    # Check complete coverage (all strategies in all years)
+    years = year_df['year'].unique()
+    strategies = year_df['strategy'].unique()
+    expected_combinations = len(years) * len(strategies)
+    actual_combinations = len(year_df)
+    validation['checks']['complete_coverage'] = expected_combinations == actual_combinations
+    if expected_combinations != actual_combinations:
+        missing = expected_combinations - actual_combinations
+        validation['warnings'].append(
+            f'Incomplete coverage: {missing} missing year-strategy combinations '
+            f'(expected {expected_combinations}, got {actual_combinations})'
+        )
+
+    # Check for reasonable values (not $1B from coffee or negative $1M)
+    min_earnings = year_df['net_earnings'].min()
+    max_earnings = year_df['net_earnings'].max()
+    validation['checks']['reasonable_min'] = min_earnings > -1_000_000
+    validation['checks']['reasonable_max'] = max_earnings < 10_000_000
+
+    if min_earnings <= -1_000_000:
+        validation['warnings'].append(f'Extreme negative earnings: ${min_earnings:,.0f}')
+    if max_earnings >= 10_000_000:
+        validation['warnings'].append(f'Extreme positive earnings: ${max_earnings:,.0f}')
+
+    # Detect outlier years (years with unusual average earnings)
+    avg_by_year = year_df.groupby('year')['net_earnings'].mean()
+    if len(avg_by_year) >= 3:
+        z_scores = (avg_by_year - avg_by_year.mean()) / avg_by_year.std()
+        outliers = avg_by_year[np.abs(z_scores) > 2]
+        validation['checks']['no_outlier_years'] = len(outliers) == 0
+        validation['outlier_years'] = outliers.index.tolist() if len(outliers) > 0 else []
+
+        if len(outliers) > 0:
+            validation['warnings'].append(
+                f'{len(outliers)} outlier years detected: {outliers.index.tolist()}'
+            )
+
+    return validation
 
 
 def bootstrap_confidence_interval(
