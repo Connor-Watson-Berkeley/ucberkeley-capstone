@@ -143,6 +143,7 @@ class StatisticalAnalyzer:
         """
         # Try multiple possible file locations
         possible_paths = [
+            f"/dbfs/production/files/results_detailed_{commodity}_{model_version}.pkl",  # Production location
             f"/dbfs/volumes/commodity/trading_agent/results/results_detailed_{commodity}_{model_version}.pkl",
             f"/Volumes/commodity/trading_agent/results/results_detailed_{commodity}_{model_version}.pkl",
             f"/dbfs/FileStore/trading_agent/results_detailed_{commodity}_{model_version}.pkl"
