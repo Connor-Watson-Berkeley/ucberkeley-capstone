@@ -387,7 +387,97 @@ def run_full_workflow(commodities=None, skip_predictions=False, reload_forecasts
         return workflow_results
 
     # ----------------------------------------------------------------------
-    # STEP 3: Identify Best Strategies
+    # STEP 5: Identify Best Forecast Model (Statistical Comparison)
+    # ----------------------------------------------------------------------
+    print("\n" + "=" * 80)
+    print("STEP: Identify Best Forecast Model")
+    print("=" * 80)
+
+    try:
+        # Run model comparison for each commodity
+        from scipy import stats as scipy_stats
+        from pyspark.sql.functions import min as spark_min
+        import pandas as pd
+
+        best_models = {}
+
+        for commodity in commodity_configs.keys():
+            print(f"\nAnalyzing {commodity}...")
+
+            # Load manifest
+            manifest_path = os.path.join(VOLUME_PATH, f'forecast_manifest_{commodity}.json')
+            try:
+                with open(manifest_path, 'r') as f:
+                    manifest = json.load(f)
+                manifest_models = list(manifest['models'].keys())
+            except:
+                print(f"  ⚠️  No manifest found for {commodity}, skipping")
+                continue
+
+            print(f"  Models in manifest: {manifest_models}")
+
+            # Compare models
+            model_results = {}
+            for model in manifest_models:
+                table = f"{OUTPUT_SCHEMA}.results_{commodity}_by_year_{model}"
+
+                try:
+                    df = spark.table(table).toPandas()
+
+                    # Find valid years
+                    df_spark = spark.table(table)
+                    year_validity = df_spark.groupBy('year').agg(
+                        spark_min('net_earnings').alias('min_earnings')
+                    ).filter('min_earnings > 0').select('year').toPandas()
+
+                    valid_years = sorted(year_validity['year'].astype(int).tolist())
+                    df_filtered = df[df['year'].isin(valid_years)]
+
+                    # Get MPC vs Baseline
+                    mpc_data = df_filtered[df_filtered['strategy'] == 'RollingHorizonMPC']['net_earnings'].values
+                    baseline_data = df_filtered[df_filtered['strategy'] == 'Immediate Sale']['net_earnings'].values
+
+                    if len(mpc_data) > 0 and len(baseline_data) > 0:
+                        annual_improvements = ((mpc_data - baseline_data) / baseline_data) * 100
+                        avg_improvement = annual_improvements.mean()
+
+                        model_results[model] = {
+                            'avg_improvement': float(avg_improvement),
+                            'n_years': len(valid_years)
+                        }
+
+                        print(f"    {model}: {avg_improvement:+.2f}% (n={len(valid_years)})")
+
+                except Exception as e:
+                    print(f"    {model}: ERROR - {e}")
+
+            # Select winner
+            if model_results:
+                winner = max(model_results.items(), key=lambda x: x[1]['avg_improvement'])
+                winner_model = winner[0]
+                winner_improvement = winner[1]['avg_improvement']
+
+                best_models[commodity] = {
+                    'model': winner_model,
+                    'avg_improvement': winner_improvement,
+                    'n_years': winner[1]['n_years'],
+                    'all_models': model_results
+                }
+
+                print(f"\n  🏆 Winner: {winner_model} ({winner_improvement:+.2f}%)")
+
+        workflow_results['best_models'] = best_models
+
+        print(f"\n✓ Identified best models for {len(best_models)} commodities")
+
+    except Exception as e:
+        print(f"\n⚠️  Model comparison failed: {e}")
+        import traceback
+        traceback.print_exc()
+        workflow_results['best_models'] = {}
+
+    # ----------------------------------------------------------------------
+    # STEP 6: Identify Best Strategies (per model)
     # ----------------------------------------------------------------------
     print("\n" + "=" * 80)
     print("STEP: Identify Best Strategies")
