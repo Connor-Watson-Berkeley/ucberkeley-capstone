@@ -20,6 +20,7 @@ from statsmodels.stats.sandwich_covariance import cov_cluster
 from typing import Dict, Tuple, List, Optional, Any
 import pickle
 import os
+import json
 
 
 class StatisticalAnalyzer:
@@ -39,6 +40,29 @@ class StatisticalAnalyzer:
         """
         self.spark = spark
 
+    def load_forecast_manifest(self, commodity: str) -> Optional[Dict]:
+        """
+        Load forecast manifest to determine valid time periods for a commodity
+
+        Args:
+            commodity: Commodity name (e.g., 'coffee')
+
+        Returns:
+            Dict with manifest data or None if not found
+        """
+        manifest_path = f"/dbfs/production/files/forecast_manifest_{commodity}.json"
+
+        try:
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+            return manifest
+        except FileNotFoundError:
+            print(f"⚠️  Warning: Forecast manifest not found at {manifest_path}")
+            return None
+        except Exception as e:
+            print(f"⚠️  Warning: Could not load manifest: {e}")
+            return None
+
     def load_year_by_year_results(
         self,
         commodity: str,
@@ -47,8 +71,8 @@ class StatisticalAnalyzer:
         """
         Load year-by-year results from Delta table, filtering to valid years only
 
-        Valid years are those where ALL strategies have net_earnings > 0
-        (excludes incomplete/failed backtest years)
+        Valid years are determined by the forecast manifest (years_available field),
+        which tells us which years have valid forecast data for the model.
 
         Args:
             commodity: Commodity name (e.g., 'coffee')
@@ -64,23 +88,33 @@ class StatisticalAnalyzer:
         table_name = f"commodity.trading_agent.results_{commodity}_by_year_{model_version}"
 
         try:
-            # Load all data
+            # Load forecast manifest to get valid years for this model
+            manifest = self.load_forecast_manifest(commodity)
+
+            if manifest and 'models' in manifest and model_version in manifest['models']:
+                # Use years_available from manifest (intelligent time period detection)
+                valid_years = manifest['models'][model_version]['years_available']
+                print(f"✓ Using forecast manifest for valid years: {valid_years}")
+                print(f"  Date range: {manifest['models'][model_version]['date_range']}")
+                print(f"  Coverage: {manifest['models'][model_version]['coverage_pct']:.1f}%")
+            else:
+                # Fallback: compute valid years from data
+                print(f"⚠️  Forecast manifest not available for {model_version}, computing valid years from data...")
+                df_spark = self.spark.table(table_name)
+                from pyspark.sql.functions import min as spark_min
+                valid_years_df = df_spark.groupBy('year').agg(
+                    spark_min('net_earnings').alias('min_earnings')
+                ).filter('min_earnings > 0')
+                valid_years = sorted([row.year for row in valid_years_df.collect()])
+                print(f"  Computed valid years: {valid_years}")
+
+            # Load data and filter to valid years
             df_spark = self.spark.table(table_name)
-
-            # Find valid years (where ALL strategies have earnings > 0)
-            from pyspark.sql.functions import min as spark_min
-            valid_years_df = df_spark.groupBy('year').agg(
-                spark_min('net_earnings').alias('min_earnings')
-            ).filter('min_earnings > 0')
-
-            valid_years = [row.year for row in valid_years_df.collect()]
-
-            # Filter to valid years
             df = df_spark.filter(df_spark.year.isin(valid_years)).toPandas()
 
             total_rows = self.spark.table(table_name).count()
             print(f"✓ Loaded {len(df)} year-strategy combinations from {table_name}")
-            print(f"  Valid years: {sorted(valid_years)}")
+            print(f"  Valid years: {sorted(valid_years)} ({len(valid_years)} years)")
             print(f"  Filtered out {total_rows - len(df)} invalid rows")
 
             return df
@@ -767,6 +801,27 @@ def test_strategy_vs_baseline(
     baseline_values = baseline_years.loc[common_years].values
     differences = strategy_values - baseline_values
 
+    # Calculate percentage improvements (year by year and mean)
+    pct_improvements = ((strategy_values - baseline_values) / np.abs(baseline_values)) * 100
+    mean_pct_improvement = float(np.mean(pct_improvements))
+
+    # Year-by-year breakdown
+    year_by_year = []
+    for year, strat_val, base_val, diff, pct in zip(
+        sorted(common_years),
+        strategy_years.loc[sorted(common_years)].values,
+        baseline_years.loc[sorted(common_years)].values,
+        strategy_years.loc[sorted(common_years)].values - baseline_years.loc[sorted(common_years)].values,
+        pct_improvements[np.argsort(common_years)]
+    ):
+        year_by_year.append({
+            'year': int(year),
+            'strategy_earnings': float(strat_val),
+            'baseline_earnings': float(base_val),
+            'difference': float(diff),
+            'pct_improvement': float(pct)
+        })
+
     # Check normality assumption for t-test
     normality = check_normality_assumptions(differences)
 
@@ -811,6 +866,10 @@ def test_strategy_vs_baseline(
         'mean_difference': float(mean_diff),
         'std_difference': float(std_diff),
 
+        # Percentage improvements
+        'mean_pct_improvement': mean_pct_improvement,
+        'year_by_year': year_by_year,
+
         # Paired t-test
         't_statistic': float(t_stat),
         'p_value': float(p_value),
@@ -853,13 +912,26 @@ def test_strategy_vs_baseline(
 
     if verbose:
         print(f"\n{strategy_name} vs {baseline_name}:")
-        print(f"  n={len(common_years)} years, Δ=${mean_diff:,.0f}, p={p_value:.4f}", end="")
+        print(f"  n={len(common_years)} years ({min(common_years)}-{max(common_years)})")
+        print(f"  Mean improvement: ${mean_diff:,.0f} ({mean_pct_improvement:+.2f}%)")
+        print(f"  p-value: {p_value:.4f}", end="")
         if p_value < 0.05:
-            print(" ✓")
+            print(" ✓ SIGNIFICANT")
         elif p_value < 0.10:
-            print(" ⚠️")
+            print(" ⚠️ MARGINAL")
         else:
-            print(" ✗")
+            print(" ✗ NOT SIGNIFICANT")
+
+        # Year-by-year breakdown
+        print(f"\n  Year-by-year:")
+        print(f"    {'Year':<6} {'Strategy':<12} {'Baseline':<12} {'Difference':<12} {'% Improvement':<15}")
+        print(f"    {'-' * 57}")
+        for yby in year_by_year:
+            print(f"    {yby['year']:<6} "
+                  f"${yby['strategy_earnings']:>10,.0f} "
+                  f"${yby['baseline_earnings']:>10,.0f} "
+                  f"${yby['difference']:>10,.0f} "
+                  f"{yby['pct_improvement']:>13.2f}%")
 
     return result
 
